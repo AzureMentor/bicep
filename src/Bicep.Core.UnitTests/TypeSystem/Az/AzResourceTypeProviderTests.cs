@@ -6,14 +6,13 @@ using System.Collections.Immutable;
 using System.Linq;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Resources;
-using Bicep.Core.SemanticModel;
-using Bicep.Core.Syntax;
+using Bicep.Core.Semantics;
 using Bicep.Core.TypeSystem;
 using Bicep.Core.TypeSystem.Az;
 using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.UnitTests.Utils;
-using Bicep.SerializedTypes;
-using Bicep.SerializedTypes.Az;
+using Azure.Bicep.Types;
+using Azure.Bicep.Types.Az;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
@@ -23,24 +22,29 @@ namespace Bicep.Core.UnitTests.TypeSystem.Az
     [TestClass]
     public class AzResourceTypeProviderTests
     {
-        [TestMethod]
-        public void AzResourceTypeProvider_can_deserialize_all_types_without_throwing()
+        [DataTestMethod]
+        [DataRow(ResourceTypeGenerationFlags.None)]
+        [DataRow(ResourceTypeGenerationFlags.ExistingResource)]
+        [DataRow(ResourceTypeGenerationFlags.PermitLiteralNameProperty)]
+        [DataRow(ResourceTypeGenerationFlags.ExistingResource | ResourceTypeGenerationFlags.PermitLiteralNameProperty)]
+        public void AzResourceTypeProvider_can_deserialize_all_types_without_throwing(ResourceTypeGenerationFlags flags)
         {
             var resourceTypeProvider = new AzResourceTypeProvider();
             var availableTypes = resourceTypeProvider.GetAvailableTypes();
 
             // sanity check - we know there should be a lot of types available
-            availableTypes.Should().HaveCountGreaterThan(2000);
+            var expectedTypeCount = 3000;
+            availableTypes.Should().HaveCountGreaterThan(expectedTypeCount);
 
             foreach (var availableType in availableTypes)
             {
                 resourceTypeProvider.HasType(availableType).Should().BeTrue();
-                var knownResourceType = resourceTypeProvider.GetType(availableType);
+                var resourceType = resourceTypeProvider.GetType(availableType, flags);
 
                 try
                 {
                     var visited = new HashSet<TypeSymbol>();
-                    VisitAllReachableTypes(knownResourceType, visited);
+                    VisitAllReachableTypes(resourceType, visited);
                 }
                 catch (Exception exception)
                 {
@@ -51,12 +55,14 @@ namespace Bicep.Core.UnitTests.TypeSystem.Az
 
         [TestMethod]
         public void AzResourceTypeProvider_can_list_all_types_without_throwing()
+        
         {
             var resourceTypeProvider = new AzResourceTypeProvider();
             var availableTypes = resourceTypeProvider.GetAvailableTypes();
 
             // sanity check - we know there should be a lot of types available
-            availableTypes.Should().HaveCountGreaterThan(2000);
+            var expectedTypeCount = 3000;
+            availableTypes.Should().HaveCountGreaterThan(expectedTypeCount);
         }
 
         [TestMethod]
@@ -65,7 +71,7 @@ namespace Bicep.Core.UnitTests.TypeSystem.Az
             
             var typeLoader = CreateMockTypeLoader(ResourceTypeReference.Parse("Mock.Rp/mockType@2020-01-01"));
             Compilation createCompilation(string program)
-                => new Compilation(new AzResourceTypeProvider(typeLoader), SyntaxFactory.CreateFromText(program));
+                => new Compilation(new AzResourceTypeProvider(typeLoader), SyntaxTreeGroupingFactory.CreateFromText(program));
 
             // Missing top-level properties - should be an error
             var compilation = createCompilation(@"
@@ -83,7 +89,7 @@ resource missingResource 'Mock.Rp/madeUpResourceType@2020-01-01' = {
         {
             var typeLoader = CreateMockTypeLoader(ResourceTypeReference.Parse("Mock.Rp/mockType@2020-01-01"));
             Compilation createCompilation(string program)
-                => new Compilation(new AzResourceTypeProvider(typeLoader), SyntaxFactory.CreateFromText(program));
+                => new Compilation(new AzResourceTypeProvider(typeLoader), SyntaxTreeGroupingFactory.CreateFromText(program));
 
             // Missing top-level properties - should be an error
             var compilation = createCompilation(@"
@@ -106,7 +112,7 @@ resource unexpectedTopLevel 'Mock.Rp/mockType@2020-01-01' = {
 }
 ");
             compilation.Should().HaveDiagnostics(new [] {
-                ("BCP037", DiagnosticLevel.Error, "No other properties are allowed on objects of type \"Mock.Rp/mockType@2020-01-01\"."),
+                ("BCP038", DiagnosticLevel.Error, "The property \"madeUpProperty\" is not allowed on objects of type \"Mock.Rp/mockType@2020-01-01\". Permissible properties include \"dependsOn\"."),
             });
 
             // Missing non top-level properties - should be a warning
@@ -196,15 +202,15 @@ resource unexpectedPropertiesProperty 'Mock.Rp/mockType@2020-01-01' = {
         {
             var serializedTypes = CreateSerializedTypes(resourceTypeReference);
             var deserializedType = TypeSerializer.Deserialize(serializedTypes);
-            var resourceType = deserializedType.OfType<SerializedTypes.Concrete.ResourceType>().Single();
+            var resourceType = deserializedType.OfType<Azure.Bicep.Types.Concrete.ResourceType>().Single();
 
             var mockTypeLocation = new TypeLocation();
             var mockTypeLoader = new Mock<ITypeLoader>();
-            mockTypeLoader.Setup(x => x.ListAllAvailableTypes()).Returns(
-                new Dictionary<string, TypeLocation>
-                {
-                    [resourceTypeReference.FormatName()] = mockTypeLocation,
-                });
+            var resourceTypes = new Dictionary<string, TypeLocation>
+            {
+                [resourceTypeReference.FormatName()] = mockTypeLocation,
+            };
+            mockTypeLoader.Setup(x => x.GetIndexedTypes()).Returns(new Azure.Bicep.Types.Az.Index.TypeIndex(resourceTypes));
             mockTypeLoader.Setup(x => x.LoadResourceType(mockTypeLocation)).Returns(resourceType);
 
             return mockTypeLoader.Object;
@@ -212,39 +218,36 @@ resource unexpectedPropertiesProperty 'Mock.Rp/mockType@2020-01-01' = {
 
         private static string CreateSerializedTypes(ResourceTypeReference resourceTypeReference)
         {
-            var typeFactory = new SerializedTypes.Concrete.TypeFactory(Enumerable.Empty<SerializedTypes.Concrete.TypeBase>());
-            var stringType = typeFactory.Create(() => new SerializedTypes.Concrete.BuiltInType { Kind = SerializedTypes.Concrete.BuiltInTypeKind.String });
-            var apiVersionType = typeFactory.Create(() => new SerializedTypes.Concrete.StringLiteralType { Value = resourceTypeReference.ApiVersion });
-            var typeType = typeFactory.Create(() => new SerializedTypes.Concrete.StringLiteralType { Value = resourceTypeReference.FullyQualifiedType });
-            var propertiesType = typeFactory.Create(() => new SerializedTypes.Concrete.ObjectType
-            {
-                Name = "Properties",
-                Properties = new Dictionary<string, SerializedTypes.Concrete.ObjectProperty>
+            var typeFactory = new Azure.Bicep.Types.Concrete.TypeFactory(Enumerable.Empty<Azure.Bicep.Types.Concrete.TypeBase>());
+            var stringType = typeFactory.Create(() => new Azure.Bicep.Types.Concrete.BuiltInType(Azure.Bicep.Types.Concrete.BuiltInTypeKind.String));
+            var apiVersionType = typeFactory.Create(() => new Azure.Bicep.Types.Concrete.StringLiteralType(resourceTypeReference.ApiVersion));
+            var typeType = typeFactory.Create(() => new Azure.Bicep.Types.Concrete.StringLiteralType(resourceTypeReference.FullyQualifiedType));
+            var propertiesType = typeFactory.Create(() => new Azure.Bicep.Types.Concrete.ObjectType(
+                "Properties",
+                new Dictionary<string, Azure.Bicep.Types.Concrete.ObjectProperty>
                 {
-                    ["readwrite"] = new SerializedTypes.Concrete.ObjectProperty { Type = typeFactory.GetReference(stringType), Flags = SerializedTypes.Concrete.ObjectPropertyFlags.None },
-                    ["readonly"] = new SerializedTypes.Concrete.ObjectProperty { Type = typeFactory.GetReference(stringType), Flags = SerializedTypes.Concrete.ObjectPropertyFlags.ReadOnly },
-                    ["writeonly"] = new SerializedTypes.Concrete.ObjectProperty { Type = typeFactory.GetReference(stringType), Flags = SerializedTypes.Concrete.ObjectPropertyFlags.WriteOnly },
-                    ["required"] = new SerializedTypes.Concrete.ObjectProperty { Type = typeFactory.GetReference(stringType), Flags = SerializedTypes.Concrete.ObjectPropertyFlags.Required },
-                }
-            });
-            var bodyType = typeFactory.Create(() => new SerializedTypes.Concrete.ObjectType
-            {
-                Name = resourceTypeReference.FormatName(),
-                Properties = new Dictionary<string, SerializedTypes.Concrete.ObjectProperty>
-                {
-                    ["name"] = new SerializedTypes.Concrete.ObjectProperty { Type = typeFactory.GetReference(stringType), Flags = SerializedTypes.Concrete.ObjectPropertyFlags.DeployTimeConstant | SerializedTypes.Concrete.ObjectPropertyFlags.Required },
-                    ["type"] = new SerializedTypes.Concrete.ObjectProperty { Type = typeFactory.GetReference(typeType), Flags = SerializedTypes.Concrete.ObjectPropertyFlags.DeployTimeConstant | SerializedTypes.Concrete.ObjectPropertyFlags.ReadOnly },
-                    ["apiVersion"] = new SerializedTypes.Concrete.ObjectProperty { Type = typeFactory.GetReference(apiVersionType), Flags = SerializedTypes.Concrete.ObjectPropertyFlags.DeployTimeConstant | SerializedTypes.Concrete.ObjectPropertyFlags.ReadOnly },
-                    ["id"] = new SerializedTypes.Concrete.ObjectProperty { Type = typeFactory.GetReference(stringType), Flags = SerializedTypes.Concrete.ObjectPropertyFlags.DeployTimeConstant | SerializedTypes.Concrete.ObjectPropertyFlags.ReadOnly },
-                    ["properties"] = new SerializedTypes.Concrete.ObjectProperty { Type = typeFactory.GetReference(propertiesType), Flags = SerializedTypes.Concrete.ObjectPropertyFlags.Required },
+                    ["readwrite"] = new Azure.Bicep.Types.Concrete.ObjectProperty(typeFactory.GetReference(stringType), Azure.Bicep.Types.Concrete.ObjectPropertyFlags.None),
+                    ["readonly"] = new Azure.Bicep.Types.Concrete.ObjectProperty(typeFactory.GetReference(stringType), Azure.Bicep.Types.Concrete.ObjectPropertyFlags.ReadOnly),
+                    ["writeonly"] = new Azure.Bicep.Types.Concrete.ObjectProperty(typeFactory.GetReference(stringType), Azure.Bicep.Types.Concrete.ObjectPropertyFlags.WriteOnly),
+                    ["required"] = new Azure.Bicep.Types.Concrete.ObjectProperty(typeFactory.GetReference(stringType), Azure.Bicep.Types.Concrete.ObjectPropertyFlags.Required),
                 },
-            });
+                null));
+            var bodyType = typeFactory.Create(() => new Azure.Bicep.Types.Concrete.ObjectType(
+                resourceTypeReference.FormatName(),
+                new Dictionary<string, Azure.Bicep.Types.Concrete.ObjectProperty>
+                {
+                    ["name"] = new Azure.Bicep.Types.Concrete.ObjectProperty(typeFactory.GetReference(stringType), Azure.Bicep.Types.Concrete.ObjectPropertyFlags.DeployTimeConstant | Azure.Bicep.Types.Concrete.ObjectPropertyFlags.Required),
+                    ["type"] = new Azure.Bicep.Types.Concrete.ObjectProperty(typeFactory.GetReference(typeType), Azure.Bicep.Types.Concrete.ObjectPropertyFlags.DeployTimeConstant | Azure.Bicep.Types.Concrete.ObjectPropertyFlags.ReadOnly),
+                    ["apiVersion"] = new Azure.Bicep.Types.Concrete.ObjectProperty(typeFactory.GetReference(apiVersionType), Azure.Bicep.Types.Concrete.ObjectPropertyFlags.DeployTimeConstant | Azure.Bicep.Types.Concrete.ObjectPropertyFlags.ReadOnly),
+                    ["id"] = new Azure.Bicep.Types.Concrete.ObjectProperty(typeFactory.GetReference(stringType), Azure.Bicep.Types.Concrete.ObjectPropertyFlags.DeployTimeConstant | Azure.Bicep.Types.Concrete.ObjectPropertyFlags.ReadOnly),
+                    ["properties"] = new Azure.Bicep.Types.Concrete.ObjectProperty(typeFactory.GetReference(propertiesType), Azure.Bicep.Types.Concrete.ObjectPropertyFlags.Required),
+                },
+                null));
 
-            typeFactory.Create(() => new SerializedTypes.Concrete.ResourceType
-            {
-                Name = resourceTypeReference.FormatName(),
-                Body = typeFactory.GetReference(bodyType),
-            });
+            typeFactory.Create(() => new Azure.Bicep.Types.Concrete.ResourceType(
+                resourceTypeReference.FormatName(),
+                Azure.Bicep.Types.Concrete.ScopeType.ResourceGroup,
+                typeFactory.GetReference(bodyType)));
 
             return TypeSerializer.Serialize(typeFactory.GetTypes());
         }

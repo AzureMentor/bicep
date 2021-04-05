@@ -1,7 +1,4 @@
-param location string {
-  default: resourceGroup().location
-}
-
+param location string = resourceGroup().location
 param logAnalyticsWorkspaceName string = 'la-${uniqueString(resourceGroup().id)}'
 
 var vmInsights = {
@@ -34,8 +31,9 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2020-03
   })
 }
 
-resource logAnalyticsWorkspaceDiagnostics 'Microsoft.OperationalInsights/workspaces/providers/diagnosticSettings@2017-05-01-preview' = {
-  name: '${logAnalyticsWorkspace.name}/Microsoft.Insights/diagnosticSettings'
+resource logAnalyticsWorkspaceDiagnostics 'Microsoft.Insights/diagnosticSettings@2017-05-01-preview' = {
+  scope: logAnalyticsWorkspace
+  name: 'diagnosticSettings'
   properties: {
     workspaceId: logAnalyticsWorkspace.id
     logs: [

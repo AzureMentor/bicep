@@ -10,15 +10,17 @@ using Bicep.Core.Emit;
 using Bicep.Core.Extensions;
 using Bicep.Core.FileSystem;
 using Bicep.Core.Resources;
-using Bicep.Core.SemanticModel;
+using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
 using Bicep.Core.TypeSystem;
+using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.UnitTests.Utils;
 using Bicep.Core.Workspaces;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
+using Newtonsoft.Json.Linq;
 
 namespace Bicep.Core.IntegrationTests
 {
@@ -72,7 +74,7 @@ output outputb string = '${inputa}-${inputb}'
             };
 
 
-            var compilation = new Compilation(TestResourceTypeProvider.Create(), SyntaxFactory.CreateForFiles(files, mainUri));
+            var compilation = new Compilation(TestResourceTypeProvider.Create(), SyntaxTreeGroupingFactory.CreateForFiles(files, mainUri));
 
             var (success, diagnosticsByFile) = GetSuccessAndDiagnosticsByFile(compilation);
             diagnosticsByFile.Values.SelectMany(x => x).Should().BeEmpty();
@@ -102,7 +104,7 @@ module mainRecursive 'main.bicep' = {
             };
 
 
-            var compilation = new Compilation(TestResourceTypeProvider.Create(), SyntaxFactory.CreateForFiles(files, mainUri));
+            var compilation = new Compilation(TestResourceTypeProvider.Create(), SyntaxTreeGroupingFactory.CreateForFiles(files, mainUri));
 
             var (success, diagnosticsByFile) = GetSuccessAndDiagnosticsByFile(compilation);
             diagnosticsByFile[mainUri].Should().HaveDiagnostics(new[] {
@@ -157,7 +159,7 @@ module main 'main.bicep' = {
             };
 
 
-            var compilation = new Compilation(TestResourceTypeProvider.Create(), SyntaxFactory.CreateForFiles(files, mainUri));
+            var compilation = new Compilation(TestResourceTypeProvider.Create(), SyntaxTreeGroupingFactory.CreateForFiles(files, mainUri));
 
             var (success, diagnosticsByFile) = GetSuccessAndDiagnosticsByFile(compilation);
             diagnosticsByFile[mainUri].Should().HaveDiagnostics(new[] {
@@ -229,6 +231,117 @@ module modulea 'modulea.bicep' = {
         }
 
         [TestMethod]
+        public void Modules_should_have_metadata()
+        {
+            var mainUri = new Uri("file:///main.bicep");
+            var moduleAUri = new Uri("file:///modulea.bicep");
+            var moduleBUri = new Uri("file:///moduleb.bicep");
+            var moduleCUri = new Uri("file:///modulec.bicep");
+
+            var files = new Dictionary<Uri, string>
+            {
+                [mainUri] = @"
+param inputa string
+param inputb string
+
+module modulea 'modulea.bicep' = {
+  name: 'modulea'
+  params: {
+    inputa: inputa
+    inputb: inputb
+  }
+}
+
+module moduleb 'moduleb.bicep' = {
+  name: 'moduleb'
+  params: {
+    inputa: inputa
+    inputb: inputb
+  }
+}
+
+output outputa string = modulea.outputs.outputa
+output outputb string = moduleb.outputs.outputb
+",
+                [moduleAUri] = @"
+param inputa string
+param inputb string
+
+output outputa string = '${inputa}-${inputb}'
+",
+                [moduleBUri] = @"
+param inputa string
+param inputb string
+
+module module 'modulec.bicep' = {
+  name: 'modulec'
+  params: {
+    inputa: inputa
+    inputb: 2
+  }
+}
+
+output outputb string = '${inputa}-${inputb}'
+",
+                [moduleCUri] = @"
+param inputa string
+param inputb int
+
+var mystr = 'hello'
+
+output outputc1 string = '${inputa}-${mystr}'
+output outputc2 int = inputb + 1
+"
+            };
+
+
+            var compilation = new Compilation(TestResourceTypeProvider.Create(), SyntaxTreeGroupingFactory.CreateForFiles(files, mainUri));
+
+            var (success, diagnosticsByFile) = GetSuccessAndDiagnosticsByFile(compilation);
+            diagnosticsByFile.Values.SelectMany(x => x).Should().BeEmpty();
+            success.Should().BeTrue();
+
+            var templateString = GetTemplate(compilation);
+            var template = JToken.Parse(templateString);
+            template.Should().NotBeNull();
+            
+            var mainTemplateHash = template.SelectToken(BicepTestConstants.GeneratorTemplateHashPath)?.ToString()!;
+            var moduleATemplateHash = template.SelectToken("resources[0].properties.template.metadata._generator.templateHash")?.ToString()!;
+            var moduleBTemplateHash = template.SelectToken("resources[1].properties.template.metadata._generator.templateHash")?.ToString()!;
+            var moduleCTemplateHash = template.SelectToken("resources[1].properties.template.resources[0].properties.template.metadata._generator.templateHash")?.ToString()!;
+
+            new HashSet<String> {
+              mainTemplateHash,
+              moduleATemplateHash,
+              moduleBTemplateHash,
+              moduleCTemplateHash,
+            }.Should().HaveCount(4);
+
+            // Confirming hashes equal individual template hashes
+            ModuleTemplateHashValidator(
+              new Compilation(TestResourceTypeProvider.Create(), SyntaxTreeGroupingFactory.CreateForFiles(new Dictionary<Uri, string> 
+              {
+                [moduleAUri] = files[moduleAUri]
+              }, 
+              moduleAUri)), moduleATemplateHash);
+
+            ModuleTemplateHashValidator(
+              new Compilation(TestResourceTypeProvider.Create(), SyntaxTreeGroupingFactory.CreateForFiles(new Dictionary<Uri, string> 
+              {
+                [moduleBUri] = files[moduleBUri],
+                [moduleCUri] = files[moduleCUri]
+              }, 
+              moduleBUri)), moduleBTemplateHash);
+
+            ModuleTemplateHashValidator(
+              new Compilation(TestResourceTypeProvider.Create(), SyntaxTreeGroupingFactory.CreateForFiles(new Dictionary<Uri, string> 
+              {
+                [moduleCUri] = files[moduleCUri]
+              }, 
+              moduleCUri)), moduleCTemplateHash);
+        }
+
+         [TestMethod]
         public void Module_should_include_diagnostic_if_module_file_cannot_be_loaded()
         {
             var mainUri = new Uri("file:///path/to/main.bicep");
@@ -264,7 +377,7 @@ module modulea 'modulea.bicep' = {
             var stringBuilder = new StringBuilder();
             var stringWriter = new StringWriter(stringBuilder);
 
-            var emitter = new TemplateEmitter(compilation.GetEntrypointSemanticModel());
+            var emitter = new TemplateEmitter(compilation.GetEntrypointSemanticModel(), BicepTestConstants.DevAssemblyFileVersion);
             emitter.Emit(stringWriter);
 
             return stringBuilder.ToString();
@@ -287,6 +400,17 @@ module modulea 'modulea.bicep' = {
             var success = diagnosticsByFile.Values.SelectMany(x => x).All(d => d.Level != DiagnosticLevel.Error);
 
             return (success, diagnosticsByFile);
+        }
+
+        private static void ModuleTemplateHashValidator(Compilation compilation, string expectedTemplateHash)
+        {
+          var (success, diagnosticsByFile) = GetSuccessAndDiagnosticsByFile(compilation);
+          diagnosticsByFile.Values.SelectMany(x => x).Should().BeEmpty();
+          success.Should().BeTrue();
+          var templateString = GetTemplate(compilation);
+          var template = JToken.Parse(templateString);
+          template.Should().NotBeNull();
+          template.SelectToken(BicepTestConstants.GeneratorTemplateHashPath)?.ToString().Should().Be(expectedTemplateHash);
         }
     }
 }

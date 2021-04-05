@@ -49,7 +49,7 @@ var bad = 33-
 //@[4:7)   Identifier |bad|
 //@[8:9)  Assignment |=|
 //@[10:13)  SkippedTriviaSyntax
-//@[10:12)   Number |33|
+//@[10:12)   Integer |33|
 //@[12:13)   Minus |-|
 //@[13:14) NewLine |\n|
 var bad = --33
@@ -61,7 +61,7 @@ var bad = --33
 //@[10:14)  SkippedTriviaSyntax
 //@[10:11)   Minus |-|
 //@[11:12)   Minus |-|
-//@[12:14)   Number |33|
+//@[12:14)   Integer |33|
 //@[14:15) NewLine |\n|
 var bad = 3 * 4 /
 //@[0:17) VariableDeclarationSyntax
@@ -70,9 +70,9 @@ var bad = 3 * 4 /
 //@[4:7)   Identifier |bad|
 //@[8:9)  Assignment |=|
 //@[10:17)  SkippedTriviaSyntax
-//@[10:11)   Number |3|
+//@[10:11)   Integer |3|
 //@[12:13)   Asterisk |*|
-//@[14:15)   Number |4|
+//@[14:15)   Integer |4|
 //@[16:17)   Slash |/|
 //@[17:18) NewLine |\n|
 var bad = 222222222222222222222222222222222222222222 * 4
@@ -82,9 +82,9 @@ var bad = 222222222222222222222222222222222222222222 * 4
 //@[4:7)   Identifier |bad|
 //@[8:9)  Assignment |=|
 //@[10:56)  SkippedTriviaSyntax
-//@[10:52)   Number |222222222222222222222222222222222222222222|
+//@[10:52)   Integer |222222222222222222222222222222222222222222|
 //@[53:54)   Asterisk |*|
-//@[55:56)   Number |4|
+//@[55:56)   Integer |4|
 //@[56:57) NewLine |\n|
 var bad = (null) ?
 //@[0:18) VariableDeclarationSyntax
@@ -151,8 +151,8 @@ var bad = (null)[0]
 //@[11:15)     NullKeyword |null|
 //@[15:16)    RightParen |)|
 //@[16:17)   LeftSquare |[|
-//@[17:18)   NumericLiteralSyntax
-//@[17:18)    Number |0|
+//@[17:18)   IntegerLiteralSyntax
+//@[17:18)    Integer |0|
 //@[18:19)   RightSquare |]|
 //@[19:20) NewLine |\n|
 var bad = ()
@@ -161,8 +161,9 @@ var bad = ()
 //@[4:7)  IdentifierSyntax
 //@[4:7)   Identifier |bad|
 //@[8:9)  Assignment |=|
-//@[10:12)  SkippedTriviaSyntax
+//@[10:12)  ParenthesizedExpressionSyntax
 //@[10:11)   LeftParen |(|
+//@[11:11)   SkippedTriviaSyntax
 //@[11:12)   RightParen |)|
 //@[12:13) NewLine |\n|
 var bad = 
@@ -187,8 +188,8 @@ var x = a + 2
 //@[8:9)    IdentifierSyntax
 //@[8:9)     Identifier |a|
 //@[10:11)   Plus |+|
-//@[12:13)   NumericLiteralSyntax
-//@[12:13)    Number |2|
+//@[12:13)   IntegerLiteralSyntax
+//@[12:13)    Integer |2|
 //@[13:15) NewLine |\n\n|
 
 // unary NOT
@@ -212,8 +213,8 @@ var not = !4
 //@[8:9)  Assignment |=|
 //@[10:12)  UnaryOperationSyntax
 //@[10:11)   Exclamation |!|
-//@[11:12)   NumericLiteralSyntax
-//@[11:12)    Number |4|
+//@[11:12)   IntegerLiteralSyntax
+//@[11:12)    Integer |4|
 //@[12:13) NewLine |\n|
 var not = !'s'
 //@[0:14) VariableDeclarationSyntax
@@ -289,7 +290,7 @@ var minus = ------12
 //@[15:16)   Minus |-|
 //@[16:17)   Minus |-|
 //@[17:18)   Minus |-|
-//@[18:20)   Number |12|
+//@[18:20)   Integer |12|
 //@[20:22) NewLine |\n\n|
 
 // unary minus
@@ -455,8 +456,8 @@ var ne = 15 !~ [
 //@[4:6)   Identifier |ne|
 //@[7:8)  Assignment |=|
 //@[9:18)  BinaryOperationSyntax
-//@[9:11)   NumericLiteralSyntax
-//@[9:11)    Number |15|
+//@[9:11)   IntegerLiteralSyntax
+//@[9:11)    Integer |15|
 //@[12:14)   NotEqualsInsensitive |!~|
 //@[15:18)   ArraySyntax
 //@[15:16)    LeftSquare |[|
@@ -474,8 +475,8 @@ var lt = 4 < 's'
 //@[4:6)   Identifier |lt|
 //@[7:8)  Assignment |=|
 //@[9:16)  BinaryOperationSyntax
-//@[9:10)   NumericLiteralSyntax
-//@[9:10)    Number |4|
+//@[9:10)   IntegerLiteralSyntax
+//@[9:10)    Integer |4|
 //@[11:12)   LessThan |<|
 //@[13:16)   StringSyntax
 //@[13:16)    StringComplete |'s'|
@@ -490,8 +491,8 @@ var lteq = null <= 10
 //@[11:15)   NullLiteralSyntax
 //@[11:15)    NullKeyword |null|
 //@[16:18)   LessThanOrEqual |<=|
-//@[19:21)   NumericLiteralSyntax
-//@[19:21)    Number |10|
+//@[19:21)   IntegerLiteralSyntax
+//@[19:21)    Integer |10|
 //@[21:22) NewLine |\n|
 var gt = false>[
 //@[0:18) VariableDeclarationSyntax
@@ -548,11 +549,11 @@ var or = 10 || 4
 //@[4:6)   Identifier |or|
 //@[7:8)  Assignment |=|
 //@[9:16)  BinaryOperationSyntax
-//@[9:11)   NumericLiteralSyntax
-//@[9:11)    Number |10|
+//@[9:11)   IntegerLiteralSyntax
+//@[9:11)    Integer |10|
 //@[12:14)   LogicalOr ||||
-//@[15:16)   NumericLiteralSyntax
-//@[15:16)    Number |4|
+//@[15:16)   IntegerLiteralSyntax
+//@[15:16)    Integer |4|
 //@[16:18) NewLine |\n\n|
 
 // conditional
@@ -567,8 +568,8 @@ var ternary = null ? 4 : false
 //@[14:18)   NullLiteralSyntax
 //@[14:18)    NullKeyword |null|
 //@[19:20)   Question |?|
-//@[21:22)   NumericLiteralSyntax
-//@[21:22)    Number |4|
+//@[21:22)   IntegerLiteralSyntax
+//@[21:22)    Integer |4|
 //@[23:24)   Colon |:|
 //@[25:30)   BooleanLiteralSyntax
 //@[25:30)    FalseKeyword |false|
@@ -588,15 +589,15 @@ var complex = test(2 + 3*4, true || false && null)
 //@[18:19)   LeftParen |(|
 //@[19:27)   FunctionArgumentSyntax
 //@[19:26)    BinaryOperationSyntax
-//@[19:20)     NumericLiteralSyntax
-//@[19:20)      Number |2|
+//@[19:20)     IntegerLiteralSyntax
+//@[19:20)      Integer |2|
 //@[21:22)     Plus |+|
 //@[23:26)     BinaryOperationSyntax
-//@[23:24)      NumericLiteralSyntax
-//@[23:24)       Number |3|
+//@[23:24)      IntegerLiteralSyntax
+//@[23:24)       Integer |3|
 //@[24:25)      Asterisk |*|
-//@[25:26)      NumericLiteralSyntax
-//@[25:26)       Number |4|
+//@[25:26)      IntegerLiteralSyntax
+//@[25:26)       Integer |4|
 //@[26:27)    Comma |,|
 //@[28:49)   FunctionArgumentSyntax
 //@[28:49)    BinaryOperationSyntax
@@ -622,19 +623,19 @@ var complex = -2 && 3 && !4 && 5
 //@[14:21)    BinaryOperationSyntax
 //@[14:16)     UnaryOperationSyntax
 //@[14:15)      Minus |-|
-//@[15:16)      NumericLiteralSyntax
-//@[15:16)       Number |2|
+//@[15:16)      IntegerLiteralSyntax
+//@[15:16)       Integer |2|
 //@[17:19)     LogicalAnd |&&|
-//@[20:21)     NumericLiteralSyntax
-//@[20:21)      Number |3|
+//@[20:21)     IntegerLiteralSyntax
+//@[20:21)      Integer |3|
 //@[22:24)    LogicalAnd |&&|
 //@[25:27)    UnaryOperationSyntax
 //@[25:26)     Exclamation |!|
-//@[26:27)     NumericLiteralSyntax
-//@[26:27)      Number |4|
+//@[26:27)     IntegerLiteralSyntax
+//@[26:27)      Integer |4|
 //@[28:30)   LogicalAnd |&&|
-//@[31:32)   NumericLiteralSyntax
-//@[31:32)    Number |5|
+//@[31:32)   IntegerLiteralSyntax
+//@[31:32)    Integer |5|
 //@[32:33) NewLine |\n|
 var complex = null ? !4: false
 //@[0:30) VariableDeclarationSyntax
@@ -648,8 +649,8 @@ var complex = null ? !4: false
 //@[19:20)   Question |?|
 //@[21:23)   UnaryOperationSyntax
 //@[21:22)    Exclamation |!|
-//@[22:23)    NumericLiteralSyntax
-//@[22:23)     Number |4|
+//@[22:23)    IntegerLiteralSyntax
+//@[22:23)     Integer |4|
 //@[23:24)   Colon |:|
 //@[25:30)   BooleanLiteralSyntax
 //@[25:30)    FalseKeyword |false|
@@ -674,8 +675,8 @@ var complex = true == false != null == 4 != 'a' ? -2 && 3 && !4 && 5 : true || f
 //@[31:35)      NullLiteralSyntax
 //@[31:35)       NullKeyword |null|
 //@[36:38)     Equals |==|
-//@[39:40)     NumericLiteralSyntax
-//@[39:40)      Number |4|
+//@[39:40)     IntegerLiteralSyntax
+//@[39:40)      Integer |4|
 //@[41:43)    NotEquals |!=|
 //@[44:47)    StringSyntax
 //@[44:47)     StringComplete |'a'|
@@ -685,19 +686,19 @@ var complex = true == false != null == 4 != 'a' ? -2 && 3 && !4 && 5 : true || f
 //@[50:57)     BinaryOperationSyntax
 //@[50:52)      UnaryOperationSyntax
 //@[50:51)       Minus |-|
-//@[51:52)       NumericLiteralSyntax
-//@[51:52)        Number |2|
+//@[51:52)       IntegerLiteralSyntax
+//@[51:52)        Integer |2|
 //@[53:55)      LogicalAnd |&&|
-//@[56:57)      NumericLiteralSyntax
-//@[56:57)       Number |3|
+//@[56:57)      IntegerLiteralSyntax
+//@[56:57)       Integer |3|
 //@[58:60)     LogicalAnd |&&|
 //@[61:63)     UnaryOperationSyntax
 //@[61:62)      Exclamation |!|
-//@[62:63)      NumericLiteralSyntax
-//@[62:63)       Number |4|
+//@[62:63)      IntegerLiteralSyntax
+//@[62:63)       Integer |4|
 //@[64:66)    LogicalAnd |&&|
-//@[67:68)    NumericLiteralSyntax
-//@[67:68)     Number |5|
+//@[67:68)    IntegerLiteralSyntax
+//@[67:68)     Integer |5|
 //@[69:70)   Colon |:|
 //@[71:92)   BinaryOperationSyntax
 //@[71:75)    BooleanLiteralSyntax
@@ -721,12 +722,12 @@ var nestedTernary = null ? 1 : 2 ? true ? 'a': 'b' : false ? 'd' : 15
 //@[20:24)   NullLiteralSyntax
 //@[20:24)    NullKeyword |null|
 //@[25:26)   Question |?|
-//@[27:28)   NumericLiteralSyntax
-//@[27:28)    Number |1|
+//@[27:28)   IntegerLiteralSyntax
+//@[27:28)    Integer |1|
 //@[29:30)   Colon |:|
 //@[31:69)   TernaryOperationSyntax
-//@[31:32)    NumericLiteralSyntax
-//@[31:32)     Number |2|
+//@[31:32)    IntegerLiteralSyntax
+//@[31:32)     Integer |2|
 //@[33:34)    Question |?|
 //@[35:50)    TernaryOperationSyntax
 //@[35:39)     BooleanLiteralSyntax
@@ -745,8 +746,8 @@ var nestedTernary = null ? 1 : 2 ? true ? 'a': 'b' : false ? 'd' : 15
 //@[61:64)     StringSyntax
 //@[61:64)      StringComplete |'d'|
 //@[65:66)     Colon |:|
-//@[67:69)     NumericLiteralSyntax
-//@[67:69)      Number |15|
+//@[67:69)     IntegerLiteralSyntax
+//@[67:69)      Integer |15|
 //@[69:70) NewLine |\n|
 var nestedTernary = (null ? 1 : 2) ? (true ? 'a': 'b') : (false ? 'd' : 15)
 //@[0:75) VariableDeclarationSyntax
@@ -761,11 +762,11 @@ var nestedTernary = (null ? 1 : 2) ? (true ? 'a': 'b') : (false ? 'd' : 15)
 //@[21:25)     NullLiteralSyntax
 //@[21:25)      NullKeyword |null|
 //@[26:27)     Question |?|
-//@[28:29)     NumericLiteralSyntax
-//@[28:29)      Number |1|
+//@[28:29)     IntegerLiteralSyntax
+//@[28:29)      Integer |1|
 //@[30:31)     Colon |:|
-//@[32:33)     NumericLiteralSyntax
-//@[32:33)      Number |2|
+//@[32:33)     IntegerLiteralSyntax
+//@[32:33)      Integer |2|
 //@[33:34)    RightParen |)|
 //@[35:36)   Question |?|
 //@[37:54)   ParenthesizedExpressionSyntax
@@ -790,8 +791,8 @@ var nestedTernary = (null ? 1 : 2) ? (true ? 'a': 'b') : (false ? 'd' : 15)
 //@[66:69)     StringSyntax
 //@[66:69)      StringComplete |'d'|
 //@[70:71)     Colon |:|
-//@[72:74)     NumericLiteralSyntax
-//@[72:74)      Number |15|
+//@[72:74)     IntegerLiteralSyntax
+//@[72:74)      Integer |15|
 //@[74:75)    RightParen |)|
 //@[75:77) NewLine |\n\n|
 
@@ -819,8 +820,8 @@ var errorInsideArrayAccess = [
 //@[1:2)   LeftSquare |[|
 //@[2:4)   UnaryOperationSyntax
 //@[2:3)    Exclamation |!|
-//@[3:4)    NumericLiteralSyntax
-//@[3:4)     Number |0|
+//@[3:4)    IntegerLiteralSyntax
+//@[3:4)     Integer |0|
 //@[4:5)   RightSquare |]|
 //@[5:6) NewLine |\n|
 var integerIndexOnNonArray = (null)[0]
@@ -836,8 +837,8 @@ var integerIndexOnNonArray = (null)[0]
 //@[30:34)     NullKeyword |null|
 //@[34:35)    RightParen |)|
 //@[35:36)   LeftSquare |[|
-//@[36:37)   NumericLiteralSyntax
-//@[36:37)    Number |0|
+//@[36:37)   IntegerLiteralSyntax
+//@[36:37)    Integer |0|
 //@[37:38)   RightSquare |]|
 //@[38:39) NewLine |\n|
 var stringIndexOnNonObject = 'test'['test']
@@ -947,8 +948,8 @@ var badIndexOverObj2 = {}[0]
 //@[23:24)    LeftBrace |{|
 //@[24:25)    RightBrace |}|
 //@[25:26)   LeftSquare |[|
-//@[26:27)   NumericLiteralSyntax
-//@[26:27)    Number |0|
+//@[26:27)   IntegerLiteralSyntax
+//@[26:27)    Integer |0|
 //@[27:28)   RightSquare |]|
 //@[28:29) NewLine |\n|
 var badExpressionIndexer = {}[base64('a')]
@@ -1246,18 +1247,147 @@ var takeTooMany = take([
 //@[0:1)     RightSquare |]|
 //@[1:2)    Comma |,|
 //@[2:4)   FunctionArgumentSyntax
-//@[2:3)    NumericLiteralSyntax
-//@[2:3)     Number |1|
+//@[2:3)    IntegerLiteralSyntax
+//@[2:3)     Integer |1|
 //@[3:4)    Comma |,|
 //@[4:6)   FunctionArgumentSyntax
-//@[4:5)    NumericLiteralSyntax
-//@[4:5)     Number |2|
+//@[4:5)    IntegerLiteralSyntax
+//@[4:5)     Integer |2|
 //@[5:6)    Comma |,|
 //@[6:9)   FunctionArgumentSyntax
 //@[6:9)    StringSyntax
 //@[6:9)     StringComplete |'s'|
 //@[9:10)   RightParen |)|
 //@[10:12) NewLine |\n\n|
+
+// missing arguments
+//@[20:21) NewLine |\n|
+var trailingArgumentComma = format('s',)
+//@[0:40) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:25)  IdentifierSyntax
+//@[4:25)   Identifier |trailingArgumentComma|
+//@[26:27)  Assignment |=|
+//@[28:40)  FunctionCallSyntax
+//@[28:34)   IdentifierSyntax
+//@[28:34)    Identifier |format|
+//@[34:35)   LeftParen |(|
+//@[35:39)   FunctionArgumentSyntax
+//@[35:38)    StringSyntax
+//@[35:38)     StringComplete |'s'|
+//@[38:39)    Comma |,|
+//@[39:39)   FunctionArgumentSyntax
+//@[39:39)    SkippedTriviaSyntax
+//@[39:40)   RightParen |)|
+//@[40:41) NewLine |\n|
+var onlyArgumentComma = concat(,)
+//@[0:33) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:21)  IdentifierSyntax
+//@[4:21)   Identifier |onlyArgumentComma|
+//@[22:23)  Assignment |=|
+//@[24:33)  FunctionCallSyntax
+//@[24:30)   IdentifierSyntax
+//@[24:30)    Identifier |concat|
+//@[30:31)   LeftParen |(|
+//@[31:32)   FunctionArgumentSyntax
+//@[31:31)    SkippedTriviaSyntax
+//@[31:32)    Comma |,|
+//@[32:32)   FunctionArgumentSyntax
+//@[32:32)    SkippedTriviaSyntax
+//@[32:33)   RightParen |)|
+//@[33:34) NewLine |\n|
+var multipleArgumentCommas = concat(,,,,,)
+//@[0:42) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:26)  IdentifierSyntax
+//@[4:26)   Identifier |multipleArgumentCommas|
+//@[27:28)  Assignment |=|
+//@[29:42)  FunctionCallSyntax
+//@[29:35)   IdentifierSyntax
+//@[29:35)    Identifier |concat|
+//@[35:36)   LeftParen |(|
+//@[36:37)   FunctionArgumentSyntax
+//@[36:36)    SkippedTriviaSyntax
+//@[36:37)    Comma |,|
+//@[37:38)   FunctionArgumentSyntax
+//@[37:37)    SkippedTriviaSyntax
+//@[37:38)    Comma |,|
+//@[38:39)   FunctionArgumentSyntax
+//@[38:38)    SkippedTriviaSyntax
+//@[38:39)    Comma |,|
+//@[39:40)   FunctionArgumentSyntax
+//@[39:39)    SkippedTriviaSyntax
+//@[39:40)    Comma |,|
+//@[40:41)   FunctionArgumentSyntax
+//@[40:40)    SkippedTriviaSyntax
+//@[40:41)    Comma |,|
+//@[41:41)   FunctionArgumentSyntax
+//@[41:41)    SkippedTriviaSyntax
+//@[41:42)   RightParen |)|
+//@[42:43) NewLine |\n|
+var emptyArgInBetween = concat(true,,false)
+//@[0:43) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:21)  IdentifierSyntax
+//@[4:21)   Identifier |emptyArgInBetween|
+//@[22:23)  Assignment |=|
+//@[24:43)  FunctionCallSyntax
+//@[24:30)   IdentifierSyntax
+//@[24:30)    Identifier |concat|
+//@[30:31)   LeftParen |(|
+//@[31:36)   FunctionArgumentSyntax
+//@[31:35)    BooleanLiteralSyntax
+//@[31:35)     TrueKeyword |true|
+//@[35:36)    Comma |,|
+//@[36:37)   FunctionArgumentSyntax
+//@[36:36)    SkippedTriviaSyntax
+//@[36:37)    Comma |,|
+//@[37:42)   FunctionArgumentSyntax
+//@[37:42)    BooleanLiteralSyntax
+//@[37:42)     FalseKeyword |false|
+//@[42:43)   RightParen |)|
+//@[43:44) NewLine |\n|
+var leadingEmptyArg = concat(,[])
+//@[0:33) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:19)  IdentifierSyntax
+//@[4:19)   Identifier |leadingEmptyArg|
+//@[20:21)  Assignment |=|
+//@[22:33)  FunctionCallSyntax
+//@[22:28)   IdentifierSyntax
+//@[22:28)    Identifier |concat|
+//@[28:29)   LeftParen |(|
+//@[29:30)   FunctionArgumentSyntax
+//@[29:29)    SkippedTriviaSyntax
+//@[29:30)    Comma |,|
+//@[30:32)   FunctionArgumentSyntax
+//@[30:32)    ArraySyntax
+//@[30:31)     LeftSquare |[|
+//@[31:32)     RightSquare |]|
+//@[32:33)   RightParen |)|
+//@[33:34) NewLine |\n|
+var leadingAndTrailingEmptyArg = concat(,'s',)
+//@[0:46) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:30)  IdentifierSyntax
+//@[4:30)   Identifier |leadingAndTrailingEmptyArg|
+//@[31:32)  Assignment |=|
+//@[33:46)  FunctionCallSyntax
+//@[33:39)   IdentifierSyntax
+//@[33:39)    Identifier |concat|
+//@[39:40)   LeftParen |(|
+//@[40:41)   FunctionArgumentSyntax
+//@[40:40)    SkippedTriviaSyntax
+//@[40:41)    Comma |,|
+//@[41:45)   FunctionArgumentSyntax
+//@[41:44)    StringSyntax
+//@[41:44)     StringComplete |'s'|
+//@[44:45)    Comma |,|
+//@[45:45)   FunctionArgumentSyntax
+//@[45:45)    SkippedTriviaSyntax
+//@[45:46)   RightParen |)|
+//@[46:48) NewLine |\n\n|
 
 // wrong argument types
 //@[23:24) NewLine |\n|
@@ -1312,12 +1442,12 @@ var indexOfWrongTypes = indexOf(1,1)
 //@[24:31)    Identifier |indexOf|
 //@[31:32)   LeftParen |(|
 //@[32:34)   FunctionArgumentSyntax
-//@[32:33)    NumericLiteralSyntax
-//@[32:33)     Number |1|
+//@[32:33)    IntegerLiteralSyntax
+//@[32:33)     Integer |1|
 //@[33:34)    Comma |,|
 //@[34:35)   FunctionArgumentSyntax
-//@[34:35)    NumericLiteralSyntax
-//@[34:35)     Number |1|
+//@[34:35)    IntegerLiteralSyntax
+//@[34:35)     Integer |1|
 //@[35:36)   RightParen |)|
 //@[36:38) NewLine |\n\n|
 
@@ -1361,27 +1491,27 @@ var test2 = lsitKeys('abcd', '2020-01-01')
 //@[41:42)   RightParen |)|
 //@[42:44) NewLine |\n\n|
 
-// just 'list' 
-//@[15:16) NewLine |\n|
-var test3 = list('abcd', '2020-01-01')
-//@[0:38) VariableDeclarationSyntax
+// just 'lis' instead of 'list'
+//@[31:32) NewLine |\n|
+var test3 = lis('abcd', '2020-01-01')
+//@[0:37) VariableDeclarationSyntax
 //@[0:3)  Identifier |var|
 //@[4:9)  IdentifierSyntax
 //@[4:9)   Identifier |test3|
 //@[10:11)  Assignment |=|
-//@[12:38)  FunctionCallSyntax
-//@[12:16)   IdentifierSyntax
-//@[12:16)    Identifier |list|
-//@[16:17)   LeftParen |(|
-//@[17:24)   FunctionArgumentSyntax
-//@[17:23)    StringSyntax
-//@[17:23)     StringComplete |'abcd'|
-//@[23:24)    Comma |,|
-//@[25:37)   FunctionArgumentSyntax
-//@[25:37)    StringSyntax
-//@[25:37)     StringComplete |'2020-01-01'|
-//@[37:38)   RightParen |)|
-//@[38:40) NewLine |\n\n|
+//@[12:37)  FunctionCallSyntax
+//@[12:15)   IdentifierSyntax
+//@[12:15)    Identifier |lis|
+//@[15:16)   LeftParen |(|
+//@[16:23)   FunctionArgumentSyntax
+//@[16:22)    StringSyntax
+//@[16:22)     StringComplete |'abcd'|
+//@[22:23)    Comma |,|
+//@[24:36)   FunctionArgumentSyntax
+//@[24:36)    StringSyntax
+//@[24:36)     StringComplete |'2020-01-01'|
+//@[36:37)   RightParen |)|
+//@[37:39) NewLine |\n\n|
 
 var sampleObject = {
 //@[0:190) VariableDeclarationSyntax
@@ -1397,8 +1527,8 @@ var sampleObject = {
 //@[2:7)    IdentifierSyntax
 //@[2:7)     Identifier |myInt|
 //@[7:8)    Colon |:|
-//@[9:11)    NumericLiteralSyntax
-//@[9:11)     Number |42|
+//@[9:11)    IntegerLiteralSyntax
+//@[9:11)     Integer |42|
 //@[11:12)   NewLine |\n|
   myStr: 's'
 //@[2:12)   ObjectPropertySyntax
@@ -1474,18 +1604,18 @@ var sampleObject = {
 //@[10:11)     NewLine |\n|
     1
 //@[4:5)     ArrayItemSyntax
-//@[4:5)      NumericLiteralSyntax
-//@[4:5)       Number |1|
+//@[4:5)      IntegerLiteralSyntax
+//@[4:5)       Integer |1|
 //@[5:6)     NewLine |\n|
     2
 //@[4:5)     ArrayItemSyntax
-//@[4:5)      NumericLiteralSyntax
-//@[4:5)       Number |2|
+//@[4:5)      IntegerLiteralSyntax
+//@[4:5)       Integer |2|
 //@[5:6)     NewLine |\n|
     3
 //@[4:5)     ArrayItemSyntax
-//@[4:5)      NumericLiteralSyntax
-//@[4:5)       Number |3|
+//@[4:5)      IntegerLiteralSyntax
+//@[4:5)       Integer |3|
 //@[5:6)     NewLine |\n|
   ]
 //@[2:3)     RightSquare |]|
@@ -1552,8 +1682,8 @@ var badType = sampleObject.myStr / 32
 //@[27:32)    IdentifierSyntax
 //@[27:32)     Identifier |myStr|
 //@[33:34)   Slash |/|
-//@[35:37)   NumericLiteralSyntax
-//@[35:37)    Number |32|
+//@[35:37)   IntegerLiteralSyntax
+//@[35:37)    Integer |32|
 //@[37:38) NewLine |\n|
 var badInnerProperty = sampleObject.myInner.fake
 //@[0:48) VariableDeclarationSyntax
@@ -1592,8 +1722,8 @@ var badInnerType = sampleObject.myInner.anotherStr + 2
 //@[40:50)    IdentifierSyntax
 //@[40:50)     Identifier |anotherStr|
 //@[51:52)   Plus |+|
-//@[53:54)   NumericLiteralSyntax
-//@[53:54)    Number |2|
+//@[53:54)   IntegerLiteralSyntax
+//@[53:54)    Integer |2|
 //@[54:55) NewLine |\n|
 var badArrayIndexer = sampleObject.myArr['s']
 //@[0:45) VariableDeclarationSyntax
@@ -1782,8 +1912,8 @@ var invalidOperands = 1 + az
 //@[4:19)   Identifier |invalidOperands|
 //@[20:21)  Assignment |=|
 //@[22:28)  BinaryOperationSyntax
-//@[22:23)   NumericLiteralSyntax
-//@[22:23)    Number |1|
+//@[22:23)   IntegerLiteralSyntax
+//@[22:23)    Integer |1|
 //@[24:25)   Plus |+|
 //@[26:28)   VariableAccessSyntax
 //@[26:28)    IdentifierSyntax
@@ -1822,8 +1952,8 @@ var bannedFunctions = {
 //@[19:20)      LeftParen |(|
 //@[20:21)      RightParen |)|
 //@[22:23)     Plus |+|
-//@[24:25)     NumericLiteralSyntax
-//@[24:25)      Number |2|
+//@[24:25)     IntegerLiteralSyntax
+//@[24:25)      Integer |2|
 //@[25:26)   NewLine |\n|
   if: sys.if(null,null)
 //@[2:23)   ObjectPropertySyntax
@@ -1895,8 +2025,8 @@ var bannedFunctions = {
 //@[15:18)          Identifier |add|
 //@[18:19)         LeftParen |(|
 //@[19:20)         FunctionArgumentSyntax
-//@[19:20)          NumericLiteralSyntax
-//@[19:20)           Number |1|
+//@[19:20)          IntegerLiteralSyntax
+//@[19:20)           Integer |1|
 //@[20:21)         RightParen |)|
 //@[22:23)        Plus |+|
 //@[24:36)        InstanceFunctionCallSyntax
@@ -1908,12 +2038,12 @@ var bannedFunctions = {
 //@[28:31)          Identifier |sub|
 //@[31:32)         LeftParen |(|
 //@[32:34)         FunctionArgumentSyntax
-//@[32:33)          NumericLiteralSyntax
-//@[32:33)           Number |2|
+//@[32:33)          IntegerLiteralSyntax
+//@[32:33)           Integer |2|
 //@[33:34)          Comma |,|
 //@[34:35)         FunctionArgumentSyntax
-//@[34:35)          NumericLiteralSyntax
-//@[34:35)           Number |3|
+//@[34:35)          IntegerLiteralSyntax
+//@[34:35)           Integer |3|
 //@[35:36)         RightParen |)|
 //@[37:38)       Plus |+|
 //@[39:53)       InstanceFunctionCallSyntax
@@ -1925,8 +2055,8 @@ var bannedFunctions = {
 //@[43:46)         Identifier |mul|
 //@[46:47)        LeftParen |(|
 //@[47:49)        FunctionArgumentSyntax
-//@[47:48)         NumericLiteralSyntax
-//@[47:48)          Number |8|
+//@[47:48)         IntegerLiteralSyntax
+//@[47:48)          Integer |8|
 //@[48:49)         Comma |,|
 //@[49:52)        FunctionArgumentSyntax
 //@[49:52)         StringSyntax
@@ -2102,6 +2232,26 @@ var sysFunctions = sys.a
 //@[23:24)    Identifier |a|
 //@[24:26) NewLine |\n\n|
 
+// #completionTest(33) -> sysFunctions
+//@[38:39) NewLine |\n|
+var sysFunctionsInParens = (sys.a)
+//@[0:34) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:24)  IdentifierSyntax
+//@[4:24)   Identifier |sysFunctionsInParens|
+//@[25:26)  Assignment |=|
+//@[27:34)  ParenthesizedExpressionSyntax
+//@[27:28)   LeftParen |(|
+//@[28:33)   PropertyAccessSyntax
+//@[28:31)    VariableAccessSyntax
+//@[28:31)     IdentifierSyntax
+//@[28:31)      Identifier |sys|
+//@[31:32)    Dot |.|
+//@[32:33)    IdentifierSyntax
+//@[32:33)     Identifier |a|
+//@[33:34)   RightParen |)|
+//@[34:36) NewLine |\n\n|
+
 // missing method name
 //@[22:23) NewLine |\n|
 var missingMethodName = az.()
@@ -2157,8 +2307,8 @@ var missingIndexerOnIdentifier = nonExistentIdentifier[][1][]
 //@[55:55)     SkippedTriviaSyntax
 //@[55:56)     RightSquare |]|
 //@[56:57)    LeftSquare |[|
-//@[57:58)    NumericLiteralSyntax
-//@[57:58)     Number |1|
+//@[57:58)    IntegerLiteralSyntax
+//@[57:58)     Integer |1|
 //@[58:59)    RightSquare |]|
 //@[59:60)   LeftSquare |[|
 //@[60:60)   SkippedTriviaSyntax
@@ -2173,10 +2323,25 @@ var emptyParens = ()
 //@[4:15)  IdentifierSyntax
 //@[4:15)   Identifier |emptyParens|
 //@[16:17)  Assignment |=|
-//@[18:20)  SkippedTriviaSyntax
+//@[18:20)  ParenthesizedExpressionSyntax
 //@[18:19)   LeftParen |(|
+//@[19:19)   SkippedTriviaSyntax
 //@[19:20)   RightParen |)|
 //@[20:22) NewLine |\n\n|
+
+// #completionTest(26) -> symbols
+//@[33:34) NewLine |\n|
+var anotherEmptyParens = ()
+//@[0:27) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:22)  IdentifierSyntax
+//@[4:22)   Identifier |anotherEmptyParens|
+//@[23:24)  Assignment |=|
+//@[25:27)  ParenthesizedExpressionSyntax
+//@[25:26)   LeftParen |(|
+//@[26:26)   SkippedTriviaSyntax
+//@[26:27)   RightParen |)|
+//@[27:29) NewLine |\n\n|
 
 // keywords can't be called like functions
 //@[42:43) NewLine |\n|
@@ -2229,7 +2394,7 @@ var partialObject = {
   2: true
 //@[2:9)   ObjectPropertySyntax
 //@[2:3)    SkippedTriviaSyntax
-//@[2:3)     Number |2|
+//@[2:3)     Integer |2|
 //@[3:4)    Colon |:|
 //@[5:9)    BooleanLiteralSyntax
 //@[5:9)     TrueKeyword |true|
@@ -2244,7 +2409,7 @@ var partialObject = {
   3 : concat('s')
 //@[2:17)   ObjectPropertySyntax
 //@[2:3)    SkippedTriviaSyntax
-//@[2:3)     Number |3|
+//@[2:3)     Integer |3|
 //@[4:5)    Colon |:|
 //@[6:17)    FunctionCallSyntax
 //@[6:12)     IdentifierSyntax
@@ -2309,7 +2474,7 @@ var partialObject = {
 //@[2:3)     Identifier |a|
 //@[4:8)    SkippedTriviaSyntax
 //@[4:5)     Unrecognized |#|
-//@[6:8)     Number |22|
+//@[6:8)     Integer |22|
 //@[8:8)    SkippedTriviaSyntax
 //@[8:9)   NewLine |\n|
   c :
@@ -2329,4 +2494,56 @@ var partialObject = {
 //@[8:9)   NewLine |\n|
 }
 //@[0:1)   RightBrace |}|
-//@[1:1) EndOfFile ||
+//@[1:3) NewLine |\n\n|
+
+// dangling decorators - to make sure the tests work, please do not add contents after this line
+//@[96:97) NewLine |\n|
+@concat()
+//@[0:24) MissingDeclarationSyntax
+//@[0:9)  DecoratorSyntax
+//@[0:1)   At |@|
+//@[1:9)   FunctionCallSyntax
+//@[1:7)    IdentifierSyntax
+//@[1:7)     Identifier |concat|
+//@[7:8)    LeftParen |(|
+//@[8:9)    RightParen |)|
+//@[9:10)  NewLine |\n|
+@sys.secure()
+//@[0:13)  DecoratorSyntax
+//@[0:1)   At |@|
+//@[1:13)   InstanceFunctionCallSyntax
+//@[1:4)    VariableAccessSyntax
+//@[1:4)     IdentifierSyntax
+//@[1:4)      Identifier |sys|
+//@[4:5)    Dot |.|
+//@[5:11)    IdentifierSyntax
+//@[5:11)     Identifier |secure|
+//@[11:12)    LeftParen |(|
+//@[12:13)    RightParen |)|
+//@[13:14)  NewLine |\n|
+xxxxx
+//@[0:5) SkippedTriviaSyntax
+//@[0:5)  Identifier |xxxxx|
+//@[5:8) NewLine |\n\n\n|
+
+
+@minLength()
+//@[0:21) MissingDeclarationSyntax
+//@[0:12)  DecoratorSyntax
+//@[0:1)   At |@|
+//@[1:12)   FunctionCallSyntax
+//@[1:10)    IdentifierSyntax
+//@[1:10)     Identifier |minLength|
+//@[10:11)    LeftParen |(|
+//@[11:12)    RightParen |)|
+//@[12:21)  NewLine |\n\n\n\n\n\n\n\n\n|
+
+
+
+
+
+
+
+
+
+//@[0:0) EndOfFile ||

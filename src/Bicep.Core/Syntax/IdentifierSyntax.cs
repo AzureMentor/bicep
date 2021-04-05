@@ -2,27 +2,31 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Diagnostics;
 using System.Linq;
-using Bicep.Core.Parser;
+using Bicep.Core.Parsing;
 
 namespace Bicep.Core.Syntax
 {
     /// <summary>
     /// Represents a well-formed identifier.
     /// </summary>
+    [DebuggerDisplay("IdentifierName = {" + nameof(IdentifierName) +"}")]
     public class IdentifierSyntax : SyntaxBase
     {
-        public IdentifierSyntax(Token identifier)
+        public IdentifierSyntax(SyntaxBase child)
         {
-            AssertTokenType(identifier, nameof(identifier), TokenType.Identifier);
-            Assert(string.IsNullOrEmpty(identifier.Text) == false, "Identifier must not be null or empty.");
+            if (child is Token token)
+            {
+                AssertTokenType(token, nameof(child), TokenType.Identifier);
+                Assert(string.IsNullOrEmpty(token.Text) == false, "Identifier must not be null or empty.");
+            }
+            else
+            {
+                AssertSyntaxType(child, nameof(child), typeof(SkippedTriviaSyntax));
+            }
 
-            this.Child = identifier;
-        }
-
-        public IdentifierSyntax(SkippedTriviaSyntax skipped)
-        {
-            this.Child = skipped;
+            this.Child = child;
         }
 
         public SyntaxBase Child { get; }
@@ -45,7 +49,7 @@ namespace Bicep.Core.Syntax
             }
         }
 
-        public override void Accept(SyntaxVisitor visitor) => visitor.VisitIdentifierSyntax(this);
+        public override void Accept(ISyntaxVisitor visitor) => visitor.VisitIdentifierSyntax(this);
 
         public override TextSpan Span => this.Child.Span;
 

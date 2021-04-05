@@ -1,6 +1,13 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "dev",
+      "templateHash": "615122294254348193"
+    }
+  },
   "parameters": {
     "location": {
       "type": "string",
@@ -45,9 +52,10 @@
       }
     },
     {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/diagnosticSettings",
+      "type": "microsoft.insights/diagnosticSettings",
       "apiVersion": "2017-05-01-preview",
-      "name": "[format('{0}/Microsoft.Insights/diagnosticSettings', parameters('logAnalyticsWorkspaceName'))]",
+      "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('logAnalyticsWorkspaceName'))]",
+      "name": "diagnosticSettings",
       "properties": {
         "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]",
         "logs": [

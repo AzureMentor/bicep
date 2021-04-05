@@ -15,51 +15,48 @@ param virtualNetworkSubnetPrefix string = '10.0.0.0/24'
 
 // Username for the Virtual Machine.
 param virtualMachineAdminUsername string
+
 // Password for the Virtual Machine.
-param virtualMachineAdminPassword string {
-  secure: true
-}
+@secure()
+param virtualMachineAdminPassword string
+
 // Size of the Virtual Machine.
-param virtualMachineSize string {
-  allowed: [
-    'Standard_D2s_v3'
-    'Standard_D4s_v3'
-    'Standard_D8s_v3'
-  ]
-  default: 'Standard_D8s_v3'
-}
+@allowed([
+  'Standard_D2s_v3'
+  'Standard_D4s_v3'
+  'Standard_D8s_v3'
+])
+param virtualMachineSize string = 'Standard_D8s_v3'
+
 // The publisher of the Virtual Machine.
-param virtualMachinePublisher string {
-  allowed: [
-    'MicrosoftVisualStudio'
-    'MicrosoftWindowsDesktop'
-  ]
-  default: 'MicrosoftWindowsDesktop'
-}
+@allowed([
+  'MicrosoftVisualStudio'
+  'MicrosoftWindowsDesktop'
+])
+param virtualMachinePublisher string = 'MicrosoftWindowsDesktop'
+
 // The offer of the Virtual Machine
-param virtualMachineOffer string {
-  allowed: [
-    'visualstudio2019latest'
-    'Windows-10'
-  ]
-  default: 'Windows-10'
-}
+@allowed([
+  'visualstudio2019latest'
+  'Windows-10'
+])
+param virtualMachineOffer string = 'Windows-10'
+
 // The Windows version for the VM. This will pick a fully patched image of this given Windows version.
-param virtualMachineSku string {
-  allowed: [
-    'vs-2019-comm-latest-ws2019'
-    'vs-2019-ent-latest-ws2019'
-    '20h1-pro-g2'
-    '20h1-ent-g2'
-  ]
-  default: '20h1-pro-g2'
-}
+@allowed([
+  'vs-2019-comm-latest-ws2019'
+  'vs-2019-ent-latest-ws2019'
+  '20h1-pro-g2'
+  '20h1-ent-g2'
+])
+param virtualMachineSku string = '20h1-pro-g2'
+
 // The URI of the PowerShell Custom Script.
 param virtualMachineExtensionCustomScriptUri string = 'https://raw.githubusercontent.com/Azure/bicep/main/docs/examples/201/vm-windows-with-custom-script-extension/install.ps1'
 
 var metadata = {
-  longName: '{0}-${name}-${coalesce(suffix, '') == '' ? '' : concat('-', suffix)}'
-  shortName: '{0}${replace(name, '-', '')}${coalesce(suffix, '') == '' ? '' : suffix}'
+  longName: '{0}-${name}-${(suffix ?? '') == '' ? '' : concat('-', suffix)}'
+  shortName: '{0}${replace(name, '-', '')}${(suffix ?? '') == '' ? '' : suffix}'
 }
 
 // Stroage Account
@@ -89,7 +86,7 @@ resource pip 'Microsoft.Network/publicIPAddresses@2020-06-01' = {
   properties: {
     publicIPAllocationMethod: 'Static'
     dnsSettings: {
-      domainNameLabel: coalesce(publicIpDnsLabel, '') == '' ? replace(metadata.shortName, '{0}', 'vm') : publicIpDnsLabel
+      domainNameLabel: (publicIpDnsLabel ?? '') == '' ? replace(metadata.shortName, '{0}', 'vm') : publicIpDnsLabel
     }
   }
 }

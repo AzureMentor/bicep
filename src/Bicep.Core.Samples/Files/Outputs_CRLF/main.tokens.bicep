@@ -13,21 +13,21 @@ output myInt int = 7
 //@[7:12) Identifier |myInt|
 //@[13:16) Identifier |int|
 //@[17:18) Assignment |=|
-//@[19:20) Number |7|
+//@[19:20) Integer |7|
 //@[20:22) NewLine |\r\n|
 output myOtherInt int = 20 / 13 + 80 % -4
 //@[0:6) Identifier |output|
 //@[7:17) Identifier |myOtherInt|
 //@[18:21) Identifier |int|
 //@[22:23) Assignment |=|
-//@[24:26) Number |20|
+//@[24:26) Integer |20|
 //@[27:28) Slash |/|
-//@[29:31) Number |13|
+//@[29:31) Integer |13|
 //@[32:33) Plus |+|
-//@[34:36) Number |80|
+//@[34:36) Integer |80|
 //@[37:38) Modulo |%|
 //@[39:40) Minus |-|
-//@[40:41) Number |4|
+//@[40:41) Integer |4|
 //@[41:45) NewLine |\r\n\r\n|
 
 output myBool bool = !false
@@ -83,7 +83,7 @@ output obj object = {
   b: 12
 //@[2:3) Identifier |b|
 //@[3:4) Colon |:|
-//@[5:7) Number |12|
+//@[5:7) Integer |12|
 //@[7:9) NewLine |\r\n|
   c: true
 //@[2:3) Identifier |c|
@@ -101,13 +101,13 @@ output obj object = {
 //@[8:9) LeftSquare |[|
 //@[9:11) NewLine |\r\n|
     1
-//@[4:5) Number |1|
+//@[4:5) Integer |1|
 //@[5:7) NewLine |\r\n|
     2
-//@[4:5) Number |2|
+//@[4:5) Integer |2|
 //@[5:7) NewLine |\r\n|
     3
-//@[4:5) Number |3|
+//@[4:5) Integer |3|
 //@[5:7) NewLine |\r\n|
     null
 //@[4:8) NullKeyword |null|
@@ -180,27 +180,23 @@ output rgLocation string = resourceGroup().location
 //@[43:51) Identifier |location|
 //@[51:55) NewLine |\r\n\r\n|
 
-output crossRegion bool = resourceGroup().location == deployment().location ? false : true
+output isWestUs bool = resourceGroup().location != 'westus' ? false : true
 //@[0:6) Identifier |output|
-//@[7:18) Identifier |crossRegion|
-//@[19:23) Identifier |bool|
-//@[24:25) Assignment |=|
-//@[26:39) Identifier |resourceGroup|
-//@[39:40) LeftParen |(|
-//@[40:41) RightParen |)|
-//@[41:42) Dot |.|
-//@[42:50) Identifier |location|
-//@[51:53) Equals |==|
-//@[54:64) Identifier |deployment|
-//@[64:65) LeftParen |(|
-//@[65:66) RightParen |)|
-//@[66:67) Dot |.|
-//@[67:75) Identifier |location|
-//@[76:77) Question |?|
-//@[78:83) FalseKeyword |false|
-//@[84:85) Colon |:|
-//@[86:90) TrueKeyword |true|
-//@[90:94) NewLine |\r\n\r\n|
+//@[7:15) Identifier |isWestUs|
+//@[16:20) Identifier |bool|
+//@[21:22) Assignment |=|
+//@[23:36) Identifier |resourceGroup|
+//@[36:37) LeftParen |(|
+//@[37:38) RightParen |)|
+//@[38:39) Dot |.|
+//@[39:47) Identifier |location|
+//@[48:50) NotEquals |!=|
+//@[51:59) StringComplete |'westus'|
+//@[60:61) Question |?|
+//@[62:67) FalseKeyword |false|
+//@[68:69) Colon |:|
+//@[70:74) TrueKeyword |true|
+//@[74:78) NewLine |\r\n\r\n|
 
 output expressionBasedIndexer string = {
 //@[0:6) Identifier |output|
@@ -292,4 +288,53 @@ output secondaryKey string = secondaryKeyIntermediateVar
 //@[20:26) Identifier |string|
 //@[27:28) Assignment |=|
 //@[29:56) Identifier |secondaryKeyIntermediateVar|
-//@[56:56) EndOfFile ||
+//@[56:60) NewLine |\r\n\r\n|
+
+var varWithOverlappingOutput = 'hello'
+//@[0:3) Identifier |var|
+//@[4:28) Identifier |varWithOverlappingOutput|
+//@[29:30) Assignment |=|
+//@[31:38) StringComplete |'hello'|
+//@[38:40) NewLine |\r\n|
+param paramWithOverlappingOutput string
+//@[0:5) Identifier |param|
+//@[6:32) Identifier |paramWithOverlappingOutput|
+//@[33:39) Identifier |string|
+//@[39:43) NewLine |\r\n\r\n|
+
+output varWithOverlappingOutput string = varWithOverlappingOutput
+//@[0:6) Identifier |output|
+//@[7:31) Identifier |varWithOverlappingOutput|
+//@[32:38) Identifier |string|
+//@[39:40) Assignment |=|
+//@[41:65) Identifier |varWithOverlappingOutput|
+//@[65:67) NewLine |\r\n|
+output paramWithOverlappingOutput string = paramWithOverlappingOutput
+//@[0:6) Identifier |output|
+//@[7:33) Identifier |paramWithOverlappingOutput|
+//@[34:40) Identifier |string|
+//@[41:42) Assignment |=|
+//@[43:69) Identifier |paramWithOverlappingOutput|
+//@[69:73) NewLine |\r\n\r\n|
+
+// top-level output loops are supported
+//@[39:41) NewLine |\r\n|
+output generatedArray array = [for i in range(0,10): i]
+//@[0:6) Identifier |output|
+//@[7:21) Identifier |generatedArray|
+//@[22:27) Identifier |array|
+//@[28:29) Assignment |=|
+//@[30:31) LeftSquare |[|
+//@[31:34) Identifier |for|
+//@[35:36) Identifier |i|
+//@[37:39) Identifier |in|
+//@[40:45) Identifier |range|
+//@[45:46) LeftParen |(|
+//@[46:47) Integer |0|
+//@[47:48) Comma |,|
+//@[48:50) Integer |10|
+//@[50:51) RightParen |)|
+//@[51:52) Colon |:|
+//@[53:54) Identifier |i|
+//@[54:55) RightSquare |]|
+//@[55:55) EndOfFile ||

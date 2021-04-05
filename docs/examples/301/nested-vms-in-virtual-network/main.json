@@ -1,6 +1,13 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "dev",
+      "templateHash": "16767638129179699760"
+    }
+  },
   "parameters": {
     "_artifactsLocation": {
       "type": "string",
@@ -68,8 +75,8 @@
     },
     "HostVirtualMachineName": {
       "type": "string",
-      "maxLength": 15,
-      "defaultValue": "HVHOST"
+      "defaultValue": "HVHOST",
+      "maxLength": 15
     },
     "HostVirtualMachineSize": {
       "type": "string",
@@ -209,7 +216,7 @@
                 "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('azureVMsSubnetNSGName'))]"
               },
               "routeTable": {
-                "id": "[reference(extensionResourceId(resourceGroup().id, 'Microsoft.Resources/deployments', 'udrDeploy'), '2019-10-01').outputs.udrId.value]"
+                "id": "[reference(resourceId('Microsoft.Resources/deployments', 'udrDeploy'), '2019-10-01').outputs.udrId.value]"
               }
             }
           }
@@ -217,7 +224,7 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.Network/networkSecurityGroups', variables('azureVMsSubnetNSGName'))]",
-        "[extensionResourceId(resourceGroup().id, 'Microsoft.Resources/deployments', 'udrDeploy')]",
+        "[resourceId('Microsoft.Resources/deployments', 'udrDeploy')]",
         "[resourceId('Microsoft.Network/networkSecurityGroups', variables('ghostedSubnetNSGName'))]",
         "[resourceId('Microsoft.Network/networkSecurityGroups', variables('hyperVSubnetNSGName'))]",
         "[resourceId('Microsoft.Network/networkSecurityGroups', variables('NATSubnetNSGName'))]"
@@ -268,13 +275,13 @@
         "networkProfile": {
           "networkInterfaces": [
             {
-              "id": "[reference(extensionResourceId(resourceGroup().id, 'Microsoft.Resources/deployments', 'createNic1'), '2019-10-01').outputs.nicId.value]",
+              "id": "[reference(resourceId('Microsoft.Resources/deployments', 'createNic1'), '2019-10-01').outputs.nicId.value]",
               "properties": {
                 "primary": true
               }
             },
             {
-              "id": "[reference(extensionResourceId(resourceGroup().id, 'Microsoft.Resources/deployments', 'createNic2'), '2019-10-01').outputs.nicId.value]",
+              "id": "[reference(resourceId('Microsoft.Resources/deployments', 'createNic2'), '2019-10-01').outputs.nicId.value]",
               "properties": {
                 "primary": false
               }
@@ -283,8 +290,8 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(resourceGroup().id, 'Microsoft.Resources/deployments', 'createNic1')]",
-        "[extensionResourceId(resourceGroup().id, 'Microsoft.Resources/deployments', 'createNic2')]"
+        "[resourceId('Microsoft.Resources/deployments', 'createNic1')]",
+        "[resourceId('Microsoft.Resources/deployments', 'createNic2')]"
       ]
     },
     {
@@ -324,12 +331,12 @@
           "fileUris": [
             "[variables('HVHostSetupScriptUri')]"
           ],
-          "commandToExecute": "[format('powershell -ExecutionPolicy Unrestricted -File HVHostSetup.ps1 -NIC1IPAddress {0} -NIC2IPAddress {1} -GhostedSubnetPrefix {2} -VirtualNetworkPrefix {3}', reference(extensionResourceId(resourceGroup().id, 'Microsoft.Resources/deployments', 'createNic1'), '2019-10-01').outputs.assignedIp.value, reference(extensionResourceId(resourceGroup().id, 'Microsoft.Resources/deployments', 'createNic2'), '2019-10-01').outputs.assignedIp.value, parameters('ghostedSubnetPrefix'), parameters('virtualNetworkAddressPrefix'))]"
+          "commandToExecute": "[format('powershell -ExecutionPolicy Unrestricted -File HVHostSetup.ps1 -NIC1IPAddress {0} -NIC2IPAddress {1} -GhostedSubnetPrefix {2} -VirtualNetworkPrefix {3}', reference(resourceId('Microsoft.Resources/deployments', 'createNic1'), '2019-10-01').outputs.assignedIp.value, reference(resourceId('Microsoft.Resources/deployments', 'createNic2'), '2019-10-01').outputs.assignedIp.value, parameters('ghostedSubnetPrefix'), parameters('virtualNetworkAddressPrefix'))]"
         }
       },
       "dependsOn": [
-        "[extensionResourceId(resourceGroup().id, 'Microsoft.Resources/deployments', 'createNic1')]",
-        "[extensionResourceId(resourceGroup().id, 'Microsoft.Resources/deployments', 'createNic2')]",
+        "[resourceId('Microsoft.Resources/deployments', 'createNic1')]",
+        "[resourceId('Microsoft.Resources/deployments', 'createNic2')]",
         "[resourceId('Microsoft.Compute/virtualMachines', parameters('HostVirtualMachineName'))]"
       ]
     },
@@ -356,6 +363,13 @@
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "dev",
+              "templateHash": "4056214892007614382"
+            }
+          },
           "parameters": {
             "nicName": {
               "type": "string"
@@ -454,6 +468,13 @@
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "dev",
+              "templateHash": "4056214892007614382"
+            }
+          },
           "parameters": {
             "nicName": {
               "type": "string"
@@ -542,7 +563,7 @@
             "value": "Static"
           },
           "staticIpAddress": {
-            "value": "[reference(extensionResourceId(resourceGroup().id, 'Microsoft.Resources/deployments', 'createNic1'), '2019-10-01').outputs.assignedIp.value]"
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'createNic1'), '2019-10-01').outputs.assignedIp.value]"
           },
           "nicName": {
             "value": "[parameters('HostNetworkInterface1Name')]"
@@ -557,6 +578,13 @@
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "dev",
+              "templateHash": "4056214892007614382"
+            }
+          },
           "parameters": {
             "nicName": {
               "type": "string"
@@ -628,7 +656,7 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(resourceGroup().id, 'Microsoft.Resources/deployments', 'createNic1')]",
+        "[resourceId('Microsoft.Resources/deployments', 'createNic1')]",
         "[resourceId('Microsoft.Network/publicIPAddresses', parameters('HostPublicIPAddressName'))]",
         "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]"
       ]
@@ -647,7 +675,7 @@
             "value": "Static"
           },
           "staticIpAddress": {
-            "value": "[reference(extensionResourceId(resourceGroup().id, 'Microsoft.Resources/deployments', 'createNic2'), '2019-10-01').outputs.assignedIp.value]"
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'createNic2'), '2019-10-01').outputs.assignedIp.value]"
           },
           "nicName": {
             "value": "[parameters('HostNetworkInterface2Name')]"
@@ -662,6 +690,13 @@
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "dev",
+              "templateHash": "4056214892007614382"
+            }
+          },
           "parameters": {
             "nicName": {
               "type": "string"
@@ -733,7 +768,7 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(resourceGroup().id, 'Microsoft.Resources/deployments', 'createNic2')]",
+        "[resourceId('Microsoft.Resources/deployments', 'createNic2')]",
         "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]"
       ]
     },
@@ -754,6 +789,13 @@
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "dev",
+              "templateHash": "9608574906046857876"
+            }
+          },
           "parameters": {
             "udrName": {
               "type": "string"
@@ -809,12 +851,19 @@
             "value": "[parameters('ghostedSubnetPrefix')]"
           },
           "nextHopAddress": {
-            "value": "[reference(extensionResourceId(resourceGroup().id, 'Microsoft.Resources/deployments', 'createNic2'), '2019-10-01').outputs.assignedIp.value]"
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'createNic2'), '2019-10-01').outputs.assignedIp.value]"
           }
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "dev",
+              "templateHash": "9608574906046857876"
+            }
+          },
           "parameters": {
             "udrName": {
               "type": "string"
@@ -853,7 +902,7 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(resourceGroup().id, 'Microsoft.Resources/deployments', 'createNic2')]"
+        "[resourceId('Microsoft.Resources/deployments', 'createNic2')]"
       ]
     }
   ]

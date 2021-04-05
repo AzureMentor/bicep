@@ -205,6 +205,20 @@ var takeTooMany = take([
 //@[4:15) Variable takeTooMany. Type: error. Declaration start char: 0, length: 35
 ],1,2,'s')
 
+// missing arguments
+var trailingArgumentComma = format('s',)
+//@[4:25) Variable trailingArgumentComma. Type: string. Declaration start char: 0, length: 40
+var onlyArgumentComma = concat(,)
+//@[4:21) Variable onlyArgumentComma. Type: any. Declaration start char: 0, length: 33
+var multipleArgumentCommas = concat(,,,,,)
+//@[4:26) Variable multipleArgumentCommas. Type: any. Declaration start char: 0, length: 42
+var emptyArgInBetween = concat(true,,false)
+//@[4:21) Variable emptyArgInBetween. Type: string. Declaration start char: 0, length: 43
+var leadingEmptyArg = concat(,[])
+//@[4:19) Variable leadingEmptyArg. Type: array. Declaration start char: 0, length: 33
+var leadingAndTrailingEmptyArg = concat(,'s',)
+//@[4:30) Variable leadingAndTrailingEmptyArg. Type: string. Declaration start char: 0, length: 46
+
 // wrong argument types
 var concatWrongTypes = concat({
 //@[4:20) Variable concatWrongTypes. Type: error. Declaration start char: 0, length: 34
@@ -223,9 +237,9 @@ var test1 = listKeys('abcd')
 var test2 = lsitKeys('abcd', '2020-01-01')
 //@[4:9) Variable test2. Type: error. Declaration start char: 0, length: 42
 
-// just 'list' 
-var test3 = list('abcd', '2020-01-01')
-//@[4:9) Variable test3. Type: error. Declaration start char: 0, length: 38
+// just 'lis' instead of 'list'
+var test3 = lis('abcd', '2020-01-01')
+//@[4:9) Variable test3. Type: error. Declaration start char: 0, length: 37
 
 var sampleObject = {
 //@[4:16) Variable sampleObject. Type: object. Declaration start char: 0, length: 190
@@ -301,6 +315,10 @@ var azFunctions = az.a
 var sysFunctions = sys.a
 //@[4:16) Variable sysFunctions. Type: error. Declaration start char: 0, length: 24
 
+// #completionTest(33) -> sysFunctions
+var sysFunctionsInParens = (sys.a)
+//@[4:24) Variable sysFunctionsInParens. Type: error. Declaration start char: 0, length: 34
+
 // missing method name
 var missingMethodName = az.()
 //@[4:21) Variable missingMethodName. Type: error. Declaration start char: 0, length: 29
@@ -314,6 +332,10 @@ var missingIndexerOnIdentifier = nonExistentIdentifier[][1][]
 // empty parens - should produce expected expression diagnostic
 var emptyParens = ()
 //@[4:15) Variable emptyParens. Type: error. Declaration start char: 0, length: 20
+
+// #completionTest(26) -> symbols
+var anotherEmptyParens = ()
+//@[4:22) Variable anotherEmptyParens. Type: error. Declaration start char: 0, length: 27
 
 // keywords can't be called like functions
 var nullness = null()
@@ -340,3 +362,20 @@ var partialObject = {
   c :
   d  : %
 }
+
+// dangling decorators - to make sure the tests work, please do not add contents after this line
+@concat()
+@sys.secure()
+xxxxx
+
+
+@minLength()
+
+
+
+
+
+
+
+
+

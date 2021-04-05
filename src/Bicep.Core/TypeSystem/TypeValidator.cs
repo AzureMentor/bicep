@@ -3,8 +3,8 @@
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Extensions;
 using Bicep.Core.Navigation;
-using Bicep.Core.Parser;
-using Bicep.Core.SemanticModel;
+using Bicep.Core.Parsing;
+using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
 using Bicep.Core.Text;
 using System;
@@ -56,8 +56,12 @@ namespace Bicep.Core.TypeSystem
                     // values of all types can be assigned to the "any" type
                     return true;
 
-                case TypeSymbol _ when targetType is ResourceScopeReference scopeReference:
-                    return sourceType is IResourceScopeType resourceScopeType && scopeReference.ResourceScopeType.HasFlag(resourceScopeType.ResourceScopeType);
+                case IScopeReference targetScope:
+                    // checking for valid combinations of scopes happens after type checking. this allows us to provide a richer & more intuitive error message.
+                    return sourceType is IScopeReference;
+
+                case UnionType union when ReferenceEquals(union, LanguageConstants.ResourceOrResourceCollectionRefItem):
+                    return sourceType is IScopeReference || sourceType is ArrayType {Item: IScopeReference};
 
                 case TypeSymbol _ when sourceType is ResourceType sourceResourceType:
                     // When assigning a resource, we're really assigning the value of the resource body.
@@ -148,14 +152,14 @@ namespace Bicep.Core.TypeSystem
                 // When assigning a resource, we're really assigning the value of the resource body.
                 var narrowedBody = NarrowTypeInternal(typeManager, expression, targetResourceType.Body.Type, diagnosticWriter, typeMismatchErrorFactory, skipConstantCheck, skipTypeErrors);
 
-                return new ResourceType(targetResourceType.TypeReference, narrowedBody);
+                return new ResourceType(targetResourceType.TypeReference, targetResourceType.ValidParentScopes, narrowedBody);
             }
-            
+
             if (targetType is ModuleType targetModuleType)
             {
                 var narrowedBody = NarrowTypeInternal(typeManager, expression, targetModuleType.Body.Type, diagnosticWriter, typeMismatchErrorFactory, skipConstantCheck, skipTypeErrors);
 
-                return new ModuleType(targetModuleType.Name, narrowedBody);
+                return new ModuleType(targetModuleType.Name, targetModuleType.ValidParentScopes, narrowedBody);
             }
 
             // TODO: The type of this expression and all subexpressions should be cached
@@ -177,14 +181,35 @@ namespace Bicep.Core.TypeSystem
             }
 
             // object assignability check
-            if (expression is ObjectSyntax objectValue && targetType is ObjectType targetObjectType)
+            if (expression is ObjectSyntax objectValue)
             {
-                return NarrowObjectType(typeManager, objectValue, targetObjectType, diagnosticWriter, skipConstantCheck);
+                switch (targetType)
+                {
+                    case ObjectType targetObjectType:
+                        return NarrowObjectType(typeManager, objectValue, targetObjectType, diagnosticWriter, skipConstantCheck);
+
+                    case DiscriminatedObjectType targetDiscriminated:
+                        return NarrowDiscriminatedObjectType(typeManager, objectValue, targetDiscriminated, diagnosticWriter, skipConstantCheck);
+                }
             }
 
-            if (expression is ObjectSyntax objectDiscriminated && targetType is DiscriminatedObjectType targetDiscriminated)
+            // if-condition assignability check
+            if (expression is IfConditionSyntax { Body: ObjectSyntax body })
             {
-                return NarrowDiscriminatedObjectType(typeManager, objectDiscriminated, targetDiscriminated, diagnosticWriter, skipConstantCheck);
+                switch (targetType)
+                {
+                    case ObjectType targetObjectType:
+                        return NarrowObjectType(typeManager, body, targetObjectType, diagnosticWriter, skipConstantCheck);
+
+                    case DiscriminatedObjectType targetDiscriminated:
+                        return NarrowDiscriminatedObjectType(typeManager, body, targetDiscriminated, diagnosticWriter, skipConstantCheck);
+                }
+            }
+
+            // for-expression assignability check
+            if (expression is ForSyntax @for && targetType is ArrayType loopArrayType)
+            {
+                return new TypedArrayType(NarrowTypeInternal(typeManager, @for.Body, loopArrayType.Item.Type, diagnosticWriter, typeMismatchErrorFactory, skipConstantCheck, skipTypeErrors), TypeSymbolValidationFlags.Default);
             }
 
             // array assignability check
@@ -195,7 +220,7 @@ namespace Bicep.Core.TypeSystem
 
             if (targetType is UnionType targetUnionType)
             {
-                return UnionType.Create(targetUnionType.Members.Where(x => AreTypesAssignable(expressionType, x.Type) == true));
+                return UnionType.Create(targetUnionType.Members.Where(x => AreTypesAssignable(expressionType, x.Type)));
             }
 
             return targetType;
@@ -313,23 +338,9 @@ namespace Bicep.Core.TypeSystem
 
             if (missingRequiredProperties.Any())
             {
-                IPositionable positionable = expression;
-                string blockName = "object";
-
-                var parent = typeManager.GetParent(expression);
-                if (parent is ObjectPropertySyntax objectPropertyParent)
-                {
-                    positionable = objectPropertyParent.Key;
-                    blockName = "object";
-                }
-                else if (parent is INamedDeclarationSyntax declarationParent)
-                {
-                    positionable = declarationParent.Name;
-                    blockName = declarationParent.Keyword.Text;
-                }
+                var (positionable, blockName) = GetMissingPropertyContext(typeManager, expression);
 
                 diagnosticWriter.Write(DiagnosticBuilder.ForPosition(positionable).MissingRequiredProperties(ShouldWarn(targetType), missingRequiredProperties, blockName));
-
             }
 
             var narrowedProperties = new List<TypeProperty>();
@@ -353,39 +364,18 @@ namespace Bicep.Core.TypeSystem
                     {
                         // the declared property is read-only
                         // value cannot be assigned to a read-only property
-                        diagnosticWriter.Write(DiagnosticBuilder.ForPosition(declaredPropertySyntax.Key).CannotAssignToReadOnlyProperty(ShouldWarn(targetType), declaredProperty.Name));
+                        var parent = typeManager.GetParent(expression);
+                        if (parent is ResourceDeclarationSyntax resourceSyntax && resourceSyntax.IsExistingResource())
+                        {
+                            diagnosticWriter.Write(DiagnosticBuilder.ForPosition(declaredPropertySyntax.Key).CannotUsePropertyInExistingResource(declaredProperty.Name));
+                        }
+                        else
+                        {
+                            diagnosticWriter.Write(DiagnosticBuilder.ForPosition(declaredPropertySyntax.Key).CannotAssignToReadOnlyProperty(ShouldWarn(targetType), declaredProperty.Name));
+                        }
                         narrowedProperties.Add(new TypeProperty(declaredProperty.Name, declaredProperty.TypeReference.Type, declaredProperty.Flags));
                         continue;
                     }
-
-                    TypeMismatchErrorFactory typeMismatchErrorFactory = (expectedType, actualType, errorExpression) =>
-                    {
-                        var builder = DiagnosticBuilder.ForPosition(errorExpression);
-                        var shouldWarn = ShouldWarn(targetType);
-
-                        if (actualType is StringLiteralType)
-                        {
-                            string? suggestedStringLiteral = null;
-
-                            if (expectedType is StringLiteralType)
-                            {
-                                suggestedStringLiteral = SpellChecker.GetSpellingSuggestion(actualType.Name, expectedType.Name.AsEnumerable());
-                            }
-
-                            if (expectedType is UnionType unionType && unionType.Members.All(typeReference => typeReference.Type is StringLiteralType))
-                            {
-                                var stringLiteralCandidates = unionType.Members.Select(typeReference => typeReference.Type.Name).OrderBy(x => x);
-                                suggestedStringLiteral = SpellChecker.GetSpellingSuggestion(actualType.Name, stringLiteralCandidates);
-                            }
-
-                            if (suggestedStringLiteral != null)
-                            {
-                                return builder.PropertyStringLiteralMismatchWithSuggestion(shouldWarn, declaredProperty.Name, expectedType, actualType.Name, suggestedStringLiteral);
-                            }
-                        }
-
-                        return builder.PropertyTypeMismatch(shouldWarn, declaredProperty.Name, expectedType, actualType);
-                    };
 
                     // declared property is specified in the value object
                     // validate type
@@ -394,7 +384,7 @@ namespace Bicep.Core.TypeSystem
                         declaredPropertySyntax.Value,
                         declaredProperty.TypeReference.Type,
                         diagnosticWriter,
-                        typeMismatchErrorFactory,
+                        GetPropertyMismatchErrorFactory(ShouldWarn(targetType), declaredProperty.Name),
                         skipConstantCheckForProperty,
                         skipTypeErrors: true);
                         
@@ -467,34 +457,7 @@ namespace Bicep.Core.TypeSystem
                     TypeMismatchErrorFactory typeMismatchErrorFactory;
                     if (extraProperty.TryGetKeyText() is string keyName)
                     {
-                        typeMismatchErrorFactory = (expectedType, actualType, errorExpression) =>
-                        {
-                            var builder = DiagnosticBuilder.ForPosition(errorExpression);
-                            var shouldWarn = ShouldWarn(targetType);
-
-                            if (actualType is StringLiteralType)
-                            {
-                                string? suggestedStringLiteral = null;
-
-                                if (expectedType is StringLiteralType)
-                                {
-                                    suggestedStringLiteral = SpellChecker.GetSpellingSuggestion(actualType.Name, expectedType.Name.AsEnumerable());
-                                }
-
-                                if (expectedType is UnionType unionType && unionType.Members.All(typeReference => typeReference.Type is StringLiteralType))
-                                {
-                                    var stringLiteralCandidates = unionType.Members.Select(typeReference => typeReference.Type.Name).OrderBy(s => s);
-                                    suggestedStringLiteral = SpellChecker.GetSpellingSuggestion(actualType.Name, stringLiteralCandidates);
-                                }
-
-                                if (suggestedStringLiteral != null)
-                                {
-                                    return builder.PropertyStringLiteralMismatchWithSuggestion(shouldWarn, keyName, expectedType, actualType.Name, suggestedStringLiteral);
-                                }
-                            }
-
-                            return builder.PropertyTypeMismatch(shouldWarn, keyName, expectedType, actualType);
-                        };
+                        typeMismatchErrorFactory = GetPropertyMismatchErrorFactory(ShouldWarn(targetType), keyName);
                     }
                     else
                     {
@@ -514,7 +477,64 @@ namespace Bicep.Core.TypeSystem
                 }
             }
 
-            return new NamedObjectType(targetType.Name, targetType.ValidationFlags, narrowedProperties, targetType.AdditionalPropertiesType, targetType.AdditionalPropertiesFlags);
+            return new ObjectType(targetType.Name, targetType.ValidationFlags, narrowedProperties, targetType.AdditionalPropertiesType, targetType.AdditionalPropertiesFlags);
+        }
+
+        private static (IPositionable positionable, string blockName) GetMissingPropertyContext(ITypeManager typeManager, SyntaxBase expression)
+        {
+            var parent = typeManager.GetParent(expression);
+            
+            // determine where to place the missing property error
+            return parent switch
+            {
+                // for properties, put it on the property name in the parent object
+                ObjectPropertySyntax objectPropertyParent => (objectPropertyParent.Key, "object"),
+
+                // for declaration bodies, put it on the declaration identifier
+                ITopLevelNamedDeclarationSyntax declarationParent => (declarationParent.Name, declarationParent.Keyword.Text),
+                
+                // for conditionals, put it on the parent declaration identifier
+                // (the parent of a conditional can only be a resource or module declaration)
+                IfConditionSyntax ifCondition => GetMissingPropertyContext(typeManager, ifCondition),
+
+                // for loops, put it on the parent declaration identifier
+                // (the parent of a loop can only be a resource or module declaration)
+                ForSyntax @for => GetMissingPropertyContext(typeManager, @for),
+
+                // fall back to marking the entire object with the error
+                _ => (expression, "object")
+            };
+        }
+
+        private static TypeMismatchErrorFactory GetPropertyMismatchErrorFactory(bool shouldWarn, string propertyName)
+        {
+            return (expectedType, actualType, errorExpression) =>
+            {
+                var builder = DiagnosticBuilder.ForPosition(errorExpression);
+
+                if (actualType is StringLiteralType)
+                {
+                    string? suggestedStringLiteral = null;
+
+                    if (expectedType is StringLiteralType)
+                    {
+                        suggestedStringLiteral = SpellChecker.GetSpellingSuggestion(actualType.Name, expectedType.Name.AsEnumerable());
+                    }
+
+                    if (expectedType is UnionType unionType && unionType.Members.All(typeReference => typeReference.Type is StringLiteralType))
+                    {
+                        var stringLiteralCandidates = unionType.Members.Select(typeReference => typeReference.Type.Name).OrderBy(s => s);
+                        suggestedStringLiteral = SpellChecker.GetSpellingSuggestion(actualType.Name, stringLiteralCandidates);
+                    }
+
+                    if (suggestedStringLiteral != null)
+                    {
+                        return builder.PropertyStringLiteralMismatchWithSuggestion(shouldWarn, propertyName, expectedType, actualType.Name, suggestedStringLiteral);
+                    }
+                }
+
+                return builder.PropertyTypeMismatch(shouldWarn, propertyName, expectedType, actualType);
+            };
         }
     }
 }

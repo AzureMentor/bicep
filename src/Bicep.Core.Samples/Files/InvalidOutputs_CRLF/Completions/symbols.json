@@ -7,10 +7,13 @@
     "preselect": false,
     "sortText": "3_any",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "any($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -21,10 +24,27 @@
     "preselect": false,
     "sortText": "3_array",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "array($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
+    }
+  },
+  {
+    "label": "attemptToReferenceAnOutput",
+    "kind": "variable",
+    "detail": "attemptToReferenceAnOutput",
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_attemptToReferenceAnOutput",
+    "insertTextFormat": "plainText",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "attemptToReferenceAnOutput"
     }
   },
   {
@@ -35,7 +55,7 @@
     "preselect": false,
     "sortText": "3_az",
     "insertTextFormat": "plainText",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "az"
@@ -49,10 +69,13 @@
     "preselect": false,
     "sortText": "3_base64",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "base64($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -63,10 +86,13 @@
     "preselect": false,
     "sortText": "3_base64ToJson",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "base64ToJson($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -77,10 +103,13 @@
     "preselect": false,
     "sortText": "3_base64ToString",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "base64ToString($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -91,10 +120,13 @@
     "preselect": false,
     "sortText": "3_bool",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "bool($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -105,10 +137,13 @@
     "preselect": false,
     "sortText": "3_coalesce",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "coalesce($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -119,10 +154,13 @@
     "preselect": false,
     "sortText": "3_concat",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "concat($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -133,10 +171,13 @@
     "preselect": false,
     "sortText": "3_contains",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "contains($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -147,10 +188,13 @@
     "preselect": false,
     "sortText": "3_dataUri",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "dataUri($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -161,10 +205,13 @@
     "preselect": false,
     "sortText": "3_dataUriToString",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "dataUriToString($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -175,10 +222,13 @@
     "preselect": false,
     "sortText": "3_dateTimeAdd",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "dateTimeAdd($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -189,7 +239,7 @@
     "preselect": false,
     "sortText": "3_deployment",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "deployment()$0"
@@ -203,10 +253,13 @@
     "preselect": false,
     "sortText": "3_empty",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "empty($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -217,10 +270,13 @@
     "preselect": false,
     "sortText": "3_endsWith",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "endsWith($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -231,7 +287,7 @@
     "preselect": false,
     "sortText": "3_environment",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "environment()$0"
@@ -245,10 +301,13 @@
     "preselect": false,
     "sortText": "3_extensionResourceId",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "extensionResourceId($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -259,10 +318,13 @@
     "preselect": false,
     "sortText": "3_first",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "first($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -273,10 +335,13 @@
     "preselect": false,
     "sortText": "3_format",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "format($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -287,10 +352,13 @@
     "preselect": false,
     "sortText": "3_guid",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "guid($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -301,10 +369,13 @@
     "preselect": false,
     "sortText": "3_indexOf",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "indexOf($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -315,10 +386,13 @@
     "preselect": false,
     "sortText": "3_int",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "int($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -329,10 +403,13 @@
     "preselect": false,
     "sortText": "3_intersection",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "intersection($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -343,10 +420,13 @@
     "preselect": false,
     "sortText": "3_json",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "json($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -357,10 +437,13 @@
     "preselect": false,
     "sortText": "3_last",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "last($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -371,10 +454,13 @@
     "preselect": false,
     "sortText": "3_lastIndexOf",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "lastIndexOf($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -385,10 +471,30 @@
     "preselect": false,
     "sortText": "3_length",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "length($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
+    }
+  },
+  {
+    "label": "managementGroup",
+    "kind": "function",
+    "detail": "managementGroup()",
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "3_managementGroup",
+    "insertTextFormat": "snippet",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "managementGroup($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -399,10 +505,13 @@
     "preselect": false,
     "sortText": "3_max",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "max($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -413,10 +522,13 @@
     "preselect": false,
     "sortText": "3_min",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "min($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -427,10 +539,13 @@
     "preselect": false,
     "sortText": "3_padLeft",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "padLeft($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -441,10 +556,13 @@
     "preselect": false,
     "sortText": "3_pickZones",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "pickZones($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -455,10 +573,13 @@
     "preselect": false,
     "sortText": "3_providers",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "providers($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -469,10 +590,13 @@
     "preselect": false,
     "sortText": "3_range",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "range($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -483,10 +607,13 @@
     "preselect": false,
     "sortText": "3_reference",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "reference($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -497,10 +624,13 @@
     "preselect": false,
     "sortText": "3_replace",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "replace($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -511,10 +641,13 @@
     "preselect": false,
     "sortText": "3_resourceGroup",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "resourceGroup($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -525,10 +658,13 @@
     "preselect": false,
     "sortText": "3_resourceId",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "resourceId($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -539,10 +675,13 @@
     "preselect": false,
     "sortText": "3_skip",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "skip($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -553,10 +692,13 @@
     "preselect": false,
     "sortText": "3_split",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "split($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -567,10 +709,13 @@
     "preselect": false,
     "sortText": "3_startsWith",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "startsWith($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -581,10 +726,13 @@
     "preselect": false,
     "sortText": "3_string",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "string($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -595,10 +743,13 @@
     "preselect": false,
     "sortText": "3_subscription",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "subscription($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -609,10 +760,13 @@
     "preselect": false,
     "sortText": "3_subscriptionResourceId",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "subscriptionResourceId($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -623,10 +777,13 @@
     "preselect": false,
     "sortText": "3_substring",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "substring($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -637,7 +794,7 @@
     "preselect": false,
     "sortText": "3_sys",
     "insertTextFormat": "plainText",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "sys"
@@ -651,10 +808,13 @@
     "preselect": false,
     "sortText": "3_take",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "take($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -665,7 +825,7 @@
     "preselect": false,
     "sortText": "3_tenant",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "tenant()$0"
@@ -679,10 +839,13 @@
     "preselect": false,
     "sortText": "3_tenantResourceId",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "tenantResourceId($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -693,7 +856,7 @@
     "preselect": false,
     "sortText": "2_testSymbol",
     "insertTextFormat": "plainText",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "testSymbol"
@@ -707,10 +870,13 @@
     "preselect": false,
     "sortText": "3_toLower",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "toLower($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -721,10 +887,13 @@
     "preselect": false,
     "sortText": "3_toUpper",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "toUpper($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -735,10 +904,13 @@
     "preselect": false,
     "sortText": "3_trim",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "trim($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -749,10 +921,13 @@
     "preselect": false,
     "sortText": "3_union",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "union($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -763,10 +938,13 @@
     "preselect": false,
     "sortText": "3_uniqueString",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "uniqueString($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -777,10 +955,13 @@
     "preselect": false,
     "sortText": "3_uri",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "uri($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -791,10 +972,13 @@
     "preselect": false,
     "sortText": "3_uriComponent",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "uriComponent($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -805,10 +989,13 @@
     "preselect": false,
     "sortText": "3_uriComponentToString",
     "insertTextFormat": "snippet",
-    "insertTextMode": "asIs",
+    "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
       "newText": "uriComponentToString($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
     }
   }
 ]

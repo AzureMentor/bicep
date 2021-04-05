@@ -4,9 +4,10 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Bicep.Core.Diagnostics;
+using Bicep.Core.Parsing;
 using Bicep.Core.Syntax;
 using Bicep.Core.TypeSystem;
-using Bicep.Core.UnitTests.Parser;
+using Bicep.Core.UnitTests.Parsing;
 using Bicep.Core.UnitTests.Utils;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -71,6 +72,7 @@ namespace Bicep.Core.UnitTests.TypeSystem
             yield return CreateTextRow("!true");
             yield return CreateTextRow("!x");
             yield return CreateTextRow("-x");
+            yield return CreateTextRow("!true");
 
             // ternary
             yield return CreateTextRow("true?true:true");
@@ -102,6 +104,7 @@ namespace Bicep.Core.UnitTests.TypeSystem
             yield return CreateRow("false", TestSyntaxFactory.CreateBool(false));
             yield return CreateRow("string", TestSyntaxFactory.CreateString("hello"));
             yield return CreateRow("int", TestSyntaxFactory.CreateInt(42));
+            yield return CreateRow("negative int", TestSyntaxFactory.CreateUnaryMinus(TestSyntaxFactory.CreateInt(42)));
 
             yield return CreateRow("empty object", TestSyntaxFactory.CreateObject(new ObjectPropertySyntax[0]));
 
@@ -168,9 +171,9 @@ namespace Bicep.Core.UnitTests.TypeSystem
 
         private static IEnumerable<object[]> GetNonExpressionData()
         {
-            yield return CreateRow("param declaration", new Core.Parser.Parser("param foo string").Program());
+            yield return CreateRow("param declaration", new Parser("param foo string").Program());
 
-            yield return CreateRow("empty file", new Core.Parser.Parser("").Program());
+            yield return CreateRow("empty file", new Parser("").Program());
         }
 
         private static object[] CreateRow(string name, SyntaxBase expression) => new object[] { name, expression };

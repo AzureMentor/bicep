@@ -1,6 +1,13 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "dev",
+      "templateHash": "2786526292618952263"
+    }
+  },
   "parameters": {
     "myString": {
       "type": "string"
@@ -88,13 +95,26 @@
     "password": {
       "type": "secureString"
     },
+    "passwordWithDecorator": {
+      "type": "secureString"
+    },
     "nonSecure": {
       "type": "string"
     },
     "secretObject": {
       "type": "secureObject"
     },
+    "secureObjectWithDecorator": {
+      "type": "secureObject"
+    },
     "storageSku": {
+      "type": "string",
+      "allowedValues": [
+        "Standard_LRS",
+        "Standard_GRS"
+      ]
+    },
+    "storageSkuWithDecorator": {
       "type": "string",
       "allowedValues": [
         "Standard_LRS",
@@ -106,12 +126,26 @@
       "minLength": 3,
       "maxLength": 24
     },
+    "storageNameWithDecorator": {
+      "type": "string",
+      "maxLength": 24,
+      "minLength": 3
+    },
     "someArray": {
       "type": "array",
       "minLength": 3,
       "maxLength": 24
     },
+    "someArrayWithDecorator": {
+      "type": "array",
+      "maxLength": 24,
+      "minLength": 3
+    },
     "emptyMetadata": {
+      "type": "string",
+      "metadata": {}
+    },
+    "emptyMetadataWithDecorator": {
       "type": "string",
       "metadata": {}
     },
@@ -121,7 +155,31 @@
         "description": "my description"
       }
     },
+    "descriptionWithDecorator": {
+      "type": "string",
+      "metadata": {
+        "description": "my description"
+      }
+    },
+    "descriptionWithDecorator2": {
+      "type": "string",
+      "metadata": {
+        "description": "my description"
+      }
+    },
     "additionalMetadata": {
+      "type": "string",
+      "metadata": {
+        "description": "my description",
+        "a": 1,
+        "b": true,
+        "c": [],
+        "d": {
+          "test": "abc"
+        }
+      }
+    },
+    "additionalMetadataWithDecorator": {
       "type": "string",
       "metadata": {
         "description": "my description",
@@ -147,6 +205,20 @@
         "three"
       ]
     },
+    "someParameterWithDecorator": {
+      "type": "secureString",
+      "defaultValue": "one",
+      "metadata": {
+        "description": "Name of the storage account"
+      },
+      "allowedValues": [
+        "one",
+        "two",
+        "three"
+      ],
+      "maxLength": 24,
+      "minLength": 3
+    },
     "defaultValueExpression": {
       "type": "int",
       "defaultValue": "[if(true(), add(4, mul(2, 3)), 0)]"
@@ -154,6 +226,60 @@
     "defaultExpression": {
       "type": "bool",
       "defaultValue": "[not(equals(18, or(true(), false())))]"
+    },
+    "decoratedString": {
+      "type": "secureString",
+      "allowedValues": [
+        "Apple",
+        "Banana"
+      ],
+      "maxLength": 10,
+      "minLength": 2
+    },
+    "decoratedInt": {
+      "type": "int",
+      "defaultValue": 123,
+      "minValue": 200
+    },
+    "negativeValues": {
+      "type": "int",
+      "maxValue": -3,
+      "minValue": -10
+    },
+    "negativeZeros": {
+      "type": "string",
+      "maxLength": 0,
+      "minLength": 0
+    },
+    "negativeModifiers": {
+      "type": "int",
+      "minValue": -100,
+      "maxValue": -33
+    },
+    "decoratedBool": {
+      "type": "bool",
+      "metadata": {
+        "description": "A boolean.",
+        "foo": "something",
+        "bar": [
+          {},
+          true,
+          123
+        ]
+      }
+    },
+    "decoratedObject": {
+      "type": "secureObject",
+      "defaultValue": {
+        "location": "westus"
+      }
+    },
+    "decoratedArray": {
+      "type": "array",
+      "metadata": {
+        "description": "An array."
+      },
+      "maxLength": 20
     }
   },
   "functions": [],

@@ -1,12 +1,15 @@
 # Resource Scopes
+
 ## Introduction / Motivation
+
 A deployment in ARM has an associated scope, which dictates the scope that resources within that deployment are created in. There are various ways to deploy resources across multiple scopes today in ARM templates; this spec describes how similar functionality can be achieved in Bicep.
 
-See [here][arm-scopes] for more information on ARM scopes.
+[Read more about ARM scopes][arm-scopes].
 
 ## Declaring and using scopes
 
 ### Declaring the target scope
+
 Unless otherwise specified, Bicep will assume that a given `.bicep` file is to be deployed at a resource group scope, and will validate resources accordingly. If you wish to change this scope, or define a file that can be deployed at multiple scopes, you must use the `targetScope` keyword with either a string or array value as follows:
 
 ```bicep
@@ -15,6 +18,7 @@ targetScope = 'subscription'
 ```
 
 > **NOTE:** The below syntax to target multiple scopes below has not yet been implemented.
+
 ```bicep
 // this file can be deployed at either a tenant or managementGroup scope
 targetScope = [
@@ -28,7 +32,8 @@ The following strings are permitted for the `targetScope` keyword: `'tenant'`, `
 It is important to set the target scope because it allows Bicep to perform validation that the resources declared in the `.bicep` file are permitted at that scope, and it also ensures that the correct type of scope is passed to the module when the module is referenced.
 
 ### Module 'scope' property
-When declaring a module, you can supply a property named `scope` to set the scope at which to deploy the module. If the module's target scope is the same as the parent's target scope, this property may be omitted.
+
+When declaring a module, you can supply an optional property named `scope` to set the scope at which to deploy the module. By default, bicep assumes the module will target the same scope as the parent if this property is omitted. If the parent bicep file does not specify a `targetScope` it will default to `targetScope='resourceGroup'`.
 
 Assigning a scope to this field indicates that the module must be deployed at that scope. If the field is not provided, the module will be deployed at the target scope for the file (see [Declaring the target scope(s)](#declaring-the-target-scopes)).
 
@@ -36,19 +41,19 @@ Assigning a scope to this field indicates that the module must be deployed at th
 module myModule './path/to/module.bicep' = {
   name: 'myModule'
   // deploy this module at the subscription scope
-  scope: scope.subscription()
+  scope: subscription()
 }
 
-var otherRgScope = scope.resourceGroup(otherSubscription, otherResourceGroupName)
 module myModule './path/to/module.bicep' = {
   name: 'myModule'
   // deploy this module into a different resource group
-  scope: otherRgScope
+  scope: resourceGroup(otherSubscription, otherResourceGroupName)
 }
 ```
 
 ### Global Functions
-The following functions will return a scope object which can be passed to an above-mentioned `scope` property:
+
+The following functions will return a scope object, which can be passed to an above-mentioned `scope` property:
 
 ```bicep
 tenant() // returns the tenant scope
@@ -65,48 +70,34 @@ resourceGroup(subscriptionId: string, resourceGroupName: string) // returns a na
 ```
 
 ### Resource 'scope' Property
-> **NOTE:** Supplying scope to resources has not yet been implemented.
 
-When declaring a resource, you can supply a property named `scope` to set the scope at which to deploy the resource. If the module's target scope is the same as the parent's target scope, this property may be omitted.
-
-Assigning a scope to this field indicates that the resource must be deployed at that scope. If the field is not provided, the resource will be deployed at the target scope for the file (see [Declaring the target scope(s)](#declaring-the-target-scopes)).
+It is possible to define extension resources by supplying a reference to the resource being extended to the `scope` property of another resource. Unlike module scopes, Bicep currently only supports `resource` scopes being passed to resources. Using the parent resource scope will set up an implicit dependency from extension resource on parent resource.
 
 ```bicep
-resource myNic 'Microsoft.Network/networkInterfaces@2020-01-01' = {
-  // use a different resource group scope for this resource
-  scope: scope.resourceGroup(myExternalResourceGroup)
+// deploy a parent storage account resource
+resource storageAcc 'Microsoft.Storage/storageAccounts@2019-06-01' = {
+  name: accountName
+  kind: 'StorageV2'
+  sku: {
+    name: 'Standard_LRS'
+  }
+  location: resourceGroup().location
+}
+
+// declare a lock resource extending the storage account by supplying the 'scope' property
+resource lockResource 'Microsoft.Authorization/locks@2016-09-01' = {
+  name: 'DontDelete'
+  scope: storageAcc
+  properties: {
+    level: 'CanNotDelete'
+  }
 }
 ```
-
-If the scope being assigned has been generated by another resource (for example the deployment of a resourceGroup), using this scope will set up an implicit dependency from child on parent.
-
-## Example Usages
-```bicep
-// set the target scope for this file
-targetScope = 'subscription'
-
-// deploy a resource group to the subscription scope
-resource myRg 'Microsoft.Resources/resourceGroups@2020-01-01 = {
-  name: 'myRg'
-  location: 'West US'
-  scope: subscription()
-}
-var rgScope = resourceGroup('myRg') // use the scope of the newly-created resource group
-
-// deploy a module to that newly-created resource group
-module myMod './path/to/module.bicep' = {
-  name: 'myMod'
-  scope: rgScope
-}
-```
-
-## Allowed combinations of scopes
-This feature is limited to the same scoping constraints that exist within ARM Deployments today.
-
-## Possible Extensions
 
 ### Parent-child syntax
-We may want to use a similar concept to deploy child resources of a parent in a less-verbose manner - e.g.:
+
+You can declare the child resource as a top-level resource just like the parent. To do this, specify the `parent` property on the child with the value set to the symbolic name of the parent. With this syntax you still need to declare the full resource type, but the `name` of the child resource is only the name of the child.
+
 ```bicep
 resource myParent 'My.Rp/parentType@2020-01-01' = {
   name: 'myParent'
@@ -114,9 +105,43 @@ resource myParent 'My.Rp/parentType@2020-01-01' = {
 }
 
 resource myChild 'My.Rp/parentType/childType@2020-01-01' = {
-  scope: myParent // pass parent reference
+  parent: myParent // pass parent reference
   name: 'myChild' // don't require the full name to be formatted with '/' characters
+}
+
+output childProp string = myChild.properties.someProp
+```
+
+Referencing the child resource symbolic name works the same as referencing the parent.
+
+**Note:** the `name` property rules are different than ARM Templates, which requires concatenating the parent and child name together separated by `/`.
+
+Alternatively, you can use the [nested resource syntax](./resources.md#resource-nesting) to declare child resources.
+
+## Allowed combinations of scopes
+
+This feature is limited to the same scoping constraints that exist within ARM Deployments today.
+
+## Example Usages
+
+If you have a symbolic reference to a scope, you can use that as a value of the `scope` property. Currently this only works with the `resourceGroup` scope, it does not yet support `subscription` or `managementGroup` scope types.
+
+```bicep
+// set the target scope for this file
+targetScope = 'subscription'
+
+// deploy a resource group to the subscription scope
+resource myRg 'Microsoft.Resources/resourceGroups@2020-01-01' = {
+  name: 'myRg'
+  location: 'West US'
+  scope: subscription()
+}
+
+// deploy a module to that newly-created resource group
+module myMod './path/to/module.bicep' = {
+  name: 'myMod'
+  scope: myRg
 }
 ```
 
-[arm-scopes]: https://docs.microsoft.com/en-us/azure/azure-resource-manager/management/overview#understand-scope
+[arm-scopes]: https://docs.microsoft.com/azure/azure-resource-manager/management/overview#understand-scope

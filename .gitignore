@@ -364,3 +364,7 @@ FodyWeavers.xsd
 
 # Language Server bits
 bicepLanguageServer/
+src/vscode-bicep/bicepLanguageServer
+
+# user-specific launch settings for .net apps
+launchSettings.json

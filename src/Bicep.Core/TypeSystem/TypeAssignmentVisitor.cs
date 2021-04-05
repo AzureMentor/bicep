@@ -7,8 +7,8 @@ using System.Collections.Immutable;
 using System.Linq;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Extensions;
-using Bicep.Core.Parser;
-using Bicep.Core.SemanticModel;
+using Bicep.Core.Parsing;
+using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
 using Bicep.Core.Syntax.Visitors;
 using Bicep.Core.Text;
@@ -37,30 +37,15 @@ namespace Bicep.Core.TypeSystem
 
         private readonly IResourceTypeProvider resourceTypeProvider;
         private readonly TypeManager typeManager;
-        private readonly IReadOnlyDictionary<SyntaxBase, Symbol> bindings;
-        private readonly IReadOnlyDictionary<DeclaredSymbol, ImmutableArray<DeclaredSymbol>> cyclesBySymbol;
+        private readonly IBinder binder;
         private readonly IDictionary<SyntaxBase, TypeAssignment> assignedTypes;
-        private readonly SyntaxHierarchy hierarchy;
-        private readonly ResourceScopeType targetScope;
 
-        public TypeAssignmentVisitor(
-            IResourceTypeProvider resourceTypeProvider,
-            TypeManager typeManager,
-            IReadOnlyDictionary<SyntaxBase, Symbol> bindings,
-            IReadOnlyDictionary<DeclaredSymbol, ImmutableArray<DeclaredSymbol>> cyclesBySymbol,
-            SyntaxHierarchy hierarchy,
-            ResourceScopeType targetScope)
+        public TypeAssignmentVisitor(IResourceTypeProvider resourceTypeProvider, TypeManager typeManager, IBinder binder)
         {
             this.resourceTypeProvider = resourceTypeProvider;
             this.typeManager = typeManager;
-            // bindings will be modified by name binding after this object is created
-            // so we can't make an immutable copy here
-            // (using the IReadOnlyDictionary to prevent accidental mutation)
-            this.bindings = bindings;
-            this.cyclesBySymbol = cyclesBySymbol;
+            this.binder = binder;
             this.assignedTypes = new Dictionary<SyntaxBase, TypeAssignment>();
-            this.hierarchy = hierarchy;
-            this.targetScope = targetScope;
         }
 
         private TypeAssignment GetTypeAssignment(SyntaxBase syntax)
@@ -79,10 +64,12 @@ namespace Bicep.Core.TypeSystem
             => GetTypeAssignment(syntax).Reference.Type;
 
         public IEnumerable<Diagnostic> GetAllDiagnostics()
-            => assignedTypes.Values.SelectMany(x => x.Diagnostics);
+        {
+            // ensure we've visited all of the syntax nodes
+            Visit(this.binder.FileSymbol.Syntax);
 
-        public SyntaxBase? GetParent(SyntaxBase syntax)
-            => hierarchy.GetParent(syntax);
+            return assignedTypes.Values.SelectMany(x => x.Diagnostics);
+        }
 
         private void AssignTypeWithCaching(SyntaxBase syntax, Func<TypeAssignment> assignFunc)
         {
@@ -114,7 +101,7 @@ namespace Bicep.Core.TypeSystem
 
         private TypeSymbol? CheckForCyclicError(SyntaxBase syntax)
         {
-            if (!(bindings.TryGetValue(syntax, out var symbol) && (symbol is DeclaredSymbol declaredSymbol)))
+            if (this.binder.GetSymbolInfo(syntax) is not DeclaredSymbol declaredSymbol)
             {
                 return null;
             }
@@ -125,7 +112,7 @@ namespace Bicep.Core.TypeSystem
                 return null;
             }
 
-            if (cyclesBySymbol.TryGetValue(declaredSymbol, out var cycle))
+            if (this.binder.TryGetCycle(declaredSymbol) is { } cycle)
             {
                 // there's a cycle. stop visiting now or we never will!
                 if (cycle.Length == 1)
@@ -139,26 +126,143 @@ namespace Bicep.Core.TypeSystem
             return null;
         }
 
+        public override void VisitIfConditionSyntax(IfConditionSyntax syntax)
+            => AssignTypeWithDiagnostics(syntax, diagnostics =>
+            {
+                diagnostics.WriteMultiple(this.ValidateIfCondition(syntax));
+                return this.typeManager.GetTypeInfo(syntax.Body);
+            });
+
+        public override void VisitLocalVariableSyntax(LocalVariableSyntax syntax)
+            => AssignType(syntax, () =>
+            {
+                // local function
+                ITypeReference GetItemType(ForSyntax @for)
+                {
+                    // get type of the loop array expression
+                    // (this shouldn't cause a stack overflow because it's a peer node of this one)
+                    var arrayExpressionType = this.typeManager.GetTypeInfo(@for.Expression);
+
+                    if (arrayExpressionType.TypeKind == TypeKind.Any || arrayExpressionType is not ArrayType arrayType)
+                    {
+                        // the array is of "any" type or the loop array expression isn't actually an array
+                        // in the former case, there isn't much we can do
+                        // in the latter case, we will let the ForSyntax type check rules produce the error for it
+                        return LanguageConstants.Any;
+                    }
+
+                    // the array expression is actually an array
+                    return arrayType.Item;
+                }
+
+                var symbol = this.binder.GetSymbolInfo(syntax);
+                if(symbol is not LocalVariableSymbol localVariableSymbol)
+                {
+                    throw new InvalidOperationException($"{syntax.GetType().Name} is bound to unexpected type '{symbol?.GetType().Name}'.");
+                }
+
+                var parent = this.binder.GetParent(syntax);
+                var @for = parent switch
+                {
+                    ForSyntax forParent => forParent,
+                    ForVariableBlockSyntax block when this.binder.GetParent(block) is ForSyntax forParent => forParent,
+                    _ => throw new InvalidOperationException($"{syntax.GetType().Name} at {syntax.Span} has an unexpected parent of type {parent?.GetType().Name}")
+                };
+
+                return localVariableSymbol.LocalKind switch
+                {
+                    // this local variable is a loop item variable
+                    // we should return item type of the array (if feasible)
+                    LocalKind.ForExpressionItemVariable => GetItemType(@for),
+
+                    // the local variable is an index variable
+                    // index variables are always of type int
+                    LocalKind.ForExpressionIndexVariable => LanguageConstants.Int,
+
+                    _ => throw new InvalidOperationException($"Unexpected local kind '{localVariableSymbol.LocalKind}'.")
+                };
+            });
+
+        public override void VisitForSyntax(ForSyntax syntax)
+            => AssignType(syntax, () =>
+            {
+                var errors = new List<ErrorDiagnostic>();
+
+                if(syntax.ItemVariable is null)
+                {
+                    // we don't have an item variable due to parse errors
+                    // no need to add additional errors
+                    return ErrorType.Empty();
+                }
+
+                var loopItemType = typeManager.GetTypeInfo(syntax.ItemVariable);
+                CollectErrors(errors, loopItemType);
+
+                var arrayExpressionType = typeManager.GetTypeInfo(syntax.Expression);
+                CollectErrors(errors, arrayExpressionType);
+
+                var bodyType = typeManager.GetTypeInfo(syntax.Body);
+                CollectErrors(errors, bodyType);
+
+                if (PropagateErrorType(errors, loopItemType, arrayExpressionType, bodyType))
+                {
+                    return ErrorType.Create(errors);
+                }
+
+                if (!TypeValidator.AreTypesAssignable(arrayExpressionType, LanguageConstants.Array))
+                {
+                    // the array expression isn't actually an array
+                    return ErrorType.Create(DiagnosticBuilder.ForPosition(syntax.Expression).LoopArrayExpressionTypeMismatch(arrayExpressionType));
+                }
+
+                if (PropagateErrorType(errors, loopItemType, arrayExpressionType, bodyType))
+                {
+                    return ErrorType.Create(errors);
+                }
+
+                // the return type of a loop is the array of the body type
+                return new TypedArrayType(bodyType, TypeSymbolValidationFlags.Default);
+            });
+
         public override void VisitResourceDeclarationSyntax(ResourceDeclarationSyntax syntax)
             => AssignTypeWithDiagnostics(syntax, diagnostics =>
             {
-                var declaredType = syntax.GetDeclaredType(resourceTypeProvider);
-                if (declaredType is ErrorType)
+                var singleResourceDeclaredType = syntax.GetDeclaredType(binder, resourceTypeProvider);
+                var singleOrCollectionDeclaredType = syntax.Value is ForSyntax
+                    ? new TypedArrayType(singleResourceDeclaredType, TypeSymbolValidationFlags.Default)
+                    : singleResourceDeclaredType;
+
+                this.ValidateDecorators(syntax.Decorators, singleOrCollectionDeclaredType, diagnostics);
+
+                if (singleResourceDeclaredType is ErrorType)
                 {
-                    return declaredType;
+                    return singleResourceDeclaredType;
                 }
 
-                if (declaredType is ResourceType resourceType && !resourceTypeProvider.HasType(resourceType.TypeReference))
+                if (singleResourceDeclaredType is ResourceType resourceType && !resourceTypeProvider.HasType(resourceType.TypeReference))
                 {
-                    diagnostics.Write(DiagnosticBuilder.ForPosition(syntax.Type).ResourceTypesUnavailable(resourceType.TypeReference));
+                    var typeSegments = resourceType.TypeReference.Types;
+
+                    if (typeSegments.Length > 2 &&
+                        typeSegments.Where((type, i) => i > 0 && i < (typeSegments.Length - 1) &&  StringComparer.OrdinalIgnoreCase.Equals(type, "providers")).Any())
+                    {
+                        // Special check for (<type>/)+providers(/<type>)+
+                        // This indicates someone is trying to deploy an extension resource without using the 'scope' property.
+                        // We should instead point them towards documentation on the 'scope' property.
+                        diagnostics.Write(syntax.Type, x => x.ResourceTypeContainsProvidersSegment());
+                    }
+                    else
+                    {
+                        diagnostics.Write(syntax.Type, x => x.ResourceTypesUnavailable(resourceType.TypeReference));
+                    }
                 }
-            
-                return TypeValidator.NarrowTypeAndCollectDiagnostics(typeManager, syntax.Body, declaredType, diagnostics);
+
+                return TypeValidator.NarrowTypeAndCollectDiagnostics(typeManager, syntax.Value, singleOrCollectionDeclaredType, diagnostics);
             });
 
         public override void VisitModuleDeclarationSyntax(ModuleDeclarationSyntax syntax)
             => AssignTypeWithDiagnostics(syntax, diagnostics => {
-                if (!(bindings.TryGetValue(syntax, out var symbol) && symbol is ModuleSymbol moduleSymbol))
+                if (this.binder.GetSymbolInfo(syntax) is not ModuleSymbol moduleSymbol)
                 {
                     // TODO: Ideally we'd still be able to return a type here, but we'd need access to the compilation to get it.
                     return ErrorType.Empty();
@@ -169,27 +273,70 @@ namespace Bicep.Core.TypeSystem
                     return ErrorType.Create(failureDiagnostic);
                 }
 
-                var declaredType = syntax.GetDeclaredType(targetScope, moduleSemanticModel);
+                var singleModuleDeclaredType = syntax.GetDeclaredType(this.binder.TargetScope, moduleSemanticModel);
+                var singleOrCollectionDeclaredType = syntax.Value is ForSyntax
+                    ? new TypedArrayType(singleModuleDeclaredType, TypeSymbolValidationFlags.Default)
+                    : singleModuleDeclaredType;
+
+                this.ValidateDecorators(syntax.Decorators, singleOrCollectionDeclaredType, diagnostics);
 
                 if (moduleSemanticModel.HasErrors())
                 {
                     diagnostics.Write(DiagnosticBuilder.ForPosition(syntax.Path).ReferencedModuleHasErrors());
                 }
-                
-                return TypeValidator.NarrowTypeAndCollectDiagnostics(typeManager, syntax.Body, declaredType, diagnostics);
+
+                return TypeValidator.NarrowTypeAndCollectDiagnostics(typeManager, syntax.Value, singleOrCollectionDeclaredType, diagnostics);
             });
 
         public override void VisitParameterDeclarationSyntax(ParameterDeclarationSyntax syntax)
             => AssignTypeWithDiagnostics(syntax, diagnostics => {
-                diagnostics.WriteMultiple(this.ValidateIdentifierAccess(syntax));
-
                 var declaredType = syntax.GetDeclaredType();
+
+                this.ValidateDecorators(syntax.Decorators, declaredType, diagnostics);
+
+                if (syntax.Modifier != null)
+                {
+                    if (syntax.Modifier is ObjectSyntax modifierSyntax)
+                    {
+                        diagnostics.Write(syntax.Decorators.Any()
+                            ? DiagnosticBuilder.ForPosition(modifierSyntax.OpenBrace).CannotUseParameterDecoratorsAndModifiersTogether()
+                            : DiagnosticBuilder.ForPosition(modifierSyntax).ParameterModifiersDeprecated());
+                    }
+
+                    diagnostics.WriteMultiple(this.ValidateIdentifierAccess(syntax.Modifier));
+                }
+
                 if (declaredType is ErrorType)
                 {
                     return declaredType;
                 }
 
-                var assignedType = syntax.GetAssignedType(this.typeManager);
+                /*
+                 * Calling FirstOrDefault here because when there are duplicate decorators,
+                 * the top most one takes precedence.
+                 */
+                var allowedDecoratorSyntax = syntax.Decorators.FirstOrDefault(decoratorSyntax =>
+                {
+                    if (this.binder.GetSymbolInfo(decoratorSyntax.Expression) is FunctionSymbol functionSymbol)
+                    {
+                        var argumentTypes = this.GetRecoveredArgumentTypes(decoratorSyntax.Arguments).ToArray();
+                        Decorator? decorator = this.binder.FileSymbol.ImportedNamespaces["sys"].Type.DecoratorResolver
+                            .GetMatches(functionSymbol, argumentTypes)
+                            .SingleOrDefault();
+
+                        if (decorator?.Overload.Name == "allowed")
+                        {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                });
+
+
+                var assignedType = allowedDecoratorSyntax?.Arguments.Single().Expression is ArraySyntax allowedArrraySyntax
+                    ? syntax.GetAssignedType(this.typeManager, allowedArrraySyntax)
+                    : syntax.GetAssignedType(this.typeManager, null);
 
                 switch (syntax.Modifier)
                 {
@@ -207,8 +354,70 @@ namespace Bicep.Core.TypeSystem
                 return assignedType;
             });
 
+        private void ValidateDecorators(IEnumerable<DecoratorSyntax> decoratorSyntaxes, TypeSymbol targetType, IDiagnosticWriter diagnostics)
+        {
+            var decoratorSyntaxesByMatchingDecorator = new Dictionary<Decorator, List<DecoratorSyntax>>();
+
+            foreach (var decoratorSyntax in decoratorSyntaxes)
+            {
+                var decoratorType = this.typeManager.GetTypeInfo(decoratorSyntax.Expression);
+
+                if (decoratorType is ErrorType)
+                {
+                    diagnostics.WriteMultiple(decoratorType.GetDiagnostics());
+                    continue;
+                }
+
+                foreach (var argumentSyntax in decoratorSyntax.Arguments)
+                {
+                    TypeValidator.GetCompileTimeConstantViolation(argumentSyntax, diagnostics);
+                }
+
+                var symbol = this.binder.GetSymbolInfo(decoratorSyntax.Expression);
+
+                if (symbol is DeclaredSymbol or NamespaceSymbol)
+                {
+                    diagnostics.Write(DiagnosticBuilder.ForPosition(decoratorSyntax.Expression).ExpressionNotCallable());
+                    continue;
+                }
+
+                if (this.binder.GetSymbolInfo(decoratorSyntax.Expression) is FunctionSymbol functionSymbol)
+                {
+                    var argumentTypes = this.GetRecoveredArgumentTypes(decoratorSyntax.Arguments).ToArray();
+
+                    // There should exist exact one matching decorator if there's no argument mismatches,
+                    // since each argument must be a compile-time constant which cannot be of Any type.
+                    var decorator = this.binder.FileSymbol.ImportedNamespaces.Values
+                        .SelectMany(ns => ns.Type.DecoratorResolver.GetMatches(functionSymbol, argumentTypes))
+                        .SingleOrDefault();
+
+                    if (decorator is not null)
+                    {
+                        if (decoratorSyntaxesByMatchingDecorator.TryGetValue(decorator, out var duplicateDecoratorSyntaxes))
+                        {
+                            duplicateDecoratorSyntaxes.Add(decoratorSyntax);
+                        }
+                        else
+                        {
+                            decoratorSyntaxesByMatchingDecorator[decorator] = new List<DecoratorSyntax> { decoratorSyntax };
+                        }
+
+                        decorator.Validate(decoratorSyntax, targetType, this.typeManager, diagnostics);
+                    }
+                }
+            }
+
+            foreach (var (decorator, duplicateDecoratorSyntaxes) in decoratorSyntaxesByMatchingDecorator.Where(x => x.Value.Count > 1))
+            {
+                foreach (var decoratorSyntax in duplicateDecoratorSyntaxes)
+                {
+                    diagnostics.Write(DiagnosticBuilder.ForPosition(decoratorSyntax).DuplicateDecorator(decorator.Overload.Name));
+                }
+            }
+        }
+
         public override void VisitVariableDeclarationSyntax(VariableDeclarationSyntax syntax)
-            => AssignType(syntax, () => {
+            => AssignTypeWithDiagnostics(syntax, diagnostics => {
                 var errors = new List<ErrorDiagnostic>();
 
                 var valueType = typeManager.GetTypeInfo(syntax.Value);
@@ -224,27 +433,23 @@ namespace Bicep.Core.TypeSystem
                     return ErrorType.Create(DiagnosticBuilder.ForPosition(syntax.Value).VariableTypeAssignmentDisallowed(valueType));
                 }
 
+                this.ValidateDecorators(syntax.Decorators, valueType, diagnostics);
+
                 return valueType;
             });
 
         public override void VisitOutputDeclarationSyntax(OutputDeclarationSyntax syntax)
             => AssignTypeWithDiagnostics(syntax, diagnostics =>
             {
-                // assume "any" type if the output type has parse errors (either missing or skipped)
-                var primitiveType = syntax.OutputType == null
-                    ? LanguageConstants.Any
-                    : LanguageConstants.TryGetDeclarationType(syntax.OutputType.TypeName);
+                var declaredType = syntax.GetDeclaredType();
+                
+                this.ValidateDecorators(syntax.Decorators, declaredType, diagnostics);
 
-                if (primitiveType == null)
-                {
-                    return ErrorType.Create(DiagnosticBuilder.ForPosition(syntax.Type).InvalidOutputType());
-                }
-
-                var currentDiagnostics = GetOutputDeclarationDiagnostics(primitiveType, syntax);
+                var currentDiagnostics = GetOutputDeclarationDiagnostics(declaredType, syntax);
 
                 diagnostics.WriteMultiple(currentDiagnostics);
 
-                return primitiveType;
+                return declaredType;
             });
 
         public override void VisitBooleanLiteralSyntax(BooleanLiteralSyntax syntax)
@@ -278,7 +483,7 @@ namespace Bicep.Core.TypeSystem
                 return LanguageConstants.String;
             });
 
-        public override void VisitNumericLiteralSyntax(NumericLiteralSyntax syntax)
+        public override void VisitIntegerLiteralSyntax(IntegerLiteralSyntax syntax)
             => AssignType(syntax, () => LanguageConstants.Int);
 
         public override void VisitNullLiteralSyntax(NullLiteralSyntax syntax)
@@ -321,7 +526,7 @@ namespace Bicep.Core.TypeSystem
                 var additionalPropertiesType = additionalProperties.Any() ? UnionType.Create(additionalProperties) : null;
 
                 // TODO: Add structural naming?
-                return new NamedObjectType(LanguageConstants.Object.Name, TypeSymbolValidationFlags.Default, namedProperties, additionalPropertiesType);
+                return new ObjectType(LanguageConstants.Object.Name, TypeSymbolValidationFlags.Default, namedProperties, additionalPropertiesType);
             });
 
         public override void VisitObjectPropertySyntax(ObjectPropertySyntax syntax)
@@ -620,24 +825,68 @@ namespace Bicep.Core.TypeSystem
                 }
             });
 
+        public override void VisitResourceAccessSyntax(ResourceAccessSyntax syntax)
+            => AssignTypeWithDiagnostics(syntax, diagnostics => {
+                var errors = new List<ErrorDiagnostic>();
+
+                var baseType = typeManager.GetTypeInfo(syntax.BaseExpression);
+                CollectErrors(errors, baseType);
+
+                if (PropagateErrorType(errors, baseType))
+                {
+                    return ErrorType.Create(errors);
+                }
+
+                if (baseType is not ResourceType)
+                {
+                    // can only access children of resources
+                    return ErrorType.Create(DiagnosticBuilder.ForPosition(syntax.ResourceName).ResourceRequiredForResourceAccess(baseType.Name));
+                }
+
+                if (!syntax.ResourceName.IsValid)
+                {
+                    // the resource name is not valid
+                    // there's already a parse error for it, so we don't need to add a type error as well
+                    return ErrorType.Empty();
+                }
+
+                // Should have a symbol from name binding.
+                var symbol = binder.GetSymbolInfo(syntax);
+                if (symbol == null)
+                {
+                    throw new InvalidOperationException("ResourceAccessSyntax was not assigned a symbol during name binding.");
+                }
+
+                if (symbol is ErrorSymbol error)
+                {
+                    return ErrorType.Create(error.GetDiagnostics());
+                }
+                else if (symbol is not ResourceSymbol)
+                {
+                    return ErrorType.Create(DiagnosticBuilder.ForPosition(syntax.ResourceName).ResourceRequiredForResourceAccess(baseType.Kind.ToString()));
+                }
+
+                // This is a valid nested resource. Return its type.
+                return typeManager.GetTypeInfo(((ResourceSymbol)symbol).DeclaringResource);
+            });
+
         public override void VisitFunctionCallSyntax(FunctionCallSyntax syntax)
             => AssignType(syntax, () => {
                 var errors = new List<ErrorDiagnostic>();
-                var argumentTypes = syntax.Arguments.Select(arg => typeManager.GetTypeInfo(arg)).ToList();
 
-                foreach (TypeSymbol argumentType in argumentTypes)
+                foreach (TypeSymbol argumentType in this.GetArgumentTypes(syntax.Arguments).ToArray())
                 {
                     CollectErrors(errors, argumentType);
                 }
 
-                switch (bindings[syntax])
+                switch (this.binder.GetSymbolInfo(syntax))
                 {
                     case ErrorSymbol errorSymbol:
                         // function bind failure - pass the error along
                         return ErrorType.Create(errors.Concat(errorSymbol.GetDiagnostics()));
 
                     case FunctionSymbol function:
-                        return GetFunctionSymbolType(function, syntax.OpenParen, syntax.CloseParen, syntax.Arguments, argumentTypes, errors);
+                        return this.GetFunctionSymbolType(function, syntax.OpenParen, syntax.CloseParen, syntax.Arguments, errors);
 
                     default:
                         return ErrorType.Create(errors.Append(DiagnosticBuilder.ForPosition(syntax.Name.Span).SymbolicNameIsNotAFunction(syntax.Name.IdentifierName)));
@@ -664,14 +913,12 @@ namespace Bicep.Core.TypeSystem
                     return ErrorType.Create(DiagnosticBuilder.ForPosition(syntax.Name).ObjectRequiredForMethodAccess(baseType));
                 }
 
-                var argumentTypes = syntax.Arguments.Select(arg => typeManager.GetTypeInfo(arg)).ToList();
-
-                foreach (TypeSymbol argumentType in argumentTypes)
+                foreach (TypeSymbol argumentType in this.GetArgumentTypes(syntax.Arguments).ToArray())
                 {
                     CollectErrors(errors, argumentType);
                 }
 
-                if (!bindings.TryGetValue(syntax, out var foundSymbol))
+                if (this.binder.GetSymbolInfo(syntax) is not Symbol foundSymbol)
                 {
                     // namespace methods will have already been bound. Everything else will not have been.
                     var resolvedSymbol = objectType.MethodResolver.TryGetSymbol(syntax.Name);
@@ -686,7 +933,7 @@ namespace Bicep.Core.TypeSystem
                         return ErrorType.Create(errors.Concat(errorSymbol.GetDiagnostics()));
 
                     case FunctionSymbol functionSymbol:
-                        return GetFunctionSymbolType(functionSymbol, syntax.OpenParen, syntax.CloseParen, syntax.Arguments, argumentTypes, errors);
+                        return this.GetFunctionSymbolType(functionSymbol, syntax.OpenParen, syntax.CloseParen, syntax.Arguments, errors);
 
                     default:
                         return ErrorType.Create(errors.Append(DiagnosticBuilder.ForPosition(syntax.Name.Span).SymbolicNameIsNotAFunction(syntax.Name.IdentifierName)));
@@ -695,6 +942,11 @@ namespace Bicep.Core.TypeSystem
 
         public override void VisitTargetScopeSyntax(TargetScopeSyntax syntax)
             => AssignTypeWithDiagnostics(syntax, diagnostics => {
+                if (syntax.Decorators.Any())
+                {
+                    diagnostics.Write(DiagnosticBuilder.ForPosition(syntax.Decorators.First().At).DecoratorsNotAllowed());
+                }
+
                 var declaredType = syntax.GetDeclaredType();
                 if (declaredType is ErrorType)
                 {
@@ -705,6 +957,50 @@ namespace Bicep.Core.TypeSystem
 
                 return TypeValidator.NarrowTypeAndCollectDiagnostics(typeManager, syntax.Value, declaredType, diagnostics);
             });
+
+        public override void VisitMissingDeclarationSyntax(MissingDeclarationSyntax syntax) => AssignTypeWithDiagnostics(syntax, diagnostics =>
+        {
+            if (syntax.HasParseErrors())
+            {
+                // Skip adding semantic errors if there are parsing errors, as it might be a bit overwhelming.
+                return LanguageConstants.Any;
+            }
+
+            List<ErrorDiagnostic> errors = new();
+
+            foreach (var decoratorSyntax in syntax.Decorators)
+            {
+                var expressionType = this.typeManager.GetTypeInfo(decoratorSyntax.Expression);
+                CollectErrors(errors, expressionType);
+            }
+
+            diagnostics.WriteMultiple(errors);
+
+            // There must exist at least one decorator for MissingDeclarationSyntax.
+            var lastDecoratorSyntax = syntax.Decorators.Last();
+
+            if (this.binder.GetSymbolInfo(lastDecoratorSyntax.Expression) is FunctionSymbol functionSymbol)
+            {
+                var diagnosticBuilder = DiagnosticBuilder.ForPosition(lastDecoratorSyntax);
+                var diagnostic = functionSymbol.FunctionFlags switch
+                {
+                    FunctionFlags.ParameterDecorator => diagnosticBuilder.ExpectedParameterDeclarationAfterDecorator(),
+                    FunctionFlags.VariableDecorator => diagnosticBuilder.ExpectedVariableDeclarationAfterDecorator(),
+                    FunctionFlags.ResourceDecorator => diagnosticBuilder.ExpectedResourceDeclarationAfterDecorator(),
+                    FunctionFlags.ModuleDecorator => diagnosticBuilder.ExpectedModuleDeclarationAfterDecorator(),
+                    FunctionFlags.OutputDecorator => diagnosticBuilder.ExpectedOutputDeclarationAfterDecorator(),
+                    FunctionFlags.ResourceOrModuleDecorator => diagnosticBuilder.ExpectedResourceOrModuleDeclarationAfterDecorator(),
+                    _ => null,
+                };
+
+                if (diagnostic is not null)
+                {
+                    diagnostics.Write(diagnostic);
+                }
+            }
+
+            return LanguageConstants.Any;
+        });
 
         private TypeSymbol VisitDeclaredSymbol(VariableAccessSyntax syntax, DeclaredSymbol declaredSymbol)
         {
@@ -725,7 +1021,7 @@ namespace Bicep.Core.TypeSystem
 
         public override void VisitVariableAccessSyntax(VariableAccessSyntax syntax)
             => AssignType(syntax, () => {
-                switch (bindings[syntax])
+                switch (this.binder.GetSymbolInfo(syntax))
                 {
                     case ErrorSymbol errorSymbol:
                         // variable bind failure - pass the error along
@@ -744,6 +1040,9 @@ namespace Bicep.Core.TypeSystem
 
                     case VariableSymbol variable:
                         return new DeferredTypeReference(() => VisitDeclaredSymbol(syntax, variable));
+
+                    case LocalVariableSymbol local:
+                        return new DeferredTypeReference(() => VisitDeclaredSymbol(syntax, local));
                     
                     case NamespaceSymbol @namespace:
                         return @namespace.Type;
@@ -761,22 +1060,18 @@ namespace Bicep.Core.TypeSystem
             errors.AddRange(reference.Type.GetDiagnostics());
         }
 
-        private static TypeSymbol GetFunctionSymbolType(
+        private TypeSymbol GetFunctionSymbolType(
             FunctionSymbol function,
             Token openParen,
             Token closeParen,
             ImmutableArray<FunctionArgumentSyntax> argumentSyntaxes,
-            IList<TypeSymbol> argumentTypes,
             IList<ErrorDiagnostic> errors)
         {
             // Recover argument type errors so we can continue type checking for the parent function call.
-            var recoveredArgumentTypes = argumentTypes
-                .Select(t => t.TypeKind == TypeKind.Error ? LanguageConstants.Any : t)
-                .ToList();
-
+            var argumentTypes = this.GetRecoveredArgumentTypes(argumentSyntaxes).ToArray();
             var matches = FunctionResolver.GetMatches(
                 function,
-                recoveredArgumentTypes,
+                argumentTypes,
                 out IList<ArgumentCountMismatch> countMismatches,
                 out IList<ArgumentTypeMismatch> typeMismatches).ToList();
             
@@ -920,6 +1215,12 @@ namespace Bicep.Core.TypeSystem
             return (unknownPropertyDiagnostic.Level == DiagnosticLevel.Error) ? ErrorType.Create(Enumerable.Empty<ErrorDiagnostic>()) : LanguageConstants.Any;
         }
 
+        private IEnumerable<TypeSymbol> GetArgumentTypes(IEnumerable<FunctionArgumentSyntax> argumentSyntaxes) =>
+            argumentSyntaxes.Select(syntax => this.typeManager.GetTypeInfo(syntax));
+
+        private IEnumerable<TypeSymbol> GetRecoveredArgumentTypes(IEnumerable<FunctionArgumentSyntax> argumentSyntaxes) =>
+            this.GetArgumentTypes(argumentSyntaxes).Select(argumentType => argumentType.TypeKind == TypeKind.Error ? LanguageConstants.Any : argumentType);
+
         private IEnumerable<Diagnostic> GetOutputDeclarationDiagnostics(TypeSymbol assignedType, OutputDeclarationSyntax syntax)
         {
             var valueType = typeManager.GetTypeInfo(syntax.Value);
@@ -957,19 +1258,20 @@ namespace Bicep.Core.TypeSystem
             return Enumerable.Empty<Diagnostic>();
         }
 
-        private IEnumerable<Diagnostic> ValidateIdentifierAccess(ParameterDeclarationSyntax syntax)
+        private IEnumerable<Diagnostic> ValidateIdentifierAccess(SyntaxBase syntax)
         {
             return SyntaxAggregator.Aggregate(syntax, new List<Diagnostic>(), (accumulated, current) =>
                 {
                     if (current is VariableAccessSyntax)
                     {
-                        var symbol = bindings[current];
+                        var symbol = this.binder.GetSymbolInfo(current);
                         
                         // Error: already has error info attached, no need to add more
                         // Parameter: references are permitted in other parameters' default values as long as there is not a cycle (BCP080)
                         // Function: we already validate that a function cannot be used as a variable (BCP063)
                         // Output: we already validate that outputs cannot be referenced in expressions (BCP058)
-                        if (symbol.Kind != SymbolKind.Error &&
+                        if (symbol != null &&
+                            symbol.Kind != SymbolKind.Error &&
                             symbol.Kind != SymbolKind.Parameter &&
                             symbol.Kind != SymbolKind.Function &&
                             symbol.Kind != SymbolKind.Output &&
@@ -983,8 +1285,25 @@ namespace Bicep.Core.TypeSystem
                 },
                 accumulated => accumulated);
         }
-        
-        private static TypeSymbol UnwrapType(TypeSymbol baseType) =>
+
+        private IEnumerable<Diagnostic> ValidateIfCondition(IfConditionSyntax syntax)
+        {
+            var conditionType = typeManager.GetTypeInfo(syntax.ConditionExpression);
+
+            if (conditionType is ErrorType)
+            {
+                return conditionType.GetDiagnostics();
+            }
+
+            if (!TypeValidator.AreTypesAssignable(conditionType, LanguageConstants.Bool))
+            {
+                return DiagnosticBuilder.ForPosition(syntax.ConditionExpression).ValueTypeMismatch(LanguageConstants.Bool).AsEnumerable();
+            }
+
+            return Enumerable.Empty<Diagnostic>();
+        }
+
+        public static TypeSymbol UnwrapType(TypeSymbol baseType) =>
             baseType switch
             {
                 ResourceType resourceType =>

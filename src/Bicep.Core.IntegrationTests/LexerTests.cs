@@ -7,7 +7,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using Bicep.Core.Diagnostics;
-using Bicep.Core.Parser;
+using Bicep.Core.Extensions;
+using Bicep.Core.Parsing;
 using Bicep.Core.Samples;
 using Bicep.Core.Syntax;
 using Bicep.Core.UnitTests.Assertions;
@@ -46,7 +47,7 @@ namespace Bicep.Core.IntegrationTests
             foreach (Token token in lexer.GetTokens())
             {
                 // lookup the text of the token in original contents by token's span
-                string tokenText = dataSet.Bicep[new Range(token.Span.Position, token.Span.Position + token.Span.Length)];
+                string tokenText = dataSet.Bicep[new Range(token.Span.Position, token.GetEndPosition())];
 
                 tokenText.Should().Be(token.Text, "because token text at location should match original contents at the same location");
             }
@@ -104,13 +105,13 @@ namespace Bicep.Core.IntegrationTests
                 return $"{token.Type} |{token.Text}|";
             }
 
-            var sourceTextWithDiags = OutputHelper.AddDiagsToSourceText(dataSet, lexer.GetTokens(), getLoggingString);
+            var sourceTextWithDiags = DataSet.AddDiagsToSourceText(dataSet, lexer.GetTokens(), getLoggingString);
             var resultsFile = FileHelper.SaveResultFile(this.TestContext, Path.Combine(dataSet.Name, DataSet.TestFileMainTokens), sourceTextWithDiags);
 
             sourceTextWithDiags.Should().EqualWithLineByLineDiffOutput(
                 TestContext, 
                 dataSet.Tokens,
-                expectedLocation: OutputHelper.GetBaselineUpdatePath(dataSet, DataSet.TestFileMainTokens),
+                expectedLocation: DataSet.GetBaselineUpdatePath(dataSet, DataSet.TestFileMainTokens),
                 actualLocation: resultsFile);
 
             lexer.GetTokens().Count(token => token.Type == TokenType.EndOfFile).Should().Be(1, "because there should only be 1 EOF token");

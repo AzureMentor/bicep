@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using Bicep.Core.Diagnostics;
+using Bicep.Core;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Diagnostic = Bicep.Core.Diagnostics.Diagnostic;
 
@@ -18,8 +19,9 @@ namespace Bicep.LanguageServer.Extensions
                 Severity = ToDiagnosticSeverity(diagnostic.Level),
                 Code = diagnostic.Code,
                 Message = diagnostic.Message,
-                Source = LanguageServerConstants.LanguageId,
-                Range = diagnostic.ToRange(lineStarts)
+                Source = LanguageConstants.LanguageId,
+                Range = diagnostic.ToRange(lineStarts),
+                Tags = ToDiagnosticTags(diagnostic.Label),
             });
 
         private static DiagnosticSeverity ToDiagnosticSeverity(DiagnosticLevel level)
@@ -29,6 +31,14 @@ namespace Bicep.LanguageServer.Extensions
                 DiagnosticLevel.Error => DiagnosticSeverity.Error,
                 _ => throw new ArgumentException($"Unrecognized level {level}"),
             };
+
+        private static Container<DiagnosticTag>? ToDiagnosticTags(DiagnosticLabel? label) => label switch
+        {
+            null => null,
+            DiagnosticLabel.Unnecessary => new Container<DiagnosticTag>(DiagnosticTag.Unnecessary),
+            DiagnosticLabel.Deprecated => new Container<DiagnosticTag>(DiagnosticTag.Deprecated),
+            _ => throw new ArgumentException($"Unrecognized label {label}"),
+        };
     }
 }
 

@@ -22,6 +22,9 @@ param missingTypeWithSpaceAfter
 // tab after identifier #completionTest(30) -> paramTypes
 param missingTypeWithTabAfter	
 
+// #completionTest(20) -> paramTypes
+param trailingSpace  
+
 // partial type #completionTest(18, 19, 20, 21) -> paramTypes
 param partialType str
 
@@ -48,6 +51,15 @@ param myFalsehood bool = 'false'
 param wrongAssignmentToken string: 'hello'
 
 param WhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLong string = 'why not?'
+
+// #completionTest(28,29) -> boolPlusSymbols
+param boolCompletions bool = 
+
+// #completionTest(30,31) -> arrayPlusSymbols
+param arrayCompletions array = 
+
+// #completionTest(32,33) -> objectPlusSymbols
+param objectCompletions object = 
 
 // badly escaped string
 param wrongType fluffyBunny = 'what's up doc?'
@@ -87,6 +99,10 @@ param someArray arra {
   maxLength: 24
 }
 
+@minLength(3)
+@maxLength(24)
+param someArrayWithDecorator arra
+
 // duplicate modifier property
 param duplicatedModifierProperty string {
   minLength: 3
@@ -99,6 +115,11 @@ param secureInt int {
   minLength: 3
   maxLength: 123
 }
+
+@secure()
+@minLength(3)
+@maxLength(123)
+param secureIntWithDecorator int
 
 // wrong modifier value types
 param wrongIntModifier int {
@@ -114,12 +135,32 @@ param wrongIntModifier int {
   metadata: 'wrong'
 }
 
+@allowed([
+  'test'
+  true
+])
+@minValue({
+})
+@maxValue([
+])
+@metadata('wrong')
+param wrongIntModifierWithDecorator int = true
+
+@metadata(any([]))
+@allowed(any(2))
+param fatalErrorInIssue1713
+
 // wrong metadata schema
 param wrongMetadataSchema string {
   metadata: {
     description: true
   }
 }
+
+@metadata({
+  description: true
+})
+param wrongMetadataSchemaWithDecorator string
 
 // expression in modifier
 param expressionInModifier string {
@@ -132,6 +173,13 @@ param expressionInModifier string {
   ]
 }
 
+@maxLength(a + 2)
+@minLength(foo())
+@allowed([
+  i
+])
+param expressionInModifierWithDecorator string = 2 + 3
+
 param nonCompileTimeConstant string {
   maxLength: 2 + 3
   minLength: length([])
@@ -140,13 +188,27 @@ param nonCompileTimeConstant string {
   ]
 }
 
+@maxLength(2 + 3)
+@minLength(length([]))
+@allowed([
+  resourceGroup().id
+])
+param nonCompileTimeConstantWithDecorator string
+
+
 param emptyAllowedString string {
   allowed: []
 }
 
+@allowed([])
+param emptyAllowedStringWithDecorator string
+
 param emptyAllowedInt int {
   allowed: []
 }
+
+@allowed([])
+param emptyAllowedIntWithDecorator int
 
 // 1-cycle in params
 param paramDefaultOneCycle string = paramDefaultOneCycle
@@ -166,6 +228,11 @@ param paramModifierSelfCycle string {
     paramModifierSelfCycle
   ]
 }
+
+@allowed([
+  paramModifierSelfCycleWithDecorator
+])
+param paramModifierSelfCycleWithDecorator string
 
 // 2-cycle in modifier params
 param paramModifierTwoCycle1 string {
@@ -275,6 +342,15 @@ param commaOne string {
     default: 'abc'
 }
 
+@metadata({
+  description: 'Name of Virtual Machine'
+})
+@allowed([
+  'abc',
+  'def'
+])
+param commaOneWithDecorator string
+
 // invalid comma separator (object)
 param commaTwo string {
     metadata: {
@@ -287,6 +363,70 @@ param commaTwo string {
     ]
     default: 'abc'
 }
+
+@secure
+@
+@&& xxx
+@sys
+@paramAccessingVar
+param incompleteDecorators string
+
+@concat(1, 2)
+@sys.concat('a', 'b')
+@secure()
+// wrong target type
+@minValue(20)
+param someString string {
+	// using decorators and modifier at the same time
+    secure: true
+}
+
+@allowed([
+    true
+    10
+    'foo'
+])
+@secure()
+// #completionTest(1, 2, 3) -> intParameterDecoratorsPlusNamespace
+@  
+// #completionTest(5, 6) -> intParameterDecorators
+@sys.   
+param someInteger int = 20
+
+@allowed([], [], 2)
+// #completionTest(4) -> empty
+@az.
+param tooManyArguments1 int = 20
+
+@metadata({}, {}, true)
+// #completionTest(2) -> stringParameterDecoratorsPlusNamespace
+@m
+// #completionTest(1, 2, 3) -> stringParameterDecoratorsPlusNamespace
+@   
+// #completionTest(5) -> stringParameterDecorators
+@sys.
+param tooManyArguments2 string
+
+@description(sys.concat(2))
+@allowed([for thing in []: 's'])
+param nonConstantInDecorator string
+
+@minValue(-length('s'))
+@metadata({
+  bool: !true
+})
+param unaryMinusOnFunction int
+
+@minLength(1)
+@minLength(2)
+@secure()
+@maxLength(3)
+@maxLength(4)
+param duplicateDecorators string
+
+@minLength(-1)
+@maxLength(-100)
+param invalidLength string
 
 // unterminated multi-line comment
 /*    

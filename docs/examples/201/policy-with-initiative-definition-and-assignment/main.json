@@ -1,6 +1,13 @@
 {
-  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "dev",
+      "templateHash": "16752335580238901591"
+    }
+  },
   "parameters": {
     "listOfAllowedLocations": {
       "type": "array",
@@ -95,7 +102,7 @@
       "properties": {
         "scope": "[subscription().id]",
         "enforcementMode": "Default",
-        "policyDefinitionId": "[resourceId('Microsoft.Authorization/policySetDefinitions', variables('initiativeDefinitionName'))]",
+        "policyDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/policySetDefinitions', variables('initiativeDefinitionName'))]",
         "parameters": {
           "listOfAllowedLocations": {
             "value": "[parameters('listOfAllowedLocations')]"
@@ -106,7 +113,7 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Authorization/policySetDefinitions', variables('initiativeDefinitionName'))]"
+        "[subscriptionResourceId('Microsoft.Authorization/policySetDefinitions', variables('initiativeDefinitionName'))]"
       ]
     }
   ]

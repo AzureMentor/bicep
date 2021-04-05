@@ -8,8 +8,8 @@ var myInt = 42
 //@[4:9)  IdentifierSyntax
 //@[4:9)   Identifier |myInt|
 //@[10:11)  Assignment |=|
-//@[12:14)  NumericLiteralSyntax
-//@[12:14)   Number |42|
+//@[12:14)  IntegerLiteralSyntax
+//@[12:14)   Integer |42|
 //@[14:16) NewLine |\n\n|
 
 // a string variable
@@ -40,8 +40,8 @@ var interp1 = 'abc${123}def'
 //@[12:13)  Assignment |=|
 //@[14:28)  StringSyntax
 //@[14:20)   StringLeftPiece |'abc${|
-//@[20:23)   NumericLiteralSyntax
-//@[20:23)    Number |123|
+//@[20:23)   IntegerLiteralSyntax
+//@[20:23)    Integer |123|
 //@[23:28)   StringRightPiece |}def'|
 //@[28:29) NewLine |\n|
 var interp2 = '${123}def'
@@ -52,8 +52,8 @@ var interp2 = '${123}def'
 //@[12:13)  Assignment |=|
 //@[14:25)  StringSyntax
 //@[14:17)   StringLeftPiece |'${|
-//@[17:20)   NumericLiteralSyntax
-//@[17:20)    Number |123|
+//@[17:20)   IntegerLiteralSyntax
+//@[17:20)    Integer |123|
 //@[20:25)   StringRightPiece |}def'|
 //@[25:26) NewLine |\n|
 var interp3 = 'abc${123}'
@@ -64,8 +64,8 @@ var interp3 = 'abc${123}'
 //@[12:13)  Assignment |=|
 //@[14:25)  StringSyntax
 //@[14:20)   StringLeftPiece |'abc${|
-//@[20:23)   NumericLiteralSyntax
-//@[20:23)    Number |123|
+//@[20:23)   IntegerLiteralSyntax
+//@[20:23)    Integer |123|
 //@[23:25)   StringRightPiece |}'|
 //@[25:26) NewLine |\n|
 var interp4 = 'abc${123}${456}jk$l${789}p$'
@@ -76,14 +76,14 @@ var interp4 = 'abc${123}${456}jk$l${789}p$'
 //@[12:13)  Assignment |=|
 //@[14:43)  StringSyntax
 //@[14:20)   StringLeftPiece |'abc${|
-//@[20:23)   NumericLiteralSyntax
-//@[20:23)    Number |123|
+//@[20:23)   IntegerLiteralSyntax
+//@[20:23)    Integer |123|
 //@[23:26)   StringMiddlePiece |}${|
-//@[26:29)   NumericLiteralSyntax
-//@[26:29)    Number |456|
+//@[26:29)   IntegerLiteralSyntax
+//@[26:29)    Integer |456|
 //@[29:36)   StringMiddlePiece |}jk$l${|
-//@[36:39)   NumericLiteralSyntax
-//@[36:39)    Number |789|
+//@[36:39)   IntegerLiteralSyntax
+//@[36:39)    Integer |789|
 //@[39:43)   StringRightPiece |}p$'|
 //@[43:44) NewLine |\n|
 var doubleInterp = 'abc${'def${123}'}_${'${456}${789}'}'
@@ -96,17 +96,17 @@ var doubleInterp = 'abc${'def${123}'}_${'${456}${789}'}'
 //@[19:25)   StringLeftPiece |'abc${|
 //@[25:36)   StringSyntax
 //@[25:31)    StringLeftPiece |'def${|
-//@[31:34)    NumericLiteralSyntax
-//@[31:34)     Number |123|
+//@[31:34)    IntegerLiteralSyntax
+//@[31:34)     Integer |123|
 //@[34:36)    StringRightPiece |}'|
 //@[36:40)   StringMiddlePiece |}_${|
 //@[40:54)   StringSyntax
 //@[40:43)    StringLeftPiece |'${|
-//@[43:46)    NumericLiteralSyntax
-//@[43:46)     Number |456|
+//@[43:46)    IntegerLiteralSyntax
+//@[43:46)     Integer |456|
 //@[46:49)    StringMiddlePiece |}${|
-//@[49:52)    NumericLiteralSyntax
-//@[49:52)     Number |789|
+//@[49:52)    IntegerLiteralSyntax
+//@[49:52)     Integer |789|
 //@[52:54)    StringRightPiece |}'|
 //@[54:56)   StringRightPiece |}'|
 //@[56:57) NewLine |\n|
@@ -118,8 +118,8 @@ var curliesInInterp = '{${123}{0}${true}}'
 //@[20:21)  Assignment |=|
 //@[22:42)  StringSyntax
 //@[22:26)   StringLeftPiece |'{${|
-//@[26:29)   NumericLiteralSyntax
-//@[26:29)    Number |123|
+//@[26:29)   IntegerLiteralSyntax
+//@[26:29)    Integer |123|
 //@[29:35)   StringMiddlePiece |}{0}${|
 //@[35:39)   BooleanLiteralSyntax
 //@[35:39)    TrueKeyword |true|
@@ -140,8 +140,8 @@ var bracketInTheMiddle = 'a[b]'
 //@[25:31)  StringSyntax
 //@[25:31)   StringComplete |'a[b]'|
 //@[31:32) NewLine |\n|
-// #completionTest(25) -> symbolsPlusTypes
-//@[42:43) NewLine |\n|
+// #completionTest(25) -> empty
+//@[31:32) NewLine |\n|
 var bracketAtBeginning = '[test'
 //@[0:32) VariableDeclarationSyntax
 //@[0:3)  Identifier |var|
@@ -151,6 +151,8 @@ var bracketAtBeginning = '[test'
 //@[25:32)  StringSyntax
 //@[25:32)   StringComplete |'[test'|
 //@[32:33) NewLine |\n|
+// #completionTest(23) -> symbolsPlusTypes
+//@[42:43) NewLine |\n|
 var enclosingBrackets = '[test]'
 //@[0:32) VariableDeclarationSyntax
 //@[0:3)  Identifier |var|
@@ -296,8 +298,8 @@ var myObj = {
 //@[3:4)    Colon |:|
 //@[5:8)    UnaryOperationSyntax
 //@[5:6)     Minus |-|
-//@[6:8)     NumericLiteralSyntax
-//@[6:8)      Number |12|
+//@[6:8)     IntegerLiteralSyntax
+//@[6:8)      Integer |12|
 //@[8:9)   NewLine |\n|
   c: true
 //@[2:9)   ObjectPropertySyntax
@@ -327,22 +329,22 @@ var myObj = {
 //@[9:10)     NewLine |\n|
     1
 //@[4:5)     ArrayItemSyntax
-//@[4:5)      NumericLiteralSyntax
-//@[4:5)       Number |1|
+//@[4:5)      IntegerLiteralSyntax
+//@[4:5)       Integer |1|
 //@[5:6)     NewLine |\n|
     2
 //@[4:5)     ArrayItemSyntax
-//@[4:5)      NumericLiteralSyntax
-//@[4:5)       Number |2|
+//@[4:5)      IntegerLiteralSyntax
+//@[4:5)       Integer |2|
 //@[5:6)     NewLine |\n|
     2+1
 //@[4:7)     ArrayItemSyntax
 //@[4:7)      BinaryOperationSyntax
-//@[4:5)       NumericLiteralSyntax
-//@[4:5)        Number |2|
+//@[4:5)       IntegerLiteralSyntax
+//@[4:5)        Integer |2|
 //@[5:6)       Plus |+|
-//@[6:7)       NumericLiteralSyntax
-//@[6:7)        Number |1|
+//@[6:7)       IntegerLiteralSyntax
+//@[6:7)        Integer |1|
 //@[7:8)     NewLine |\n|
     {
 //@[4:53)     ArrayItemSyntax
@@ -357,21 +359,21 @@ var myObj = {
 //@[12:41)        BinaryOperationSyntax
 //@[12:28)         BinaryOperationSyntax
 //@[12:20)          BinaryOperationSyntax
-//@[12:15)           NumericLiteralSyntax
-//@[12:15)            Number |144|
+//@[12:15)           IntegerLiteralSyntax
+//@[12:15)            Integer |144|
 //@[16:17)           GreaterThan |>|
-//@[18:20)           NumericLiteralSyntax
-//@[18:20)            Number |33|
+//@[18:20)           IntegerLiteralSyntax
+//@[18:20)            Integer |33|
 //@[21:23)          LogicalAnd |&&|
 //@[24:28)          BooleanLiteralSyntax
 //@[24:28)           TrueKeyword |true|
 //@[29:31)         LogicalOr ||||
 //@[32:41)         BinaryOperationSyntax
-//@[32:34)          NumericLiteralSyntax
-//@[32:34)           Number |99|
+//@[32:34)          IntegerLiteralSyntax
+//@[32:34)           Integer |99|
 //@[35:37)          LessThanOrEqual |<=|
-//@[38:41)          NumericLiteralSyntax
-//@[38:41)           Number |199|
+//@[38:41)          IntegerLiteralSyntax
+//@[38:41)           Integer |199|
 //@[41:42)       NewLine |\n|
     }
 //@[4:5)       RightBrace |}|
@@ -437,8 +439,8 @@ var objWithInterp = {
 //@[5:10)       Identifier |myStr|
 //@[10:12)     StringRightPiece |}'|
 //@[12:13)    Colon |:|
-//@[14:15)    NumericLiteralSyntax
-//@[14:15)     Number |1|
+//@[14:15)    IntegerLiteralSyntax
+//@[14:15)     Integer |1|
 //@[15:16)   NewLine |\n|
   'abc${myStr}def': 2
 //@[2:21)   ObjectPropertySyntax
@@ -449,8 +451,8 @@ var objWithInterp = {
 //@[8:13)       Identifier |myStr|
 //@[13:18)     StringRightPiece |}def'|
 //@[18:19)    Colon |:|
-//@[20:21)    NumericLiteralSyntax
-//@[20:21)     Number |2|
+//@[20:21)    IntegerLiteralSyntax
+//@[20:21)     Integer |2|
 //@[21:22)   NewLine |\n|
   '${interp1}abc${interp2}': '${interp1}abc${interp2}'
 //@[2:54)   ObjectPropertySyntax
@@ -647,6 +649,108 @@ var anyIndexOnAny = any(true)[any(false)]
 //@[40:41)   RightSquare |]|
 //@[41:43) NewLine |\n\n|
 
+var deploymentName = deployment().name
+//@[0:38) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:18)  IdentifierSyntax
+//@[4:18)   Identifier |deploymentName|
+//@[19:20)  Assignment |=|
+//@[21:38)  PropertyAccessSyntax
+//@[21:33)   FunctionCallSyntax
+//@[21:31)    IdentifierSyntax
+//@[21:31)     Identifier |deployment|
+//@[31:32)    LeftParen |(|
+//@[32:33)    RightParen |)|
+//@[33:34)   Dot |.|
+//@[34:38)   IdentifierSyntax
+//@[34:38)    Identifier |name|
+//@[38:39) NewLine |\n|
+var templateLinkUri = deployment().properties.templateLink.uri
+//@[0:62) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:19)  IdentifierSyntax
+//@[4:19)   Identifier |templateLinkUri|
+//@[20:21)  Assignment |=|
+//@[22:62)  PropertyAccessSyntax
+//@[22:58)   PropertyAccessSyntax
+//@[22:45)    PropertyAccessSyntax
+//@[22:34)     FunctionCallSyntax
+//@[22:32)      IdentifierSyntax
+//@[22:32)       Identifier |deployment|
+//@[32:33)      LeftParen |(|
+//@[33:34)      RightParen |)|
+//@[34:35)     Dot |.|
+//@[35:45)     IdentifierSyntax
+//@[35:45)      Identifier |properties|
+//@[45:46)    Dot |.|
+//@[46:58)    IdentifierSyntax
+//@[46:58)     Identifier |templateLink|
+//@[58:59)   Dot |.|
+//@[59:62)   IdentifierSyntax
+//@[59:62)    Identifier |uri|
+//@[62:63) NewLine |\n|
+var templateLinkId = deployment().properties.templateLink.id
+//@[0:60) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:18)  IdentifierSyntax
+//@[4:18)   Identifier |templateLinkId|
+//@[19:20)  Assignment |=|
+//@[21:60)  PropertyAccessSyntax
+//@[21:57)   PropertyAccessSyntax
+//@[21:44)    PropertyAccessSyntax
+//@[21:33)     FunctionCallSyntax
+//@[21:31)      IdentifierSyntax
+//@[21:31)       Identifier |deployment|
+//@[31:32)      LeftParen |(|
+//@[32:33)      RightParen |)|
+//@[33:34)     Dot |.|
+//@[34:44)     IdentifierSyntax
+//@[34:44)      Identifier |properties|
+//@[44:45)    Dot |.|
+//@[45:57)    IdentifierSyntax
+//@[45:57)     Identifier |templateLink|
+//@[57:58)   Dot |.|
+//@[58:60)   IdentifierSyntax
+//@[58:60)    Identifier |id|
+//@[60:62) NewLine |\n\n|
+
+var portalEndpoint = environment().portal
+//@[0:41) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:18)  IdentifierSyntax
+//@[4:18)   Identifier |portalEndpoint|
+//@[19:20)  Assignment |=|
+//@[21:41)  PropertyAccessSyntax
+//@[21:34)   FunctionCallSyntax
+//@[21:32)    IdentifierSyntax
+//@[21:32)     Identifier |environment|
+//@[32:33)    LeftParen |(|
+//@[33:34)    RightParen |)|
+//@[34:35)   Dot |.|
+//@[35:41)   IdentifierSyntax
+//@[35:41)    Identifier |portal|
+//@[41:42) NewLine |\n|
+var loginEndpoint = environment().authentication.loginEndpoint
+//@[0:62) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:17)  IdentifierSyntax
+//@[4:17)   Identifier |loginEndpoint|
+//@[18:19)  Assignment |=|
+//@[20:62)  PropertyAccessSyntax
+//@[20:48)   PropertyAccessSyntax
+//@[20:33)    FunctionCallSyntax
+//@[20:31)     IdentifierSyntax
+//@[20:31)      Identifier |environment|
+//@[31:32)     LeftParen |(|
+//@[32:33)     RightParen |)|
+//@[33:34)    Dot |.|
+//@[34:48)    IdentifierSyntax
+//@[34:48)     Identifier |authentication|
+//@[48:49)   Dot |.|
+//@[49:62)   IdentifierSyntax
+//@[49:62)    Identifier |loginEndpoint|
+//@[62:64) NewLine |\n\n|
+
 var namedPropertyIndexer = {
 //@[0:48) VariableDeclarationSyntax
 //@[0:3)  Identifier |var|
@@ -691,8 +795,8 @@ var intIndexer = [
 ][0]
 //@[0:1)    RightSquare |]|
 //@[1:2)   LeftSquare |[|
-//@[2:3)   NumericLiteralSyntax
-//@[2:3)    Number |0|
+//@[2:3)   IntegerLiteralSyntax
+//@[2:3)    Integer |0|
 //@[3:4)   RightSquare |]|
 //@[4:6) NewLine |\n\n|
 
@@ -719,8 +823,8 @@ var functionOnIndexer1 = concat([
 ][0], 's')
 //@[0:1)      RightSquare |]|
 //@[1:2)     LeftSquare |[|
-//@[2:3)     NumericLiteralSyntax
-//@[2:3)      Number |0|
+//@[2:3)     IntegerLiteralSyntax
+//@[2:3)      Integer |0|
 //@[3:4)     RightSquare |]|
 //@[4:5)    Comma |,|
 //@[6:9)   FunctionArgumentSyntax
@@ -747,8 +851,8 @@ var functionOnIndexer2 = concat([
 ][0], 's')
 //@[0:1)      RightSquare |]|
 //@[1:2)     LeftSquare |[|
-//@[2:3)     NumericLiteralSyntax
-//@[2:3)      Number |0|
+//@[2:3)     IntegerLiteralSyntax
+//@[2:3)      Integer |0|
 //@[3:4)     RightSquare |]|
 //@[4:5)    Comma |,|
 //@[6:9)   FunctionArgumentSyntax
@@ -775,8 +879,8 @@ var functionOnIndexer3 = concat([
 ][0], any('s'))
 //@[0:1)      RightSquare |]|
 //@[1:2)     LeftSquare |[|
-//@[2:3)     NumericLiteralSyntax
-//@[2:3)      Number |0|
+//@[2:3)     IntegerLiteralSyntax
+//@[2:3)      Integer |0|
 //@[3:4)     RightSquare |]|
 //@[4:5)    Comma |,|
 //@[6:14)   FunctionArgumentSyntax
@@ -888,8 +992,8 @@ var previousEmitLimit = [
 //@[2:8)   ArrayItemSyntax
 //@[2:8)    StringSyntax
 //@[2:5)     StringLeftPiece |'${|
-//@[5:6)     NumericLiteralSyntax
-//@[5:6)      Number |4|
+//@[5:6)     IntegerLiteralSyntax
+//@[5:6)      Integer |4|
 //@[6:8)     StringRightPiece |}'|
 //@[8:9)   NewLine |\n|
   {
@@ -935,11 +1039,11 @@ var previousEmitLimit = [
         12 + 3
 //@[8:14)           ArrayItemSyntax
 //@[8:14)            BinaryOperationSyntax
-//@[8:10)             NumericLiteralSyntax
-//@[8:10)              Number |12|
+//@[8:10)             IntegerLiteralSyntax
+//@[8:10)              Integer |12|
 //@[11:12)             Plus |+|
-//@[13:14)             NumericLiteralSyntax
-//@[13:14)              Number |3|
+//@[13:14)             IntegerLiteralSyntax
+//@[13:14)              Integer |3|
 //@[14:15)           NewLine |\n|
       ], [
 //@[6:7)           RightSquare |]|
@@ -1024,8 +1128,8 @@ var previousEmitLimit = [
 //@[8:11)             StringSyntax
 //@[8:11)              StringComplete |'s'|
 //@[12:14)             Equals |==|
-//@[15:17)             NumericLiteralSyntax
-//@[15:17)              Number |12|
+//@[15:17)             IntegerLiteralSyntax
+//@[15:17)              Integer |12|
 //@[17:18)           NewLine |\n|
       ])
 //@[6:7)           RightSquare |]|
@@ -1067,8 +1171,8 @@ var previousEmitLimit2 = [
 //@[2:8)   ArrayItemSyntax
 //@[2:8)    StringSyntax
 //@[2:5)     StringLeftPiece |'${|
-//@[5:6)     NumericLiteralSyntax
-//@[5:6)      Number |4|
+//@[5:6)     IntegerLiteralSyntax
+//@[5:6)      Integer |4|
 //@[6:8)     StringRightPiece |}'|
 //@[8:9)   NewLine |\n|
   {
@@ -1117,11 +1221,11 @@ var previousEmitLimit2 = [
 //@[8:9)             Identifier |a|
 //@[9:10)            Colon |:|
 //@[11:17)            BinaryOperationSyntax
-//@[11:13)             NumericLiteralSyntax
-//@[11:13)              Number |12|
+//@[11:13)             IntegerLiteralSyntax
+//@[11:13)              Integer |12|
 //@[14:15)             Plus |+|
-//@[16:17)             NumericLiteralSyntax
-//@[16:17)              Number |3|
+//@[16:17)             IntegerLiteralSyntax
+//@[16:17)              Integer |3|
 //@[17:18)           NewLine |\n|
       }, {
 //@[6:7)           RightBrace |}|
@@ -1223,8 +1327,8 @@ var previousEmitLimit2 = [
 //@[11:14)             StringSyntax
 //@[11:14)              StringComplete |'s'|
 //@[15:17)             Equals |==|
-//@[18:20)             NumericLiteralSyntax
-//@[18:20)              Number |12|
+//@[18:20)             IntegerLiteralSyntax
+//@[18:20)              Integer |12|
 //@[20:21)           NewLine |\n|
       }, {})
 //@[6:7)           RightBrace |}|
@@ -1295,8 +1399,8 @@ var previousEmitLimit3 = {
     } == 2
 //@[4:5)        RightBrace |}|
 //@[6:8)       Equals |==|
-//@[9:10)       NumericLiteralSyntax
-//@[9:10)        Number |2|
+//@[9:10)       IntegerLiteralSyntax
+//@[9:10)        Integer |2|
 //@[10:11)     NewLine |\n|
     c: concat([
 //@[4:43)     ObjectPropertySyntax
@@ -1716,8 +1820,8 @@ var _ = 3
 //@[4:5)  IdentifierSyntax
 //@[4:5)   Identifier |_|
 //@[6:7)  Assignment |=|
-//@[8:9)  NumericLiteralSyntax
-//@[8:9)   Number |3|
+//@[8:9)  IntegerLiteralSyntax
+//@[8:9)   Integer |3|
 //@[9:10) NewLine |\n|
 var __ = 10 * _
 //@[0:15) VariableDeclarationSyntax
@@ -1726,8 +1830,8 @@ var __ = 10 * _
 //@[4:6)   Identifier |__|
 //@[7:8)  Assignment |=|
 //@[9:15)  BinaryOperationSyntax
-//@[9:11)   NumericLiteralSyntax
-//@[9:11)    Number |10|
+//@[9:11)   IntegerLiteralSyntax
+//@[9:11)    Integer |10|
 //@[12:13)   Asterisk |*|
 //@[14:15)   VariableAccessSyntax
 //@[14:15)    IdentifierSyntax
@@ -1766,11 +1870,11 @@ var _1_ = _0a_1b || (__ + _ % 2 == 0)
 //@[26:27)        IdentifierSyntax
 //@[26:27)         Identifier |_|
 //@[28:29)       Modulo |%|
-//@[30:31)       NumericLiteralSyntax
-//@[30:31)        Number |2|
+//@[30:31)       IntegerLiteralSyntax
+//@[30:31)        Integer |2|
 //@[32:34)     Equals |==|
-//@[35:36)     NumericLiteralSyntax
-//@[35:36)      Number |0|
+//@[35:36)     IntegerLiteralSyntax
+//@[35:36)      Integer |0|
 //@[36:37)    RightParen |)|
 //@[37:39) NewLine |\n\n|
 
@@ -1851,16 +1955,16 @@ var isTrue = sys.max(1, 2) == 3
 //@[17:20)     Identifier |max|
 //@[20:21)    LeftParen |(|
 //@[21:23)    FunctionArgumentSyntax
-//@[21:22)     NumericLiteralSyntax
-//@[21:22)      Number |1|
+//@[21:22)     IntegerLiteralSyntax
+//@[21:22)      Integer |1|
 //@[22:23)     Comma |,|
 //@[24:25)    FunctionArgumentSyntax
-//@[24:25)     NumericLiteralSyntax
-//@[24:25)      Number |2|
+//@[24:25)     IntegerLiteralSyntax
+//@[24:25)      Integer |2|
 //@[25:26)    RightParen |)|
 //@[27:29)   Equals |==|
-//@[30:31)   NumericLiteralSyntax
-//@[30:31)    Number |3|
+//@[30:31)   IntegerLiteralSyntax
+//@[30:31)    Integer |3|
 //@[31:32) NewLine |\n|
 var isFalse = !isTrue
 //@[0:21) VariableDeclarationSyntax
@@ -1980,4 +2084,614 @@ var scopesWithoutArmRepresentation = {
 //@[85:86)   NewLine |\n|
 }
 //@[0:1)   RightBrace |}|
-//@[1:1) EndOfFile ||
+//@[1:3) NewLine |\n\n|
+
+// Issue #1332
+//@[14:15) NewLine |\n|
+var issue1332_propname = 'ptest'
+//@[0:32) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:22)  IdentifierSyntax
+//@[4:22)   Identifier |issue1332_propname|
+//@[23:24)  Assignment |=|
+//@[25:32)  StringSyntax
+//@[25:32)   StringComplete |'ptest'|
+//@[32:33) NewLine |\n|
+var issue1332 = true ? {
+//@[0:86) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:13)  IdentifierSyntax
+//@[4:13)   Identifier |issue1332|
+//@[14:15)  Assignment |=|
+//@[16:86)  TernaryOperationSyntax
+//@[16:20)   BooleanLiteralSyntax
+//@[16:20)    TrueKeyword |true|
+//@[21:22)   Question |?|
+//@[23:81)   ObjectSyntax
+//@[23:24)    LeftBrace |{|
+//@[24:25)    NewLine |\n|
+    prop1: {
+//@[4:54)    ObjectPropertySyntax
+//@[4:9)     IdentifierSyntax
+//@[4:9)      Identifier |prop1|
+//@[9:10)     Colon |:|
+//@[11:54)     ObjectSyntax
+//@[11:12)      LeftBrace |{|
+//@[12:13)      NewLine |\n|
+        '${issue1332_propname}': {}
+//@[8:35)      ObjectPropertySyntax
+//@[8:31)       StringSyntax
+//@[8:11)        StringLeftPiece |'${|
+//@[11:29)        VariableAccessSyntax
+//@[11:29)         IdentifierSyntax
+//@[11:29)          Identifier |issue1332_propname|
+//@[29:31)        StringRightPiece |}'|
+//@[31:32)       Colon |:|
+//@[33:35)       ObjectSyntax
+//@[33:34)        LeftBrace |{|
+//@[34:35)        RightBrace |}|
+//@[35:36)      NewLine |\n|
+    }
+//@[4:5)      RightBrace |}|
+//@[5:6)    NewLine |\n|
+} : {}
+//@[0:1)    RightBrace |}|
+//@[2:3)   Colon |:|
+//@[4:6)   ObjectSyntax
+//@[4:5)    LeftBrace |{|
+//@[5:6)    RightBrace |}|
+//@[6:8) NewLine |\n\n|
+
+// Issue #486
+//@[13:14) NewLine |\n|
+var myBigInt = 2199023255552
+//@[0:28) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:12)  IdentifierSyntax
+//@[4:12)   Identifier |myBigInt|
+//@[13:14)  Assignment |=|
+//@[15:28)  IntegerLiteralSyntax
+//@[15:28)   Integer |2199023255552|
+//@[28:29) NewLine |\n|
+var myIntExpression = 5 * 5
+//@[0:27) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:19)  IdentifierSyntax
+//@[4:19)   Identifier |myIntExpression|
+//@[20:21)  Assignment |=|
+//@[22:27)  BinaryOperationSyntax
+//@[22:23)   IntegerLiteralSyntax
+//@[22:23)    Integer |5|
+//@[24:25)   Asterisk |*|
+//@[26:27)   IntegerLiteralSyntax
+//@[26:27)    Integer |5|
+//@[27:28) NewLine |\n|
+var myBigIntExpression = 2199023255552 * 2
+//@[0:42) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:22)  IdentifierSyntax
+//@[4:22)   Identifier |myBigIntExpression|
+//@[23:24)  Assignment |=|
+//@[25:42)  BinaryOperationSyntax
+//@[25:38)   IntegerLiteralSyntax
+//@[25:38)    Integer |2199023255552|
+//@[39:40)   Asterisk |*|
+//@[41:42)   IntegerLiteralSyntax
+//@[41:42)    Integer |2|
+//@[42:43) NewLine |\n|
+var myBigIntExpression2 = 2199023255552 * 2199023255552
+//@[0:55) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:23)  IdentifierSyntax
+//@[4:23)   Identifier |myBigIntExpression2|
+//@[24:25)  Assignment |=|
+//@[26:55)  BinaryOperationSyntax
+//@[26:39)   IntegerLiteralSyntax
+//@[26:39)    Integer |2199023255552|
+//@[40:41)   Asterisk |*|
+//@[42:55)   IntegerLiteralSyntax
+//@[42:55)    Integer |2199023255552|
+//@[55:57) NewLine |\n\n|
+
+// variable loops
+//@[17:18) NewLine |\n|
+var incrementingNumbers = [for i in range(0,10) : i]
+//@[0:52) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:23)  IdentifierSyntax
+//@[4:23)   Identifier |incrementingNumbers|
+//@[24:25)  Assignment |=|
+//@[26:52)  ForSyntax
+//@[26:27)   LeftSquare |[|
+//@[27:30)   Identifier |for|
+//@[31:32)   LocalVariableSyntax
+//@[31:32)    IdentifierSyntax
+//@[31:32)     Identifier |i|
+//@[33:35)   Identifier |in|
+//@[36:47)   FunctionCallSyntax
+//@[36:41)    IdentifierSyntax
+//@[36:41)     Identifier |range|
+//@[41:42)    LeftParen |(|
+//@[42:44)    FunctionArgumentSyntax
+//@[42:43)     IntegerLiteralSyntax
+//@[42:43)      Integer |0|
+//@[43:44)     Comma |,|
+//@[44:46)    FunctionArgumentSyntax
+//@[44:46)     IntegerLiteralSyntax
+//@[44:46)      Integer |10|
+//@[46:47)    RightParen |)|
+//@[48:49)   Colon |:|
+//@[50:51)   VariableAccessSyntax
+//@[50:51)    IdentifierSyntax
+//@[50:51)     Identifier |i|
+//@[51:52)   RightSquare |]|
+//@[52:53) NewLine |\n|
+var loopInput = [
+//@[0:35) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:13)  IdentifierSyntax
+//@[4:13)   Identifier |loopInput|
+//@[14:15)  Assignment |=|
+//@[16:35)  ArraySyntax
+//@[16:17)   LeftSquare |[|
+//@[17:18)   NewLine |\n|
+  'one'
+//@[2:7)   ArrayItemSyntax
+//@[2:7)    StringSyntax
+//@[2:7)     StringComplete |'one'|
+//@[7:8)   NewLine |\n|
+  'two'
+//@[2:7)   ArrayItemSyntax
+//@[2:7)    StringSyntax
+//@[2:7)     StringComplete |'two'|
+//@[7:8)   NewLine |\n|
+]
+//@[0:1)   RightSquare |]|
+//@[1:2) NewLine |\n|
+var arrayOfStringsViaLoop = [for (name, i) in loopInput: 'prefix-${i}-${name}']
+//@[0:79) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:25)  IdentifierSyntax
+//@[4:25)   Identifier |arrayOfStringsViaLoop|
+//@[26:27)  Assignment |=|
+//@[28:79)  ForSyntax
+//@[28:29)   LeftSquare |[|
+//@[29:32)   Identifier |for|
+//@[33:42)   ForVariableBlockSyntax
+//@[33:34)    LeftParen |(|
+//@[34:38)    LocalVariableSyntax
+//@[34:38)     IdentifierSyntax
+//@[34:38)      Identifier |name|
+//@[38:39)    Comma |,|
+//@[40:41)    LocalVariableSyntax
+//@[40:41)     IdentifierSyntax
+//@[40:41)      Identifier |i|
+//@[41:42)    RightParen |)|
+//@[43:45)   Identifier |in|
+//@[46:55)   VariableAccessSyntax
+//@[46:55)    IdentifierSyntax
+//@[46:55)     Identifier |loopInput|
+//@[55:56)   Colon |:|
+//@[57:78)   StringSyntax
+//@[57:67)    StringLeftPiece |'prefix-${|
+//@[67:68)    VariableAccessSyntax
+//@[67:68)     IdentifierSyntax
+//@[67:68)      Identifier |i|
+//@[68:72)    StringMiddlePiece |}-${|
+//@[72:76)    VariableAccessSyntax
+//@[72:76)     IdentifierSyntax
+//@[72:76)      Identifier |name|
+//@[76:78)    StringRightPiece |}'|
+//@[78:79)   RightSquare |]|
+//@[79:80) NewLine |\n|
+var arrayOfObjectsViaLoop = [for (name, i) in loopInput: {
+//@[0:123) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:25)  IdentifierSyntax
+//@[4:25)   Identifier |arrayOfObjectsViaLoop|
+//@[26:27)  Assignment |=|
+//@[28:123)  ForSyntax
+//@[28:29)   LeftSquare |[|
+//@[29:32)   Identifier |for|
+//@[33:42)   ForVariableBlockSyntax
+//@[33:34)    LeftParen |(|
+//@[34:38)    LocalVariableSyntax
+//@[34:38)     IdentifierSyntax
+//@[34:38)      Identifier |name|
+//@[38:39)    Comma |,|
+//@[40:41)    LocalVariableSyntax
+//@[40:41)     IdentifierSyntax
+//@[40:41)      Identifier |i|
+//@[41:42)    RightParen |)|
+//@[43:45)   Identifier |in|
+//@[46:55)   VariableAccessSyntax
+//@[46:55)    IdentifierSyntax
+//@[46:55)     Identifier |loopInput|
+//@[55:56)   Colon |:|
+//@[57:122)   ObjectSyntax
+//@[57:58)    LeftBrace |{|
+//@[58:59)    NewLine |\n|
+  index: i
+//@[2:10)    ObjectPropertySyntax
+//@[2:7)     IdentifierSyntax
+//@[2:7)      Identifier |index|
+//@[7:8)     Colon |:|
+//@[9:10)     VariableAccessSyntax
+//@[9:10)      IdentifierSyntax
+//@[9:10)       Identifier |i|
+//@[10:11)    NewLine |\n|
+  name: name
+//@[2:12)    ObjectPropertySyntax
+//@[2:6)     IdentifierSyntax
+//@[2:6)      Identifier |name|
+//@[6:7)     Colon |:|
+//@[8:12)     VariableAccessSyntax
+//@[8:12)      IdentifierSyntax
+//@[8:12)       Identifier |name|
+//@[12:13)    NewLine |\n|
+  value: 'prefix-${i}-${name}-suffix'
+//@[2:37)    ObjectPropertySyntax
+//@[2:7)     IdentifierSyntax
+//@[2:7)      Identifier |value|
+//@[7:8)     Colon |:|
+//@[9:37)     StringSyntax
+//@[9:19)      StringLeftPiece |'prefix-${|
+//@[19:20)      VariableAccessSyntax
+//@[19:20)       IdentifierSyntax
+//@[19:20)        Identifier |i|
+//@[20:24)      StringMiddlePiece |}-${|
+//@[24:28)      VariableAccessSyntax
+//@[24:28)       IdentifierSyntax
+//@[24:28)        Identifier |name|
+//@[28:37)      StringRightPiece |}-suffix'|
+//@[37:38)    NewLine |\n|
+}]
+//@[0:1)    RightBrace |}|
+//@[1:2)   RightSquare |]|
+//@[2:3) NewLine |\n|
+var arrayOfArraysViaLoop = [for (name, i) in loopInput: [
+//@[0:102) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:24)  IdentifierSyntax
+//@[4:24)   Identifier |arrayOfArraysViaLoop|
+//@[25:26)  Assignment |=|
+//@[27:102)  ForSyntax
+//@[27:28)   LeftSquare |[|
+//@[28:31)   Identifier |for|
+//@[32:41)   ForVariableBlockSyntax
+//@[32:33)    LeftParen |(|
+//@[33:37)    LocalVariableSyntax
+//@[33:37)     IdentifierSyntax
+//@[33:37)      Identifier |name|
+//@[37:38)    Comma |,|
+//@[39:40)    LocalVariableSyntax
+//@[39:40)     IdentifierSyntax
+//@[39:40)      Identifier |i|
+//@[40:41)    RightParen |)|
+//@[42:44)   Identifier |in|
+//@[45:54)   VariableAccessSyntax
+//@[45:54)    IdentifierSyntax
+//@[45:54)     Identifier |loopInput|
+//@[54:55)   Colon |:|
+//@[56:101)   ArraySyntax
+//@[56:57)    LeftSquare |[|
+//@[57:58)    NewLine |\n|
+  i
+//@[2:3)    ArrayItemSyntax
+//@[2:3)     VariableAccessSyntax
+//@[2:3)      IdentifierSyntax
+//@[2:3)       Identifier |i|
+//@[3:4)    NewLine |\n|
+  name
+//@[2:6)    ArrayItemSyntax
+//@[2:6)     VariableAccessSyntax
+//@[2:6)      IdentifierSyntax
+//@[2:6)       Identifier |name|
+//@[6:7)    NewLine |\n|
+  'prefix-${i}-${name}-suffix'
+//@[2:30)    ArrayItemSyntax
+//@[2:30)     StringSyntax
+//@[2:12)      StringLeftPiece |'prefix-${|
+//@[12:13)      VariableAccessSyntax
+//@[12:13)       IdentifierSyntax
+//@[12:13)        Identifier |i|
+//@[13:17)      StringMiddlePiece |}-${|
+//@[17:21)      VariableAccessSyntax
+//@[17:21)       IdentifierSyntax
+//@[17:21)        Identifier |name|
+//@[21:30)      StringRightPiece |}-suffix'|
+//@[30:31)    NewLine |\n|
+]]
+//@[0:1)    RightSquare |]|
+//@[1:2)   RightSquare |]|
+//@[2:3) NewLine |\n|
+var arrayOfBooleans = [for (name, i) in loopInput: i % 2 == 0]
+//@[0:62) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:19)  IdentifierSyntax
+//@[4:19)   Identifier |arrayOfBooleans|
+//@[20:21)  Assignment |=|
+//@[22:62)  ForSyntax
+//@[22:23)   LeftSquare |[|
+//@[23:26)   Identifier |for|
+//@[27:36)   ForVariableBlockSyntax
+//@[27:28)    LeftParen |(|
+//@[28:32)    LocalVariableSyntax
+//@[28:32)     IdentifierSyntax
+//@[28:32)      Identifier |name|
+//@[32:33)    Comma |,|
+//@[34:35)    LocalVariableSyntax
+//@[34:35)     IdentifierSyntax
+//@[34:35)      Identifier |i|
+//@[35:36)    RightParen |)|
+//@[37:39)   Identifier |in|
+//@[40:49)   VariableAccessSyntax
+//@[40:49)    IdentifierSyntax
+//@[40:49)     Identifier |loopInput|
+//@[49:50)   Colon |:|
+//@[51:61)   BinaryOperationSyntax
+//@[51:56)    BinaryOperationSyntax
+//@[51:52)     VariableAccessSyntax
+//@[51:52)      IdentifierSyntax
+//@[51:52)       Identifier |i|
+//@[53:54)     Modulo |%|
+//@[55:56)     IntegerLiteralSyntax
+//@[55:56)      Integer |2|
+//@[57:59)    Equals |==|
+//@[60:61)    IntegerLiteralSyntax
+//@[60:61)     Integer |0|
+//@[61:62)   RightSquare |]|
+//@[62:63) NewLine |\n|
+var arrayOfHardCodedNumbers = [for i in range(0,10): 3]
+//@[0:55) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:27)  IdentifierSyntax
+//@[4:27)   Identifier |arrayOfHardCodedNumbers|
+//@[28:29)  Assignment |=|
+//@[30:55)  ForSyntax
+//@[30:31)   LeftSquare |[|
+//@[31:34)   Identifier |for|
+//@[35:36)   LocalVariableSyntax
+//@[35:36)    IdentifierSyntax
+//@[35:36)     Identifier |i|
+//@[37:39)   Identifier |in|
+//@[40:51)   FunctionCallSyntax
+//@[40:45)    IdentifierSyntax
+//@[40:45)     Identifier |range|
+//@[45:46)    LeftParen |(|
+//@[46:48)    FunctionArgumentSyntax
+//@[46:47)     IntegerLiteralSyntax
+//@[46:47)      Integer |0|
+//@[47:48)     Comma |,|
+//@[48:50)    FunctionArgumentSyntax
+//@[48:50)     IntegerLiteralSyntax
+//@[48:50)      Integer |10|
+//@[50:51)    RightParen |)|
+//@[51:52)   Colon |:|
+//@[53:54)   IntegerLiteralSyntax
+//@[53:54)    Integer |3|
+//@[54:55)   RightSquare |]|
+//@[55:56) NewLine |\n|
+var arrayOfHardCodedBools = [for i in range(0,10): false]
+//@[0:57) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:25)  IdentifierSyntax
+//@[4:25)   Identifier |arrayOfHardCodedBools|
+//@[26:27)  Assignment |=|
+//@[28:57)  ForSyntax
+//@[28:29)   LeftSquare |[|
+//@[29:32)   Identifier |for|
+//@[33:34)   LocalVariableSyntax
+//@[33:34)    IdentifierSyntax
+//@[33:34)     Identifier |i|
+//@[35:37)   Identifier |in|
+//@[38:49)   FunctionCallSyntax
+//@[38:43)    IdentifierSyntax
+//@[38:43)     Identifier |range|
+//@[43:44)    LeftParen |(|
+//@[44:46)    FunctionArgumentSyntax
+//@[44:45)     IntegerLiteralSyntax
+//@[44:45)      Integer |0|
+//@[45:46)     Comma |,|
+//@[46:48)    FunctionArgumentSyntax
+//@[46:48)     IntegerLiteralSyntax
+//@[46:48)      Integer |10|
+//@[48:49)    RightParen |)|
+//@[49:50)   Colon |:|
+//@[51:56)   BooleanLiteralSyntax
+//@[51:56)    FalseKeyword |false|
+//@[56:57)   RightSquare |]|
+//@[57:58) NewLine |\n|
+var arrayOfHardCodedStrings = [for i in range(0,3): 'hi']
+//@[0:57) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:27)  IdentifierSyntax
+//@[4:27)   Identifier |arrayOfHardCodedStrings|
+//@[28:29)  Assignment |=|
+//@[30:57)  ForSyntax
+//@[30:31)   LeftSquare |[|
+//@[31:34)   Identifier |for|
+//@[35:36)   LocalVariableSyntax
+//@[35:36)    IdentifierSyntax
+//@[35:36)     Identifier |i|
+//@[37:39)   Identifier |in|
+//@[40:50)   FunctionCallSyntax
+//@[40:45)    IdentifierSyntax
+//@[40:45)     Identifier |range|
+//@[45:46)    LeftParen |(|
+//@[46:48)    FunctionArgumentSyntax
+//@[46:47)     IntegerLiteralSyntax
+//@[46:47)      Integer |0|
+//@[47:48)     Comma |,|
+//@[48:49)    FunctionArgumentSyntax
+//@[48:49)     IntegerLiteralSyntax
+//@[48:49)      Integer |3|
+//@[49:50)    RightParen |)|
+//@[50:51)   Colon |:|
+//@[52:56)   StringSyntax
+//@[52:56)    StringComplete |'hi'|
+//@[56:57)   RightSquare |]|
+//@[57:58) NewLine |\n|
+var arrayOfNonRuntimeFunctionCalls = [for i in range(0,3): concat('hi', i)]
+//@[0:75) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:34)  IdentifierSyntax
+//@[4:34)   Identifier |arrayOfNonRuntimeFunctionCalls|
+//@[35:36)  Assignment |=|
+//@[37:75)  ForSyntax
+//@[37:38)   LeftSquare |[|
+//@[38:41)   Identifier |for|
+//@[42:43)   LocalVariableSyntax
+//@[42:43)    IdentifierSyntax
+//@[42:43)     Identifier |i|
+//@[44:46)   Identifier |in|
+//@[47:57)   FunctionCallSyntax
+//@[47:52)    IdentifierSyntax
+//@[47:52)     Identifier |range|
+//@[52:53)    LeftParen |(|
+//@[53:55)    FunctionArgumentSyntax
+//@[53:54)     IntegerLiteralSyntax
+//@[53:54)      Integer |0|
+//@[54:55)     Comma |,|
+//@[55:56)    FunctionArgumentSyntax
+//@[55:56)     IntegerLiteralSyntax
+//@[55:56)      Integer |3|
+//@[56:57)    RightParen |)|
+//@[57:58)   Colon |:|
+//@[59:74)   FunctionCallSyntax
+//@[59:65)    IdentifierSyntax
+//@[59:65)     Identifier |concat|
+//@[65:66)    LeftParen |(|
+//@[66:71)    FunctionArgumentSyntax
+//@[66:70)     StringSyntax
+//@[66:70)      StringComplete |'hi'|
+//@[70:71)     Comma |,|
+//@[72:73)    FunctionArgumentSyntax
+//@[72:73)     VariableAccessSyntax
+//@[72:73)      IdentifierSyntax
+//@[72:73)       Identifier |i|
+//@[73:74)    RightParen |)|
+//@[74:75)   RightSquare |]|
+//@[75:77) NewLine |\n\n|
+
+var multilineString = '''
+//@[0:36) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:19)  IdentifierSyntax
+//@[4:19)   Identifier |multilineString|
+//@[20:21)  Assignment |=|
+//@[22:36)  StringSyntax
+//@[22:36)   MultilineString |'''\nHELLO!\n'''|
+HELLO!
+'''
+//@[3:5) NewLine |\n\n|
+
+var multilineEmpty = ''''''
+//@[0:27) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:18)  IdentifierSyntax
+//@[4:18)   Identifier |multilineEmpty|
+//@[19:20)  Assignment |=|
+//@[21:27)  StringSyntax
+//@[21:27)   MultilineString |''''''|
+//@[27:28) NewLine |\n|
+var multilineEmptyNewline = '''
+//@[0:35) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:25)  IdentifierSyntax
+//@[4:25)   Identifier |multilineEmptyNewline|
+//@[26:27)  Assignment |=|
+//@[28:35)  StringSyntax
+//@[28:35)   MultilineString |'''\n'''|
+'''
+//@[3:5) NewLine |\n\n|
+
+// evaluates to '\'abc\''
+//@[25:26) NewLine |\n|
+var multilineExtraQuotes = ''''abc''''
+//@[0:38) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:24)  IdentifierSyntax
+//@[4:24)   Identifier |multilineExtraQuotes|
+//@[25:26)  Assignment |=|
+//@[27:38)  StringSyntax
+//@[27:38)   MultilineString |''''abc''''|
+//@[38:40) NewLine |\n\n|
+
+// evaluates to '\'\nabc\n\''
+//@[29:30) NewLine |\n|
+var multilineExtraQuotesNewlines = ''''
+//@[0:48) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:32)  IdentifierSyntax
+//@[4:32)   Identifier |multilineExtraQuotesNewlines|
+//@[33:34)  Assignment |=|
+//@[35:48)  StringSyntax
+//@[35:48)   MultilineString |''''\nabc\n''''|
+abc
+''''
+//@[4:6) NewLine |\n\n|
+
+var multilineSingleLine = '''hello!'''
+//@[0:38) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:23)  IdentifierSyntax
+//@[4:23)   Identifier |multilineSingleLine|
+//@[24:25)  Assignment |=|
+//@[26:38)  StringSyntax
+//@[26:38)   MultilineString |'''hello!'''|
+//@[38:40) NewLine |\n\n|
+
+var multilineFormatted = format('''
+//@[0:73) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:22)  IdentifierSyntax
+//@[4:22)   Identifier |multilineFormatted|
+//@[23:24)  Assignment |=|
+//@[25:73)  FunctionCallSyntax
+//@[25:31)   IdentifierSyntax
+//@[25:31)    Identifier |format|
+//@[31:32)   LeftParen |(|
+//@[32:62)   FunctionArgumentSyntax
+//@[32:61)    StringSyntax
+//@[32:61)     MultilineString |'''\nHello,\nmy\nname is\n{0}\n'''|
+Hello,
+my
+name is
+{0}
+''', 'Anthony')
+//@[3:4)    Comma |,|
+//@[5:14)   FunctionArgumentSyntax
+//@[5:14)    StringSyntax
+//@[5:14)     StringComplete |'Anthony'|
+//@[14:15)   RightParen |)|
+//@[15:17) NewLine |\n\n|
+
+var multilineJavaScript = '''
+//@[0:586) VariableDeclarationSyntax
+//@[0:3)  Identifier |var|
+//@[4:23)  IdentifierSyntax
+//@[4:23)   Identifier |multilineJavaScript|
+//@[24:25)  Assignment |=|
+//@[26:586)  StringSyntax
+//@[26:586)   MultilineString |'''\n// NOT RECOMMENDED PATTERN\nconst fs = require('fs');\n\nmodule.exports = function (context) {\n    fs.readFile('./hello.txt', (err, data) => {\n        if (err) {\n            context.log.error('ERROR', err);\n            // BUG #1: This will result in an uncaught exception that crashes the entire process\n            throw err;\n        }\n        context.log(`Data from file: ${data}`);\n        // context.done() should be called here\n    });\n    // BUG #2: Data is not guaranteed to be read before the Azure Function's invocation ends\n    context.done();\n}\n'''|
+// NOT RECOMMENDED PATTERN
+const fs = require('fs');
+
+module.exports = function (context) {
+    fs.readFile('./hello.txt', (err, data) => {
+        if (err) {
+            context.log.error('ERROR', err);
+            // BUG #1: This will result in an uncaught exception that crashes the entire process
+            throw err;
+        }
+        context.log(`Data from file: ${data}`);
+        // context.done() should be called here
+    });
+    // BUG #2: Data is not guaranteed to be read before the Azure Function's invocation ends
+    context.done();
+}
+'''
+//@[3:4) NewLine |\n|
+
+//@[0:0) EndOfFile ||

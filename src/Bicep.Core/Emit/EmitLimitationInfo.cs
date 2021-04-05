@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using Bicep.Core.Diagnostics;
-using Bicep.Core.SemanticModel;
+using Bicep.Core.Semantics;
 
 namespace Bicep.Core.Emit
 {
@@ -13,10 +13,13 @@ namespace Bicep.Core.Emit
 
         public ImmutableDictionary<ModuleSymbol, ScopeHelper.ScopeData> ModuleScopeData { get; }
 
-        public EmitLimitationInfo(IReadOnlyList<Diagnostic> diagnostics, ImmutableDictionary<ModuleSymbol, ScopeHelper.ScopeData> moduleScopeData)
+        public ImmutableDictionary<ResourceSymbol, ScopeHelper.ScopeData> ResourceScopeData { get; }
+
+        public EmitLimitationInfo(IReadOnlyList<Diagnostic> diagnostics, ImmutableDictionary<ModuleSymbol, ScopeHelper.ScopeData> moduleScopeData, ImmutableDictionary<ResourceSymbol, ScopeHelper.ScopeData> resourceScopeData)
         {
             Diagnostics = diagnostics;
             ModuleScopeData = moduleScopeData;
+            ResourceScopeData = resourceScopeData;
         }
     }
 }

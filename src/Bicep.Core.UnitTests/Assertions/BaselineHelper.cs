@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft Corporation.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
 using System;
@@ -78,7 +78,7 @@ Overwrite the single baseline:
     xcopy /yq {1} {2}
 
 Overwrite all baselines:
-    dotnet test -- 'TestRunParameters.Parameter(name=\\\""SetBaseLine\\\"", value=\\\""true\\\"")'
+    dotnet test -- 'TestRunParameters.Parameter(name=\""SetBaseLine\"", value=\""true\"")'
 ");
                 }
                 else
@@ -88,7 +88,7 @@ Overwrite the single baseline:
     cp {1} {2}
 
 Overwrite all baselines:
-    dotnet test -- 'TestRunParameters.Parameter(name=\""SetBaseLine\"", value=\""true\"")'
+    dotnet test -- 'TestRunParameters.Parameter(name=""SetBaseLine"", value=""true"")'
 ");
                 }
             }

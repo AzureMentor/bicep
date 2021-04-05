@@ -1,13 +1,13 @@
-﻿// Copyright (c) Microsoft Corporation.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
-using Bicep.Core.Parser;
+using Bicep.Core.Parsing;
 using Bicep.Core.Samples;
-using Bicep.Core.SemanticModel;
+using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
 using Bicep.Core.Syntax.Visitors;
 using Bicep.LangServer.IntegrationTests.Extensions;
@@ -39,9 +39,11 @@ namespace Bicep.LangServer.IntegrationTests
             var symbolTable = compilation.ReconstructSymbolTable();
             var lineStarts = compilation.SyntaxTreeGrouping.EntryPoint.LineStarts;
 
-            // filter out symbols that don't have locations
+            // filter out symbols that don't have locations as well as locals with invalid identifiers
+            // (locals are special because their full span is the same as the identifier span,
+            // which makes it impossible to go to definition on a local with invalid identifiers)
             var declaredSymbolBindings = symbolTable
-                .Where(pair => pair.Value is DeclaredSymbol)
+                .Where(pair => pair.Value is DeclaredSymbol && (pair.Value is not LocalVariableSymbol local || local.NameSyntax.IsValid))
                 .Select(pair => new KeyValuePair<SyntaxBase, DeclaredSymbol>(pair.Key, (DeclaredSymbol) pair.Value));
 
             foreach (var (syntax, symbol) in declaredSymbolBindings)
@@ -49,7 +51,7 @@ namespace Bicep.LangServer.IntegrationTests
                 var response = await client.RequestDefinition(new DefinitionParams
                 {
                     TextDocument = new TextDocumentIdentifier(uri),
-                    Position = PositionHelper.GetPosition(lineStarts, syntax.Span.Position)
+                    Position = IntegrationTestHelper.GetPosition(lineStarts, syntax)
                 });
 
                 var link = ValidateDefinitionResponse(response);
@@ -128,10 +130,19 @@ namespace Bicep.LangServer.IntegrationTests
 
             foreach (var syntax in unboundNodes)
             {
+                var offset = syntax switch
+                {
+                    // base expression could be a variable access which is bound and will throw off the test
+                    PropertyAccessSyntax propertyAccess => propertyAccess.PropertyName.Span.Position,
+                    ArrayAccessSyntax arrayAccess => arrayAccess.OpenSquare.Span.Position,
+
+                    _ => syntax.Span.Position
+                };
+
                 var response = await client.RequestDefinition(new DefinitionParams
                 {
                     TextDocument = new TextDocumentIdentifier(uri),
-                    Position = PositionHelper.GetPosition(lineStarts, syntax.Span.Position)
+                    Position = PositionHelper.GetPosition(lineStarts, offset)
                 });
 
                 // go to definition on a syntax node that isn't bound to a symbol should produce an empty response
@@ -156,7 +167,7 @@ namespace Bicep.LangServer.IntegrationTests
 
         private static IEnumerable<object[]> GetData()
         {
-            return DataSets.AllDataSets.ToDynamicTestData();
+            return DataSets.NonStressDataSets.ToDynamicTestData();
         }
     }
 }

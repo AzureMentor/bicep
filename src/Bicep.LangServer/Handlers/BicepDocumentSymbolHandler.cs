@@ -5,7 +5,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Bicep.Core.SemanticModel;
+using Bicep.Core.Semantics;
 using Bicep.LanguageServer.CompilationManager;
 using Bicep.LanguageServer.Extensions;
 using Bicep.LanguageServer.Utils;
@@ -52,7 +52,7 @@ namespace Bicep.LanguageServer.Handlers
 
         private IEnumerable<SymbolInformationOrDocumentSymbol> GetSymbols(CompilationContext context)
         {
-            return context.Compilation.GetEntrypointSemanticModel().Root.AllDeclarations
+            return context.Compilation.GetEntrypointSemanticModel().Root.Declarations
                 .OrderBy(symbol=>symbol.DeclaringSyntax.Span.Position)
                 .Select(symbol => new SymbolInformationOrDocumentSymbol(CreateDocumentSymbol(symbol, context.LineStarts)));
         }

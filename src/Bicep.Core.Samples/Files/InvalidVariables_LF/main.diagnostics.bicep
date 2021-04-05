@@ -113,7 +113,7 @@ var test2 = newGuid()
 var test3 = {
   'bad\escape': true
 //@[2:14) [BCP022 (Error)] Expected a property name at this location. |'bad\escape'|
-//@[6:8) [BCP006 (Error)] The specified escape sequence is not recognized. Only the following characters can be escaped with a backslash: "\$", "\'", "\\", "\n", "\r", "\t". |\e|
+//@[6:8) [BCP006 (Error)] The specified escape sequence is not recognized. Only the following escape sequences are allowed: "\$", "\'", "\\", "\n", "\r", "\t", "\u{...}". |\e|
 }
 
 // duplicate properties
@@ -145,6 +145,15 @@ var doubleString = "bad string"
 var resourceGroup = ''
 var rgName = resourceGroup().name
 //@[13:26) [BCP059 (Error)] The name "resourceGroup" is not a function. |resourceGroup|
+
+// this does not work at the resource group scope
+var invalidLocationVar = deployment().location
+//@[38:46) [BCP053 (Error)] The type "deployment" does not contain property "location". Available properties include "name", "properties". |location|
+
+var invalidEnvironmentVar = environment().aosdufhsad
+//@[42:52) [BCP053 (Error)] The type "environment" does not contain property "aosdufhsad". Available properties include "activeDirectoryDataLake", "authentication", "batch", "gallery", "graph", "graphAudience", "media", "name", "portal", "resourceManager", "sqlManagement", "suffixes", "vmImageAliasDoc". |aosdufhsad|
+var invalidEnvAuthVar = environment().authentication.asdgdsag
+//@[53:61) [BCP053 (Error)] The type "authentication" does not contain property "asdgdsag". Available properties include "audiences", "identityProvider", "loginEndpoint", "tenant". |asdgdsag|
 
 // invalid use of reserved namespace
 var az = 1
@@ -202,4 +211,113 @@ var objectVarTopLevelArrayIndexCompletions = objectLiteralType[f]
 // #completionTest(58) -> twoIndexPlusSymbols
 var oneArrayIndexCompletions = objectLiteralType.sixth[0][]
 //@[58:58) [BCP117 (Error)] An empty indexer is not allowed. Specify a valid expression. ||
+
+// Issue 486
+var myFloat = 3.14
+//@[16:16) [BCP020 (Error)] Expected a function or property name at this location. ||
+//@[16:18) [BCP019 (Error)] Expected a new line character at this location. |14|
+//@[16:16) [BCP055 (Error)] Cannot access properties of type "int". An "object" type is required. ||
+
+// secure cannot be used as a varaible decorator
+@sys.secure()
+//@[5:11) [BCP126 (Error)] Function "secure" cannot be used as a variable decorator. |secure|
+var something = 1
+
+// #completionTest(1) -> empty
+@
+//@[1:1) [BCP123 (Error)] Expected a namespace or decorator name at this location. ||
+// #completionTest(5) -> empty
+@sys.
+//@[5:5) [BCP020 (Error)] Expected a function or property name at this location. ||
+var anotherThing = true
+
+// invalid identifier character classes
+var ☕ = true
+//@[4:5) [BCP015 (Error)] Expected a variable identifier at this location. |☕|
+//@[4:5) [BCP001 (Error)] The following token is not recognized: "☕". |☕|
+var a☕ = true
+//@[5:6) [BCP018 (Error)] Expected the "=" character at this location. |☕|
+//@[5:6) [BCP001 (Error)] The following token is not recognized: "☕". |☕|
+//@[13:13) [BCP009 (Error)] Expected a literal value, an array, an object, a parenthesized expression, or a function call at this location. ||
+
+var missingArrayVariable = [for thing in stuff: 4]
+//@[41:46) [BCP057 (Error)] The name "stuff" does not exist in the current context. |stuff|
+
+// loops are only allowed at the top level
+var nonTopLevelLoop = {
+  notOkHere: [for thing in stuff: 4]
+//@[14:17) [BCP138 (Error)] For-expressions are not supported in this context. For-expressions may be used as values of resource, module, variable, and output declarations, or values of resource and module properties. |for|
+//@[27:32) [BCP057 (Error)] The name "stuff" does not exist in the current context. |stuff|
+}
+
+// loops with conditions won't even parse
+var noFilteredLoopsInVariables = [for thing in stuff: if]
+//@[47:52) [BCP057 (Error)] The name "stuff" does not exist in the current context. |stuff|
+//@[54:56) [BCP100 (Error)] The "if" function is not supported. Use the ternary conditional operator instead. |if|
+
+// nested loops are also not allowed
+var noNestedVariableLoopsEither = [for thing in stuff: {
+//@[48:53) [BCP057 (Error)] The name "stuff" does not exist in the current context. |stuff|
+  hello: [for thing in []: 4]
+//@[10:13) [BCP138 (Error)] For-expressions are not supported in this context. For-expressions may be used as values of resource, module, variable, and output declarations, or values of resource and module properties. |for|
+}]
+
+// loops in inner properties of a variable are also not supported
+var innerPropertyLoop = {
+  a: [for i in range(0,10): i]
+//@[6:9) [BCP138 (Error)] For-expressions are not supported in this context. For-expressions may be used as values of resource, module, variable, and output declarations, or values of resource and module properties. |for|
+}
+var innerPropertyLoop2 = {
+  b: {
+    a: [for i in range(0,10): i]
+//@[8:11) [BCP138 (Error)] For-expressions are not supported in this context. For-expressions may be used as values of resource, module, variable, and output declarations, or values of resource and module properties. |for|
+  }
+}
+
+// loops using expressions with a runtime dependency are also not allowed
+var keys = listKeys('fake','fake')
+var indirection = keys
+
+var runtimeLoop = [for (item, index) in []: indirection]
+//@[19:22) [BCP175 (Error)] The variable for-expression body or array expression must be evaluable at the start of the deployment and cannot depend on any values that have not yet been calculated. Variable dependency chain: "indirection" -> "keys". |for|
+var runtimeLoop2 = [for (item, index) in indirection.keys: 's']
+//@[20:23) [BCP175 (Error)] The variable for-expression body or array expression must be evaluable at the start of the deployment and cannot depend on any values that have not yet been calculated. Variable dependency chain: "indirection" -> "keys". |for|
+
+var zoneInput = []
+resource zones 'Microsoft.Network/dnsZones@2018-05-01' = [for (zone, i) in zoneInput: {
+  name: zone
+  location: az.resourceGroup().location
+}]
+var inlinedVariable = zones[0].properties.zoneType
+
+var runtimeLoop3 = [for (zone, i) in zoneInput: {
+//@[20:23) [BCP175 (Error)] The variable for-expression body or array expression must be evaluable at the start of the deployment and cannot depend on any values that have not yet been calculated. Variable dependency chain: "inlinedVariable". |for|
+  a: inlinedVariable
+}]
+
+var runtimeLoop4 = [for (zone, i) in zones[0].properties.registrationVirtualNetworks: {
+//@[20:23) [BCP175 (Error)] The variable for-expression body or array expression must be evaluable at the start of the deployment and cannot depend on any values that have not yet been calculated. |for|
+  a: 0
+}]
+
+var notRuntime = concat('a','b')
+var evenMoreIndirection = concat(notRuntime, string(moreIndirection))
+var moreIndirection = reference('s','s', 'Full')
+
+var myRef = [
+  evenMoreIndirection
+]
+var runtimeLoop5 = [for (item, index) in myRef: 's']
+//@[20:23) [BCP175 (Error)] The variable for-expression body or array expression must be evaluable at the start of the deployment and cannot depend on any values that have not yet been calculated. Variable dependency chain: "myRef" -> "evenMoreIndirection" -> "moreIndirection". |for|
+
+// cannot use loops in expressions
+var loopExpression = union([for thing in stuff: 4], [for thing in stuff: true])
+//@[28:31) [BCP138 (Error)] For-expressions are not supported in this context. For-expressions may be used as values of resource, module, variable, and output declarations, or values of resource and module properties. |for|
+//@[41:46) [BCP057 (Error)] The name "stuff" does not exist in the current context. |stuff|
+//@[53:56) [BCP138 (Error)] For-expressions are not supported in this context. For-expressions may be used as values of resource, module, variable, and output declarations, or values of resource and module properties. |for|
+//@[66:71) [BCP057 (Error)] The name "stuff" does not exist in the current context. |stuff|
+
+@batchSize(1)
+//@[1:10) [BCP126 (Error)] Function "batchSize" cannot be used as a variable decorator. |batchSize|
+var batchSizeMakesNoSenseHere = false
 

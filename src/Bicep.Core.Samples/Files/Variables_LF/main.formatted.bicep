@@ -15,8 +15,9 @@ var curliesInInterp = '{${123}{0}${true}}'
 
 // verify correct bracket escaping
 var bracketInTheMiddle = 'a[b]'
-// #completionTest(25) -> symbolsPlusTypes
+// #completionTest(25) -> empty
 var bracketAtBeginning = '[test'
+// #completionTest(23) -> symbolsPlusTypes
 var enclosingBrackets = '[test]'
 var emptyJsonArray = '[]'
 var interpolatedBrackets = '[${myInt}]'
@@ -81,6 +82,13 @@ var myArrWithObjects = [
 var expressionIndexOnAny = any({})[az.resourceGroup().location]
 
 var anyIndexOnAny = any(true)[any(false)]
+
+var deploymentName = deployment().name
+var templateLinkUri = deployment().properties.templateLink.uri
+var templateLinkId = deployment().properties.templateLink.id
+
+var portalEndpoint = environment().portal
+var loginEndpoint = environment().authentication.loginEndpoint
 
 var namedPropertyIndexer = {
   foo: 's'
@@ -217,3 +225,84 @@ var scopesWithoutArmRepresentation = {
   subscription: subscription('10b57a01-6350-4ce2-972a-6a13642f00bf')
   resourceGroup: az.resourceGroup('10b57a01-6350-4ce2-972a-6a13642f00bf', 'myRgName')
 }
+
+// Issue #1332
+var issue1332_propname = 'ptest'
+var issue1332 = true ? {
+  prop1: {
+    '${issue1332_propname}': {}
+  }
+} : {}
+
+// Issue #486
+var myBigInt = 2199023255552
+var myIntExpression = 5 * 5
+var myBigIntExpression = 2199023255552 * 2
+var myBigIntExpression2 = 2199023255552 * 2199023255552
+
+// variable loops
+var incrementingNumbers = [for i in range(0, 10): i]
+var loopInput = [
+  'one'
+  'two'
+]
+var arrayOfStringsViaLoop = [for (name, i) in loopInput: 'prefix-${i}-${name}']
+var arrayOfObjectsViaLoop = [for (name, i) in loopInput: {
+  index: i
+  name: name
+  value: 'prefix-${i}-${name}-suffix'
+}]
+var arrayOfArraysViaLoop = [for (name, i) in loopInput: [
+  i
+  name
+  'prefix-${i}-${name}-suffix'
+]]
+var arrayOfBooleans = [for (name, i) in loopInput: i % 2 == 0]
+var arrayOfHardCodedNumbers = [for i in range(0, 10): 3]
+var arrayOfHardCodedBools = [for i in range(0, 10): false]
+var arrayOfHardCodedStrings = [for i in range(0, 3): 'hi']
+var arrayOfNonRuntimeFunctionCalls = [for i in range(0, 3): concat('hi', i)]
+
+var multilineString = '''
+HELLO!
+'''
+
+var multilineEmpty = ''''''
+var multilineEmptyNewline = '''
+'''
+
+// evaluates to '\'abc\''
+var multilineExtraQuotes = ''''abc''''
+
+// evaluates to '\'\nabc\n\''
+var multilineExtraQuotesNewlines = ''''
+abc
+''''
+
+var multilineSingleLine = '''hello!'''
+
+var multilineFormatted = format('''
+Hello,
+my
+name is
+{0}
+''', 'Anthony')
+
+var multilineJavaScript = '''
+// NOT RECOMMENDED PATTERN
+const fs = require('fs');
+
+module.exports = function (context) {
+    fs.readFile('./hello.txt', (err, data) => {
+        if (err) {
+            context.log.error('ERROR', err);
+            // BUG #1: This will result in an uncaught exception that crashes the entire process
+            throw err;
+        }
+        context.log(`Data from file: ${data}`);
+        // context.done() should be called here
+    });
+    // BUG #2: Data is not guaranteed to be read before the Azure Function's invocation ends
+    context.done();
+}
+'''

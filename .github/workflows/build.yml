@@ -2,9 +2,6 @@ name: Build
 
 on:
   push:
-    tags:
-    - 'latest'
-    - 'v*'
     branches: [ main ]
   pull_request:
     branches: [ main ]
@@ -12,7 +9,7 @@ on:
 
 jobs:
   build-bicep:
-    name: 'Build CLI'
+    name: 'Build CLI (${{ matrix.rid }})'
     runs-on: ${{ matrix.os }}
 
     env:
@@ -27,20 +24,27 @@ jobs:
       fail-fast: false
 
       matrix:
-        os: [ 'windows-latest', 'ubuntu-latest', 'macos-latest' ]
         include:
         - os: 'windows-latest'
           rid: 'win-x64'
           configuration: 'release'
           publishLanguageServer: 'false'
+          publishPackages: 'false'
         - os: 'ubuntu-latest'
           rid: 'linux-x64'
           configuration: 'release'
           publishLanguageServer: 'true'
+          publishPackages: 'true'
+        - os: 'ubuntu-latest'
+          rid: 'linux-musl-x64'
+          configuration: 'release'
+          publishLanguageServer: 'false'
+          publishPackages: 'false'
         - os: 'macos-latest'
           rid: 'osx-x64'
           configuration: 'release'
           publishLanguageServer: 'false'
+          publishPackages: 'false'
 
     steps:
       - uses: actions/checkout@v2
@@ -53,6 +57,10 @@ jobs:
       
       - name: Build
         run: dotnet build --configuration ${{ matrix.configuration }}
+
+      - name: Pack
+        if: ${{ matrix.publishPackages == 'true' }}
+        run: dotnet pack --configuration ${{ matrix.configuration }}
       
       - name: Test
         run: dotnet test --configuration ${{ matrix.configuration }} --collect:"XPlat Code Coverage" --settings ./.github/workflows/codecov.runsettings
@@ -64,18 +72,43 @@ jobs:
       - name: Publish Bicep
         run: dotnet publish --configuration ${{ matrix.configuration }} --self-contained true -p:PublishTrimmed=true -p:PublishSingleFile=true -r ${{ matrix.rid }} ./src/Bicep.Cli/Bicep.Cli.csproj
 
+      - name: Run Bicep E2E Tests
+        if: ${{ matrix.rid != 'linux-musl-x64' }}
+        run: npm ci && npm test
+        env:
+          BICEP_CLI_EXECUTABLE: ../Bicep.Cli/bin/${{ matrix.configuration }}/net5.0/${{ matrix.rid }}/publish/bicep
+        working-directory: ./src/Bicep.Cli.E2eTests
+
+      - name: Run Bicep E2E Tests (linux-musl-x64)
+        if: ${{ matrix.rid == 'linux-musl-x64' }}
+        uses: docker://microsoft/azure-cli:latest
+        with:
+          entrypoint: sh
+          args: -c "apk add --update nodejs npm && npm ci --prefix ./src/Bicep.Cli.E2eTests && npm test --prefix ./src/Bicep.Cli.E2eTests"
+        env:
+          BICEP_CLI_EXECUTABLE: ../Bicep.Cli/bin/${{ matrix.configuration }}/net5.0/${{ matrix.rid }}/publish/bicep
+      
       - name: Upload Language Server
         uses: actions/upload-artifact@v2
         if: ${{ matrix.publishLanguageServer == 'true' }}
         with:
           name: Bicep.LangServer
           path: ./src/Bicep.LangServer/bin/${{ matrix.configuration }}/net5.0/publish/*
+          if-no-files-found: error
       
       - name: Upload Bicep
         uses: actions/upload-artifact@v2
         with:
           name: bicep-${{ matrix.configuration }}-${{ matrix.rid }}
           path: ./src/Bicep.Cli/bin/${{ matrix.configuration }}/net5.0/${{ matrix.rid }}/publish/*
+          if-no-files-found: error
+
+      - name: Upload Packages
+        uses: actions/upload-artifact@v2
+        if: ${{ matrix.publishPackages == 'true' }}
+        with:
+          name: bicep-nupkg-any
+          path: ./out/*
           if-no-files-found: error
 
       - name: Upload Code Coverage
@@ -110,7 +143,87 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: bicep-setup-win-x64
-          path: ./src/installer-win/bin/release/net46/bicep-setup-win-x64.exe
+          path: ./src/installer-win/bin/release/net472/bicep-setup-win-x64.exe
+          if-no-files-found: error
+
+  build-packages:
+    name: 'Build Packages'
+    runs-on: ${{ matrix.os }}
+    needs: build-bicep
+
+    env:
+      CI: true
+      RuntimeSuffix: ${{ matrix.rid }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ 'windows-latest', 'ubuntu-latest', 'macos-latest' ]
+        include:
+        - os: 'windows-latest'
+          rid: 'win-x64'
+        - os: 'ubuntu-latest'
+          rid: 'linux-x64'
+        - os: 'macos-latest'
+          rid: 'osx-x64'
+    
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0 # avoid shallow clone so nbgv can do its work.
+          submodules: true
+
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v1.7.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v2.1.5
+        with:
+          node-version: 10.x
+
+      - name: npm ci
+        run: npm ci
+        working-directory: ./src/Bicep.MSBuild.E2eTests
+
+      - name: Compile
+        run: npm run compile
+        working-directory: ./src/Bicep.MSBuild.E2eTests
+
+      - name: Run lint
+        run: npm run lint
+        working-directory: ./src/Bicep.MSBuild.E2eTests
+
+      - name: Download Bicep CLI
+        uses: actions/download-artifact@v2
+        with:
+          name: bicep-release-${{ matrix.rid }}
+          path: ./src/Bicep.Cli.Nuget/tools
+
+      - name: Download .Net Packages
+        uses: actions/download-artifact@v2
+        with:
+          name: bicep-nupkg-any
+          path: ./src/Bicep.MSBuild.E2eTests/examples/local-packages
+
+      - name: Build CLI Package
+        run: dotnet build --configuration release /p:RuntimeSuffix=${{ matrix.rid }} ./src/Bicep.Cli.Nuget/nuget.proj
+      
+      - name: Upload CLI Package
+        uses: actions/upload-artifact@v2
+        with:
+          name: bicep-nupkg-${{ matrix.rid }}
+          path: ./src/Bicep.Cli.Nuget/*.nupkg
+          if-no-files-found: error
+      
+      - name: Download CLI Package
+        uses: actions/download-artifact@v2
+        with:
+          name: bicep-nupkg-${{ matrix.rid }}
+          path: ./src/Bicep.MSBuild.E2eTests/examples/local-packages
+
+      - name: Run E2E tests
+        run: npm run test
+        working-directory: ./src/Bicep.MSBuild.E2eTests
 
   build-vsix:
     name: 'Build VSIX'
@@ -139,7 +252,7 @@ jobs:
           submodules: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@v2.1.2
+        uses: actions/setup-node@v2.1.5
         with:
           node-version: 10.x
 
@@ -169,11 +282,16 @@ jobs:
         run: npm run test:e2e
         if: runner.os != 'Linux'
         working-directory: ./src/vscode-bicep
-        
+
       # In headless Linux CI machines xvfb is required to run VS Code, so need a separate path for Linux.
       - name: Run E2E tests (Linux)
         run: xvfb-run -a npm run test:e2e
         if: runner.os == 'Linux'
+        working-directory: ./src/vscode-bicep
+
+      - name: Show extension logs of E2E tests
+        run: cat ./bicep.log
+        if: ${{ always() }}
         working-directory: ./src/vscode-bicep
 
       - name: Upload Code Coverage
@@ -209,12 +327,16 @@ jobs:
         uses: actions/setup-dotnet@v1.7.2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v2.1.2
+        uses: actions/setup-node@v2.1.5
         with:
-          node-version: 10.x
+          node-version: 14.x
       
       - name: npm ci
         run: npm ci
+        working-directory: ./src/playground
+
+      - name: Run lint
+        run: npm run lint
         working-directory: ./src/playground
 
       - name: Build
@@ -228,73 +350,41 @@ jobs:
           path: ./src/playground/dist/*
           if-no-files-found: error
 
-  create-release:
-    name: 'Create Release'
+  build-textmate:
+    name: 'Build Textmate'
     runs-on: 'ubuntu-latest'
-    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
-    needs: [build-bicep, build-vsix, build-playground, build-windows-setup]
+    needs: build-bicep
 
     steps:
-      - name: Download Build Artifacts
-        uses: actions/download-artifact@v2
-
-      - name: Create Release
-        id: create-release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v2
         with:
-          tag_name: ${{ github.ref }}
-          release_name: ${{ github.ref }} (alpha)
-          draft: true
-          prerelease: false
-
-      - name: Upload bicep-win-x64.exe
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create-release.outputs.upload_url }}
-          asset_path: ./bicep-release-win-x64/bicep.exe
-          asset_name: bicep-win-x64.exe
-          asset_content_type: binary/octet-stream
-
-      - name: Upload bicep-linux-x64
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create-release.outputs.upload_url }}
-          asset_path: ./bicep-release-linux-x64/bicep
-          asset_name: bicep-linux-x64
-          asset_content_type: binary/octet-stream
-
-      - name: Upload bicep-osx-x64
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create-release.outputs.upload_url }}
-          asset_path: ./bicep-release-osx-x64/bicep
-          asset_name: bicep-osx-x64
-          asset_content_type: binary/octet-stream
-
-      - name: Upload vscode-bicep.vsix
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create-release.outputs.upload_url }}
-          asset_path: ./vscode-bicep.vsix/vscode-bicep.vsix
-          asset_name: vscode-bicep.vsix
-          asset_content_type: binary/octet-stream
+          fetch-depth: 0 # avoid shallow clone so nbgv can do its work.
+          submodules: true
       
-      - name: Upload bicep-setup-win-x64.exe
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download Bicep CLI
+        uses: actions/download-artifact@v2
         with:
-          upload_url: ${{ steps.create-release.outputs.upload_url }}
-          asset_path: ./bicep-setup-win-x64/bicep-setup-win-x64.exe
-          asset_name: bicep-setup-win-x64.exe
-          asset_content_type: binary/octet-stream
+          name: bicep-release-linux-x64
+          path: ./bicep-release-linux-x64
+
+      - name: Mark Bicep CLI as executable
+        run: chmod +x ${{ github.workspace }}/bicep-release-linux-x64/bicep
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v2.1.5
+        with:
+          node-version: 14.x
+      
+      - name: npm ci
+        run: npm ci
+        working-directory: ./src/textmate
+
+      - name: Run lint
+        run: npm run lint
+        working-directory: ./src/textmate
+
+      - name: Run Tests
+        run: npm test
+        env:
+          BICEP_CLI_EXECUTABLE: ${{ github.workspace }}/bicep-release-linux-x64/bicep
+        working-directory: ./src/textmate

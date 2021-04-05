@@ -7,7 +7,7 @@ using Microsoft.JSInterop;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Text;
 using Bicep.Core.Emit;
-using Bicep.Core.SemanticModel;
+using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
 using Bicep.Wasm.LanguageHelpers;
 using System.Linq;
@@ -16,6 +16,7 @@ using Bicep.Core.TypeSystem.Az;
 using Bicep.Core.FileSystem;
 using Bicep.Core.Workspaces;
 using Bicep.Core.Extensions;
+using Bicep.Decompiler;
 
 namespace Bicep.Wasm
 {
@@ -40,6 +41,29 @@ namespace Bicep.Wasm
                 template = output,
                 diagnostics = diagnostics,
             };
+        }
+
+        public record DecompileResult(string? bicepFile, string? error);
+
+        [JSInvokable]
+        public DecompileResult Decompile(string jsonContent)
+        {
+            var jsonUri = new Uri("inmemory:///main.json");
+
+            var fileResolver = new InMemoryFileResolver(new Dictionary<Uri, string> {
+                [jsonUri] = jsonContent,
+            });
+
+            try
+            {
+                var (entrypointUri, filesToSave) = TemplateDecompiler.DecompileFileWithModules(resourceTypeProvider, fileResolver, jsonUri);
+
+                return new DecompileResult(filesToSave[entrypointUri], null);
+            }
+            catch (Exception exception)
+            {
+                return new DecompileResult(null, exception.Message);
+            }
         }
 
         [JSInvokable]
@@ -94,7 +118,7 @@ namespace Bicep.Wasm
             {
                 var lineStarts = TextCoordinateConverter.GetLineStarts(content);
                 var compilation = GetCompilation(content);
-                var emitter = new TemplateEmitter(compilation.GetEntrypointSemanticModel());
+                var emitter = new TemplateEmitter(compilation.GetEntrypointSemanticModel(), ThisAssembly.AssemblyFileVersion);
 
                 // memory stream is not ideal for frequent large allocations
                 using var stream = new MemoryStream();
@@ -137,7 +161,7 @@ namespace Bicep.Wasm
         private static object ToMonacoDiagnostic(Diagnostic diagnostic, IReadOnlyList<int> lineStarts)
         {
             var (startLine, startChar) = TextCoordinateConverter.GetPosition(lineStarts, diagnostic.Span.Position);
-            var (endLine, endChar) = TextCoordinateConverter.GetPosition(lineStarts, diagnostic.Span.Position + diagnostic.Span.Length);
+            var (endLine, endChar) = TextCoordinateConverter.GetPosition(lineStarts, diagnostic.GetEndPosition());
 
             return new {
                 code = diagnostic.Code,

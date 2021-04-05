@@ -5,9 +5,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Bicep.Core.Extensions;
-using Bicep.Core.Parser;
-using Bicep.Core.SemanticModel;
-using Bicep.Core.SemanticModel.Namespaces;
+using Bicep.Core.Parsing;
+using Bicep.Core.Semantics;
+using Bicep.Core.Semantics.Namespaces;
 using Bicep.Core.Syntax;
 using Bicep.Core.TypeSystem;
 using Bicep.Core.UnitTests.Utils;
@@ -221,7 +221,7 @@ namespace Bicep.Core.UnitTests.TypeSystem
             out List<ArgumentCountMismatch> argumentCountMismatches,
             out List<ArgumentTypeMismatch> argumentTypeMismatches)
         {
-            var namespaces = new NamespaceSymbol[] {new SystemNamespaceSymbol(), new AzNamespaceSymbol(ResourceScopeType.ResourceGroupScope)};
+            var namespaces = new NamespaceSymbol[] {new SystemNamespaceSymbol(), new AzNamespaceSymbol(ResourceScope.ResourceGroup)};
             var matches = new List<FunctionOverload>();
 
             argumentCountMismatches = new List<ArgumentCountMismatch>();

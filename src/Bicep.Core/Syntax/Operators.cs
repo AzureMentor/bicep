@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using Bicep.Core.Parser;
+using Bicep.Core.Parsing;
 
 namespace Bicep.Core.Syntax
 {
@@ -24,8 +24,8 @@ namespace Bicep.Core.Syntax
             [TokenType.Minus] = BinaryOperator.Subtract,
             [TokenType.Asterisk] = BinaryOperator.Multiply,
             [TokenType.Slash] = BinaryOperator.Divide,
-            [TokenType.Modulo] = BinaryOperator.Modulo
-
+            [TokenType.Modulo] = BinaryOperator.Modulo,
+            [TokenType.DoubleQuestion] = BinaryOperator.Coalesce
         }.ToImmutableDictionary();
 
         public static readonly ImmutableDictionary<BinaryOperator, string> BinaryOperatorToText = new Dictionary<BinaryOperator, string>
@@ -44,7 +44,8 @@ namespace Bicep.Core.Syntax
             [BinaryOperator.Subtract] = "-",
             [BinaryOperator.Multiply] = "*",
             [BinaryOperator.Divide] = "/",
-            [BinaryOperator.Modulo] = "%"
+            [BinaryOperator.Modulo] = "%",
+            [BinaryOperator.Coalesce] = "??"
         }.ToImmutableDictionary();
 
         public static readonly ImmutableDictionary<TokenType, UnaryOperator> TokenTypeToUnaryOperator = new Dictionary<TokenType, UnaryOperator>

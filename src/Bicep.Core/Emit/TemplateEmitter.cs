@@ -5,22 +5,29 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using Bicep.Core.Diagnostics;
+using Bicep.Core.Semantics;
 using Newtonsoft.Json;
 
 namespace Bicep.Core.Emit
 {
     public class TemplateEmitter
     {
-        private readonly SemanticModel.SemanticModel model;
+        private readonly SemanticModel model;
 
         /// <summary>
         /// The JSON spec requires UTF8 without a BOM, so we use this encoding to write JSON files.
         /// </summary>
         private Encoding UTF8EncodingWithoutBom => new UTF8Encoding(false);
 
-        public TemplateEmitter(SemanticModel.SemanticModel model)
+        /// <summary>
+        /// Assembly File Version to emit into the metadata
+        /// </summary>
+        private readonly string assemblyFileVersion;
+
+        public TemplateEmitter(SemanticModel model, string assemblyFileVersion)
         {
             this.model = model;
+            this.assemblyFileVersion = assemblyFileVersion;
         }
 
         /// <summary>
@@ -34,7 +41,7 @@ namespace Bicep.Core.Emit
                 Formatting = Formatting.Indented
             };
 
-            new TemplateWriter(writer, this.model).Write();
+            new TemplateWriter(this.model, this.assemblyFileVersion).Write(writer);
         });
 
         /// <summary>
@@ -48,7 +55,7 @@ namespace Bicep.Core.Emit
                 Formatting = Formatting.Indented
             };
 
-            new TemplateWriter(writer, this.model).Write();
+            new TemplateWriter(this.model, this.assemblyFileVersion).Write(writer);
         });
 
         /// <summary>
@@ -57,7 +64,7 @@ namespace Bicep.Core.Emit
         /// <param name="writer">The json writer to write the template</param>
         public EmitResult Emit(JsonTextWriter writer) => this.EmitOrFail(() =>
         {
-            new TemplateWriter(writer, this.model).Write();
+            new TemplateWriter(this.model, this.assemblyFileVersion).Write(writer);
         });
 
         private EmitResult EmitOrFail(Action write)
@@ -76,4 +83,3 @@ namespace Bicep.Core.Emit
         }
     }
 }
-

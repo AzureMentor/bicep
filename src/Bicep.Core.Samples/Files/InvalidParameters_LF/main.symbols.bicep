@@ -32,6 +32,10 @@ param missingTypeWithSpaceAfter
 param missingTypeWithTabAfter	
 //@[6:29) Parameter missingTypeWithTabAfter. Type: any. Declaration start char: 0, length: 30
 
+// #completionTest(20) -> paramTypes
+param trailingSpace  
+//@[6:19) Parameter trailingSpace. Type: any. Declaration start char: 0, length: 21
+
 // partial type #completionTest(18, 19, 20, 21) -> paramTypes
 param partialType str
 //@[6:17) Parameter partialType. Type: error. Declaration start char: 0, length: 21
@@ -70,6 +74,18 @@ param wrongAssignmentToken string: 'hello'
 
 param WhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLong string = 'why not?'
 //@[6:267) Parameter WhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLongWhySoLong. Type: string. Declaration start char: 0, length: 287
+
+// #completionTest(28,29) -> boolPlusSymbols
+param boolCompletions bool = 
+//@[6:21) Parameter boolCompletions. Type: bool. Declaration start char: 0, length: 29
+
+// #completionTest(30,31) -> arrayPlusSymbols
+param arrayCompletions array = 
+//@[6:22) Parameter arrayCompletions. Type: array. Declaration start char: 0, length: 31
+
+// #completionTest(32,33) -> objectPlusSymbols
+param objectCompletions object = 
+//@[6:23) Parameter objectCompletions. Type: object. Declaration start char: 0, length: 33
 
 // badly escaped string
 param wrongType fluffyBunny = 'what's up doc?'
@@ -127,6 +143,11 @@ param someArray arra {
   maxLength: 24
 }
 
+@minLength(3)
+@maxLength(24)
+param someArrayWithDecorator arra
+//@[6:28) Parameter someArrayWithDecorator. Type: error. Declaration start char: 0, length: 62
+
 // duplicate modifier property
 param duplicatedModifierProperty string {
 //@[6:32) Parameter duplicatedModifierProperty. Type: string. Declaration start char: 0, length: 74
@@ -141,6 +162,12 @@ param secureInt int {
   minLength: 3
   maxLength: 123
 }
+
+@secure()
+@minLength(3)
+@maxLength(123)
+param secureIntWithDecorator int
+//@[6:28) Parameter secureIntWithDecorator. Type: int. Declaration start char: 0, length: 72
 
 // wrong modifier value types
 param wrongIntModifier int {
@@ -157,6 +184,23 @@ param wrongIntModifier int {
   metadata: 'wrong'
 }
 
+@allowed([
+  'test'
+  true
+])
+@minValue({
+})
+@maxValue([
+])
+@metadata('wrong')
+param wrongIntModifierWithDecorator int = true
+//@[6:35) Parameter wrongIntModifierWithDecorator. Type: int. Declaration start char: 0, length: 125
+
+@metadata(any([]))
+@allowed(any(2))
+param fatalErrorInIssue1713
+//@[6:27) Parameter fatalErrorInIssue1713. Type: any. Declaration start char: 0, length: 63
+
 // wrong metadata schema
 param wrongMetadataSchema string {
 //@[6:25) Parameter wrongMetadataSchema. Type: string. Declaration start char: 0, length: 76
@@ -164,6 +208,12 @@ param wrongMetadataSchema string {
     description: true
   }
 }
+
+@metadata({
+  description: true
+})
+param wrongMetadataSchemaWithDecorator string
+//@[6:38) Parameter wrongMetadataSchemaWithDecorator. Type: string. Declaration start char: 0, length: 80
 
 // expression in modifier
 param expressionInModifier string {
@@ -177,6 +227,14 @@ param expressionInModifier string {
   ]
 }
 
+@maxLength(a + 2)
+@minLength(foo())
+@allowed([
+  i
+])
+param expressionInModifierWithDecorator string = 2 + 3
+//@[6:39) Parameter expressionInModifierWithDecorator. Type: string. Declaration start char: 0, length: 108
+
 param nonCompileTimeConstant string {
 //@[6:28) Parameter nonCompileTimeConstant. Type: string. Declaration start char: 0, length: 122
   maxLength: 2 + 3
@@ -186,15 +244,32 @@ param nonCompileTimeConstant string {
   ]
 }
 
+@maxLength(2 + 3)
+@minLength(length([]))
+@allowed([
+  resourceGroup().id
+])
+param nonCompileTimeConstantWithDecorator string
+//@[6:41) Parameter nonCompileTimeConstantWithDecorator. Type: string. Declaration start char: 0, length: 124
+
+
 param emptyAllowedString string {
 //@[6:24) Parameter emptyAllowedString. Type: error. Declaration start char: 0, length: 49
   allowed: []
 }
 
+@allowed([])
+param emptyAllowedStringWithDecorator string
+//@[6:37) Parameter emptyAllowedStringWithDecorator. Type: error. Declaration start char: 0, length: 57
+
 param emptyAllowedInt int {
 //@[6:21) Parameter emptyAllowedInt. Type: error. Declaration start char: 0, length: 43
   allowed: []
 }
+
+@allowed([])
+param emptyAllowedIntWithDecorator int
+//@[6:34) Parameter emptyAllowedIntWithDecorator. Type: error. Declaration start char: 0, length: 51
 
 // 1-cycle in params
 param paramDefaultOneCycle string = paramDefaultOneCycle
@@ -219,6 +294,12 @@ param paramModifierSelfCycle string {
     paramModifierSelfCycle
   ]
 }
+
+@allowed([
+  paramModifierSelfCycleWithDecorator
+])
+param paramModifierSelfCycleWithDecorator string
+//@[6:41) Parameter paramModifierSelfCycleWithDecorator. Type: string. Declaration start char: 0, length: 100
 
 // 2-cycle in modifier params
 param paramModifierTwoCycle1 string {
@@ -350,6 +431,16 @@ param commaOne string {
     default: 'abc'
 }
 
+@metadata({
+  description: 'Name of Virtual Machine'
+})
+@allowed([
+  'abc',
+  'def'
+])
+param commaOneWithDecorator string
+//@[6:27) Parameter commaOneWithDecorator. Type: 'abc' | 'def'. Declaration start char: 0, length: 121
+
 // invalid comma separator (object)
 param commaTwo string {
 //@[6:14) Parameter commaTwo. Type: 'abc' | 'def'. Declaration start char: 0, length: 174
@@ -364,5 +455,80 @@ param commaTwo string {
     default: 'abc'
 }
 
+@secure
+@
+@&& xxx
+@sys
+@paramAccessingVar
+param incompleteDecorators string
+//@[6:26) Parameter incompleteDecorators. Type: string. Declaration start char: 0, length: 75
+
+@concat(1, 2)
+@sys.concat('a', 'b')
+@secure()
+// wrong target type
+@minValue(20)
+param someString string {
+//@[6:16) Parameter someString. Type: string. Declaration start char: 0, length: 176
+	// using decorators and modifier at the same time
+    secure: true
+}
+
+@allowed([
+    true
+    10
+    'foo'
+])
+@secure()
+// #completionTest(1, 2, 3) -> intParameterDecoratorsPlusNamespace
+@  
+// #completionTest(5, 6) -> intParameterDecorators
+@sys.   
+param someInteger int = 20
+//@[6:17) Parameter someInteger. Type: int. Declaration start char: 0, length: 207
+
+@allowed([], [], 2)
+// #completionTest(4) -> empty
+@az.
+param tooManyArguments1 int = 20
+//@[6:23) Parameter tooManyArguments1. Type: int. Declaration start char: 0, length: 88
+
+@metadata({}, {}, true)
+// #completionTest(2) -> stringParameterDecoratorsPlusNamespace
+@m
+// #completionTest(1, 2, 3) -> stringParameterDecoratorsPlusNamespace
+@   
+// #completionTest(5) -> stringParameterDecorators
+@sys.
+param tooManyArguments2 string
+//@[6:23) Parameter tooManyArguments2. Type: string. Declaration start char: 0, length: 253
+
+@description(sys.concat(2))
+@allowed([for thing in []: 's'])
+//@[14:19) Local thing. Type: any. Declaration start char: 14, length: 5
+param nonConstantInDecorator string
+//@[6:28) Parameter nonConstantInDecorator. Type: string. Declaration start char: 0, length: 96
+
+@minValue(-length('s'))
+@metadata({
+  bool: !true
+})
+param unaryMinusOnFunction int
+//@[6:26) Parameter unaryMinusOnFunction. Type: int. Declaration start char: 0, length: 83
+
+@minLength(1)
+@minLength(2)
+@secure()
+@maxLength(3)
+@maxLength(4)
+param duplicateDecorators string
+//@[6:25) Parameter duplicateDecorators. Type: string. Declaration start char: 0, length: 98
+
+@minLength(-1)
+@maxLength(-100)
+param invalidLength string
+//@[6:19) Parameter invalidLength. Type: string. Declaration start char: 0, length: 58
+
 // unterminated multi-line comment
 /*    
+

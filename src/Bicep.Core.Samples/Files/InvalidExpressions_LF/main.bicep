@@ -132,6 +132,14 @@ var padLeftNotEnough = padLeft('s')
 var takeTooMany = take([
 ],1,2,'s')
 
+// missing arguments
+var trailingArgumentComma = format('s',)
+var onlyArgumentComma = concat(,)
+var multipleArgumentCommas = concat(,,,,,)
+var emptyArgInBetween = concat(true,,false)
+var leadingEmptyArg = concat(,[])
+var leadingAndTrailingEmptyArg = concat(,'s',)
+
 // wrong argument types
 var concatWrongTypes = concat({
 })
@@ -145,8 +153,8 @@ var test1 = listKeys('abcd')
 // list spelled wrong 
 var test2 = lsitKeys('abcd', '2020-01-01')
 
-// just 'list' 
-var test3 = list('abcd', '2020-01-01')
+// just 'lis' instead of 'list'
+var test3 = lis('abcd', '2020-01-01')
 
 var sampleObject = {
   myInt: 42
@@ -202,6 +210,9 @@ var azFunctions = az.a
 // #completionTest(24) -> sysFunctions
 var sysFunctions = sys.a
 
+// #completionTest(33) -> sysFunctions
+var sysFunctionsInParens = (sys.a)
+
 // missing method name
 var missingMethodName = az.()
 
@@ -211,6 +222,9 @@ var missingIndexerOnIdentifier = nonExistentIdentifier[][1][]
 
 // empty parens - should produce expected expression diagnostic
 var emptyParens = ()
+
+// #completionTest(26) -> symbols
+var anotherEmptyParens = ()
 
 // keywords can't be called like functions
 var nullness = null()
@@ -233,3 +247,19 @@ var partialObject = {
   c :
   d  : %
 }
+
+// dangling decorators - to make sure the tests work, please do not add contents after this line
+@concat()
+@sys.secure()
+xxxxx
+
+
+@minLength()
+
+
+
+
+
+
+
+

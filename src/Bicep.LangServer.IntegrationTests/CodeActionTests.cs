@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft Corporation.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 using System;
 using System.Collections.Generic;
@@ -6,7 +6,8 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
 using Bicep.Core.CodeAction;
-using Bicep.Core.Parser;
+using Bicep.Core.Extensions;
+using Bicep.Core.Parsing;
 using Bicep.Core.Samples;
 using Bicep.LanguageServer.Extensions;
 using FluentAssertions;
@@ -91,8 +92,8 @@ namespace Bicep.LangServer.IntegrationTests
             yield return new TextSpan(span.Position, 0);
 
             // Adjacent spans after.
-            yield return new TextSpan(span.Position + span.Length, 10);
-            yield return new TextSpan(span.Position + span.Length, 0);
+            yield return new TextSpan(span.GetEndPosition(), 10);
+            yield return new TextSpan(span.GetEndPosition(), 0);
 
             // Overlapping spans.
             yield return new TextSpan(startOffset, 11);
@@ -102,7 +103,7 @@ namespace Bicep.LangServer.IntegrationTests
 
         private static IEnumerable<object[]> GetData()
         {
-            return DataSets.AllDataSets.ToDynamicTestData();
+            return DataSets.NonStressDataSets.ToDynamicTestData();
         }
     }
 }

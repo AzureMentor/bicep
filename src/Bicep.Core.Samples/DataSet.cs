@@ -1,12 +1,14 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using Bicep.Core.Parsing;
 using Bicep.Core.UnitTests.Utils;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -23,8 +25,10 @@ namespace Bicep.Core.Samples
         public const string TestFileMainSyntax = "main.syntax.bicep";
         public const string TestFileMainFormatted = "main.formatted.bicep";
         public const string TestFileMainCompiled = "main.json";
-        public const string TestCompletionsPrefix = TestCompletionsDirectory + "/";
         public const string TestCompletionsDirectory = "Completions";
+        public const string TestCompletionsPrefix = TestCompletionsDirectory + "/";
+        public const string TestFunctionsDirectory = "Functions";
+        public const string TestFunctionsPrefix = TestFunctionsDirectory + "/";
 
         public static readonly string Prefix = typeof(DataSet).Namespace == null ? string.Empty : typeof(DataSet).Namespace + '/';
 
@@ -82,6 +86,8 @@ namespace Bicep.Core.Samples
 
         public bool IsValid => this.Name.Contains("Invalid", StringComparison.Ordinal) == false;
 
+        public bool IsStress => this.Name.Contains("Stress", StringComparison.Ordinal);
+
         private Lazy<string> CreateRequired(string fileName)
         {
             return new Lazy<string>(() => this.ReadDataSetFile(fileName), LazyThreadSafetyMode.PublicationOnly);
@@ -123,5 +129,15 @@ namespace Bicep.Core.Samples
 
             return builder.ToImmutable();
         }
+
+        public static string AddDiagsToSourceText<T>(DataSet dataSet, IEnumerable<T> items, Func<T, TextSpan> getSpanFunc, Func<T, string> diagsFunc)
+            => OutputHelper.AddDiagsToSourceText<T>(dataSet.Bicep, dataSet.HasCrLfNewlines() ? "\r\n" : "\n", items, getSpanFunc, diagsFunc);
+
+        public static string AddDiagsToSourceText<TPositionable>(DataSet dataSet, IEnumerable<TPositionable> items, Func<TPositionable, string> diagsFunc)
+            where TPositionable : IPositionable
+            => OutputHelper.AddDiagsToSourceText(dataSet.Bicep, dataSet.HasCrLfNewlines() ? "\r\n" : "\n", items, item => item.Span, diagsFunc);
+
+        public static string GetBaselineUpdatePath(DataSet dataSet, string fileName)
+            => Path.Combine("src", "Bicep.Core.Samples", "Files", dataSet.Name, fileName);
     }
 }

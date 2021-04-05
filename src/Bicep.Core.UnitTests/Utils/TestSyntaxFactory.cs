@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
-using Bicep.Core.Parser;
+using Bicep.Core.Parsing;
 using Bicep.Core.Syntax;
 
 namespace Bicep.Core.UnitTests.Utils
@@ -28,7 +28,7 @@ namespace Bicep.Core.UnitTests.Utils
             return new StringSyntax(new [] { token }, Enumerable.Empty<SyntaxBase>(), new [] { segment });
         }
 
-        public static NumericLiteralSyntax CreateInt(int value) => new NumericLiteralSyntax(CreateToken(TokenType.Number), value);
+        public static IntegerLiteralSyntax CreateInt(long value) => new (CreateToken(TokenType.Integer), value);
 
         public static BooleanLiteralSyntax CreateBool(bool value) => new BooleanLiteralSyntax(value ? CreateToken(TokenType.TrueKeyword) : CreateToken(TokenType.FalseKeyword), value);
 
@@ -39,6 +39,8 @@ namespace Bicep.Core.UnitTests.Utils
         public static ObjectPropertySyntax CreateProperty(string name, SyntaxBase value) => CreateProperty(CreateIdentifier(name), value);
 
         public static ObjectPropertySyntax CreateProperty(IdentifierSyntax name, SyntaxBase value) => new ObjectPropertySyntax(name, CreateToken(TokenType.Colon), value);
+
+        public static UnaryOperationSyntax CreateUnaryMinus(SyntaxBase operand) => new(CreateToken(TokenType.Minus), operand);
 
         public static Token CreateToken(TokenType type, string text = "") => new Token(type, new TextSpan(0, 0), text, ImmutableArray.Create<SyntaxTrivia>(), ImmutableArray.Create<SyntaxTrivia>());
 

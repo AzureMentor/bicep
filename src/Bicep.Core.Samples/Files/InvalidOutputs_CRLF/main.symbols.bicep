@@ -17,12 +17,28 @@ output missingValueAndType =
 output missingValue string = 
 //@[7:19) Output missingValue. Type: string. Declaration start char: 0, length: 29
 
+// #completionTest(31,32) -> arrayPlusSymbols
+output arrayCompletions array = 
+//@[7:23) Output arrayCompletions. Type: array. Declaration start char: 0, length: 32
+
+// #completionTest(33,34) -> objectPlusSymbols
+output objectCompletions object = 
+//@[7:24) Output objectCompletions. Type: object. Declaration start char: 0, length: 34
+
+// #completionTest(29,30) -> boolPlusSymbols
+output boolCompletions bool = 
+//@[7:22) Output boolCompletions. Type: bool. Declaration start char: 0, length: 30
+
 output foo
 //@[7:10) Output foo. Type: any. Declaration start char: 0, length: 10
 
 // space after identifier #completionTest(20) -> outputTypes
 output spaceAfterId 
 //@[7:19) Output spaceAfterId. Type: any. Declaration start char: 0, length: 20
+
+// #completionTest(25) -> outputTypes
+output spacesAfterCursor  
+//@[7:24) Output spacesAfterCursor. Type: any. Declaration start char: 0, length: 26
 
 // partial type #completionTest(19, 20, 21, 22) -> outputTypes
 output partialType obj
@@ -135,4 +151,44 @@ output bad int = true && !4
 //@[7:10) Output bad. Type: int. Declaration start char: 0, length: 27
 output deeper bool = true ? -true : (14 && 's') + 10
 //@[7:13) Output deeper. Type: bool. Declaration start char: 0, length: 52
+
+output myOutput string = 'hello'
+//@[7:15) Output myOutput. Type: string. Declaration start char: 0, length: 32
+var attemptToReferenceAnOutput = myOutput
+//@[4:30) Variable attemptToReferenceAnOutput. Type: error. Declaration start char: 0, length: 41
+
+@sys.maxValue(20)
+@minValue(10)
+output notAttachableDecorators int = 32
+//@[7:30) Output notAttachableDecorators. Type: int. Declaration start char: 0, length: 73
+
+// nested loops inside output loops are not supported
+output noNestedLoops array = [for thing in things: {
+//@[34:39) Local thing. Type: any. Declaration start char: 34, length: 5
+//@[7:20) Output noNestedLoops. Type: array. Declaration start char: 0, length: 110
+  something: [
+    [for thing in things: true]
+//@[9:14) Local thing. Type: any. Declaration start char: 9, length: 5
+  ]
+}]
+
+// loops in inner properties inside outputs are not supported
+output noInnerLoopsInOutputs object = {
+//@[7:28) Output noInnerLoopsInOutputs. Type: object. Declaration start char: 0, length: 74
+  a: [for i in range(0,10): i]
+//@[10:11) Local i. Type: int. Declaration start char: 10, length: 1
+}
+output noInnerLoopsInOutputs2 object = {
+//@[7:29) Output noInnerLoopsInOutputs2. Type: object. Declaration start char: 0, length: 116
+  a: [for i in range(0,10): {
+//@[10:11) Local i. Type: int. Declaration start char: 10, length: 1
+    b: [for j in range(0,10): i+j]
+//@[12:13) Local j. Type: int. Declaration start char: 12, length: 1
+  }]
+}
+
+// #completionTest(1) -> decoratorsPlusNamespace
+@
+// #completionTest(5) -> decorators
+@sys.
 

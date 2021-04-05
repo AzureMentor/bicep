@@ -5,7 +5,7 @@ using Azure.Deployments.Expression.Configuration;
 using Azure.Deployments.Expression.Expressions;
 using Azure.Deployments.Expression.Serializers;
 using Bicep.Core.Emit;
-using Bicep.Core.SemanticModel;
+using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
 using Bicep.Core.UnitTests.Utils;
 using FluentAssertions;
@@ -54,10 +54,14 @@ namespace Bicep.Core.UnitTests.Emit
         [DataRow("[\n[]\n[\n12\n's'\n][1]\n\n]","[createArray(createArray(), createArray(12, 's')[1])]")]
         [DataRow("42[33].foo","[int(42)[33].foo]")]
         [DataRow("'foo'[x()]","[string('foo')[x()]]")]
+        [DataRow("1 ?? 2 ?? 3","[coalesce(coalesce(1, 2), 3)]")]
+        [DataRow("5 ?? 3 + 2 ?? 7", "[coalesce(coalesce(5, add(3, 2)), 7)]")]
+        [DataRow("true ?? true && false ?? false || true", "[coalesce(coalesce(true(), and(true(), false())), or(false(), true()))]")]
+        [DataRow("null ?? true", "[coalesce(null(), true())]")]
         public void ShouldConvertExpressionsCorrectly(string text, string expected)
         {
             var programText = $"var test = {text}";
-            var compilation = new Compilation(TestResourceTypeProvider.Create(), SyntaxFactory.CreateFromText(programText));
+            var compilation = new Compilation(TestResourceTypeProvider.Create(), SyntaxTreeGroupingFactory.CreateFromText(programText));
 
             var programSyntax = compilation.SyntaxTreeGrouping.EntryPoint.ProgramSyntax;
             var variableDeclarationSyntax = programSyntax.Children.OfType<VariableDeclarationSyntax>().First();

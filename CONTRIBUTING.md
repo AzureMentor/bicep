@@ -8,7 +8,7 @@ We are very happy to accept community contributions to Bicep, whether those are 
 * You are free to work on Bicep on any platform using any editor, but you may find it quickest to get started using [VSCode](https://code.visualstudio.com/Download) with the [C# extension](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csharp).
 * Fork this repo (see [this forking guide](https://guides.github.com/activities/forking/) for more information).
 * Checkout the repo locally with `git clone git@github.com:{your_username}/bicep.git`.
-* Change into the bicep repo directory and run `git submodule update --init --recursive`.
+* If `git status` shows untracked files in the `bicep-types-az` directory, remove the directory via `rm -r bicep-types-az` on Linux/Mac or `rmdir /S bicep-types-az` on Windows. (This is only needed once.)
 * Build the .NET solution with `dotnet build`.
 
 ## Developing
@@ -17,7 +17,7 @@ We are very happy to accept community contributions to Bicep, whether those are 
 
 The Bicep solution is comprised of the following main components:
 
-* **Bicep CLI** (`src/Bicep.Cli`): the `bicep` CLI exectuable.
+* **Bicep CLI** (`src/Bicep.Cli`): the `bicep` CLI executable.
 * **Bicep Language Server** (`src/Bicep.LangServer`): the LanguageServer used by the VSCode extension for parsing and providing information about a Bicep file.
 * **Bicep Core** (`src/Bicep.Core`): the library containing the majority of the Bicep compiler code.
 * **Bicep VSCode Extension** (`src/vscode-bicep`): the VSCode extension itself. This is mostly a thin wrapper around the Bicep Language Server.
@@ -30,18 +30,41 @@ The Bicep solution is comprised of the following main components:
   * `dotnet test`
 
 ### Updating test baselines
-* Many of the bicep integration tests rely on baseline test assertion files that are checked into the repo. Code changes in some areas will require updates to the baseline assertions. 
+Many of the bicep integration tests rely on baseline test assertion files that are checked into the repo. Code changes in some areas will require updates to the baseline assertions. 
+
+#### Manually
 * If you see a test failure with a message containing Windows and *nix copy commands, you have encountered such a test. You have the following options to fix the test:
   1. Manually execute the provided command in a shell. This makes sense for a single test, but is extremely tedious otherwise.
   1. Run the `SetBaseline.ps1` script at the repo root to execute the tests in `SetBaseLine` mode, which causes the baselines to be automatically updated in bulk for failing tests. You should see baseline file modifications in Git pending changes. (Make sure your Git pending changes are empty before doing so - your changes could get overwritten!).
 * Inspect the baseline assertion diffs to ensure changes are expected and match the code changes you have made. (If a pull request contains changes to baseline files that can't be explained, it will not be merged.)
+
+#### Via GitHub Action
+If you have an active branch pushed to your GitHub fork, you can use the "Update Baselines" GitHub action to automatically update any broken baselines:
+1. Under your fork of the repo, navigate to "Actions" -> "Update Baselines".
+1. Press "Run workflow", and select your branch name under the "Use work flow from" dropdown.
+1. If any baseline changes are detected, the action will create a commit with the diffs, and push it to your branch.
+1. Because of [this limitation](https://docs.github.com/en/actions/reference/events-that-trigger-workflows#triggering-new-workflows-using-a-personal-access-token), you will need to manually re-run the CI action once the commit has been made:
+    1. Under your fork of the repo, navigate to "Actions" -> "Build".
+    1. Press "Run workflow", and select your branch name under the "Use work flow from" dropdown.
+
+### Creating new integration tests dataset
+* To Add new integration tests dataset you need to:
+  1. Add a entry to src/Bicep.Core.Samples/DataSets.cs
+     * prefix with Invalid if the expectation is that it doesn't compile.
+     * The suffix should match the type of newline the file uses, so just pick one (_LF or _CRLF) - that's just to ensure we have support for both.
+     * The name of the entry should match the name of the folder you create (same casing), and there should be a main.bicep file in that folder.
+  1.  Make changes to main.bicep.
+  1. Create empty `main.<suffix>.bicep` assertion files in the folder. You need to create following suffixes: `diagnostics`, `formatted`, `symbols`, `syntax`, `tokens`
+  1. Run `SetBaseline.ps1` to fill out the assertion files.
+* The naming and file structure is important here as it's used by the test runner to assert e.g. whether the example should compile, and the end-of-line characters.
+* For tests that deal with module, you may see some unexpected behavior because the test could be using a mock file resolver instead of the standard one. Similarly, some tests may be using a mock resource type provider instead of the standard ones - usually that explains why some types aren't recognized in tests.
 
 ### Running the Bicep VSCode extension
 
 * On the first run, you'll need to ensure you have installed all the npm packages required by the Bicep VSCode extension with the following:
   * `cd src/vscode-bicep`
   * `npm i`
-* In the [VSCode Run View](https://code.visualstudio.com/Docs/editor/debugging), select the "Bicep VSCode Extension" task, and press the "Start" button. This will launch a new VSCode window with the Bicep extension and LanguageServer containing your changes. When running on WSL, set the `BICEP_LANGUAGE_SERVER_PATH` environment variable found in `launch.json` manually following [WSL environment setup scripts](https://code.visualstudio.com/docs/remote/wsl#_advanced-environment-setup-script).
+* In the [VSCode Run View](https://code.visualstudio.com/Docs/editor/debugging), select the "Bicep VSCode Extension" task, and press the "Start" button. This will launch a new VSCode window with the Bicep extension and LanguageServer containing your changes. When running on WSL, create a symbolic link in `src/vscode-bicep` named `bicepLanguageServer` to `../Bicep.LangServer/bin/Debug/net5.0`.
 * If you want the ability to put breakpoints and step through the C# code, you can also use the "Attach" run configuration once the extension host has launched, and select the Bicep LanguageServer process by searching for "bicep".
 
 ### Running the Bicep CLI
@@ -65,7 +88,7 @@ If you'd like to start contributing to Bicep, you can search for issues tagged a
 * Ensure that an issue has been created to track the feature enhancement or bug that is being fixed.
 * In the PR description, make sure you've included "Fixes #{issue_number}" e.g. "Fixes #242" so that GitHub knows to link it to an issue.
 * To avoid multiple contributors working on the same issue, please add a comment to the issue to let us know you plan to work on it.
-* If a significant amount of design is required, please include a proposal in the issue and wait for approval before working on code. If there's anything you're not sure about, please feel free to discuss this in the issue. We'd much rather all be on the same page at the start, so that there's less chance that drastic changes will be needed when your pull request is reveiwed.
+* If a significant amount of design is required, please include a proposal in the issue and wait for approval before working on code. If there's anything you're not sure about, please feel free to discuss this in the issue. We'd much rather all be on the same page at the start, so that there's less chance that drastic changes will be needed when your pull request is reviewed.
 * We report on code coverage; please ensure any new code you add is sufficiently covered by tests.
 
 ### Example Files
@@ -75,13 +98,16 @@ If you'd like to contribute example `.bicep` files that showcase abilities of th
 * Create an appropriately-named directory inside `docs/examples`. Note that the directory naming matches that of the [azure quickstart template repo](https://github.com/Azure/azure-quickstart-templates).
 * Include your file named `main.bicep`.
 * Compile the file using the Bicep CLI, and include the compiled `main.json` with your check-in.
-* Update the `src/examples.ts` to import the newly defined `.bicep` file and then add it to the `examples` object with the name you'd like it to appear in the playground
+* Update `docs/examples/index.json` to reference your new `main.bicep` file. Choose a `description` to display in the Playground dropdown menu.
 * Pull Request validation checks the following:
   1. All `.bicep` files in `docs/examples` can be compiled without errors.
   1. All `.bicep` files have a corresponding `.json` file which exactly matches that generated by the Bicep compiler.
   1. All `.bicep` files have been formatted with the default Bicep auto-formatter.
   
   See [Running the tests](#running-the-tests) if you'd like to test locally before submitting a PR, and [Updating test baselines](#updating-test-baselines) for information on how to automatically update your example `.json` and `.bicep` files to match the format expected by the tests.
+* If you have any test failures that are the result of compiler warnings, you may need to do either of the following:
+  1. If a resource type or api version is missing, you will get a type warning. To pass the test, you will need to add that type to the list of missing types in [ExampleTests.cs](https://github.com/Azure/bicep/blob/main/src/Bicep.Core.Samples/ExamplesTests.cs#L95).
+  1. If you have a false positive error or warning for a known resource type -- for example, if a property is missing an enum value -- you will need to suppress the warning using the `any()` function. You can read more about the any() function [here](./docs/the-any-function.md).
 * While everything will *not necessarily be applicable*, read through the Azure QuickStart Templates [Best Practices Guide](https://github.com/Azure/azure-quickstart-templates/blob/master/1-CONTRIBUTION-GUIDE/best-practices.md#best-practices) and follow it where appropriate (i.e. [parameter guidance](https://github.com/Azure/azure-quickstart-templates/blob/master/1-CONTRIBUTION-GUIDE/best-practices.md#parameters), [resource property order](https://github.com/Azure/azure-quickstart-templates/blob/master/1-CONTRIBUTION-GUIDE/best-practices.md#sort-order-of-properties), etc.)
 
 **Note:** If you have never submitted a Pull Request or used git before, reading through the [Git tutorial](https://github.com/Azure/azure-quickstart-templates/blob/master/1-CONTRIBUTION-GUIDE/git-tutorial.md) in the azure-quickstart-template repo is a good place to start.

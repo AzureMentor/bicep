@@ -13,18 +13,20 @@ statement ->
 
 targetScopeDecl -> "targetScope" "=" expression
 
-parameterDecl -> "parameter" IDENTIFIER(name) IDENTIFIER(type) (parameterDefaultValue | object(modifier))? NL
+parameterDecl -> decorator* "parameter" IDENTIFIER(name) IDENTIFIER(type) parameterDefaultValue? NL
 parameterDefaultValue -> "=" expression
 
-variableDecl -> "variable" IDENTIFIER(name) "=" expression NL
+variableDecl -> decorator* "variable" IDENTIFIER(name) "=" expression NL
 
-resourceDecl -> "resource" IDENTIFIER(name) interpString(type) "=" object NL
+resourceDecl -> decorator* "resource" IDENTIFIER(name) interpString(type) "existing"? "=" (ifCondition | object | forExpression) NL
 
-moduleDecl -> "module" IDENTIFIER(name) interpString(type) "=" object NL
+moduleDecl -> decorator* "module" IDENTIFIER(name) interpString(type) "=" (ifCondition | object | forExpression) NL
 
-outputDecl -> "output" IDENTIFIER(name) IDENTIFIER(type) "=" expression NL
+outputDecl -> decorator* "output" IDENTIFIER(name) IDENTIFIER(type) "=" expression NL
 
 NL -> ("\n" | "\r")+
+
+decorator -> "@" decoratorExpression NL
 
 expression -> 
   binaryExpression |
@@ -70,14 +72,19 @@ memberExpression ->
   memberExpression "[" expression "]" |
   memberExpression "." IDENTIFIER(property) |
   memberExpression "." functionCall
+  memberExpression ":" IDENTIFIER(name)
 
 primaryExpression ->
   functionCall |
   literalValue |
   interpString |
+  multilineString |
   array |
+  forExpression |
   object |
   parenthesizedExpression
+
+decoratorExpression -> functionCall | memberExpression "." functionCall
 
 functionCall -> IDENTIFIER "(" argumentList? ")"
 
@@ -85,11 +92,19 @@ argumentList -> expression ("," expression)*
 
 parenthesizedExpression -> "(" expression ")"
 
-interpString ->  interpStringLeftPiece ( expression interpStringMiddlePiece )* expression interpStringRightPiece | literalString
-interpStringLeftPiece -> "'" STRINGCHAR* "${"
-interpStringMiddlePiece -> "}" STRINGCHAR* "${"
-interpStringRightPiece -> "}" STRINGCHAR* "'"
-literalString -> "'" STRINGCHAR* "'"
+ifCondition -> "if" parenthesizedExpression object
+
+forExpression -> "[" "for" (IDENTIFIER(item) | forVariableBlock) "in" expression ":" forBody "]"
+forVariableBlock -> "(" IDENTIFIER(item) "," IDENTIFIER(index) ")"
+forBody -> expression(body) | ifCondition
+
+interpString ->  stringLeftPiece ( expression stringMiddlePiece )* expression stringRightPiece | stringComplete
+stringLeftPiece -> "'" STRINGCHAR* "${"
+stringMiddlePiece -> "}" STRINGCHAR* "${"
+stringRightPiece -> "}" STRINGCHAR* "'"
+stringComplete -> "'" STRINGCHAR* "'"
+
+multilineString -> "'''" + MULTILINESTRINGCHAR+ + "'''"
 
 literalValue -> NUMBER | "true" | "false" | "null"
 

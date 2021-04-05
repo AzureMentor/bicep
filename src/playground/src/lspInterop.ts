@@ -1,15 +1,18 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 import { editor, languages } from 'monaco-editor/esm/vs/editor/editor.api';
 
-let interop;
+let interop: any; /* eslint-disable-line */
 
-export function initializeInterop(self): Promise<boolean> {
+export function initializeInterop(self: any): Promise<boolean> { /* eslint-disable */ /* eslint-disable-line */
   return new Promise<boolean>((resolve, reject) => {
-    self['BicepInitialize'] = (newInterop) => {
+    self['BicepInitialize'] = (newInterop: any) => {
       interop = newInterop;
       resolve(true);
     }
   
-    const test = require('../../Bicep.Wasm/bin/Release/net5.0/wwwroot/_framework/blazor.webassembly.js');  
+    // this is necessary to invoke the Blazor startup code - do not remove it!
+    const test = require('../../Bicep.Wasm/bin/Release/net5.0/wwwroot/_framework/blazor.webassembly.js');
   });
 }
 
@@ -23,4 +26,14 @@ export function getSemanticTokens(content: string): languages.SemanticTokens {
 
 export function compileAndEmitDiagnostics(content: string): {template: string, diagnostics: editor.IMarkerData[]} {
   return interop.invokeMethod('CompileAndEmitDiagnostics', content);
+}
+
+export function decompile(jsonContent: string): string {
+  const { bicepFile, error } = interop.invokeMethod('Decompile', jsonContent);
+
+  if (error) {
+    throw error;
+  }
+
+  return bicepFile;
 }

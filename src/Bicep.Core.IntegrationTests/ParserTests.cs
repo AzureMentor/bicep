@@ -6,8 +6,9 @@ using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text;
+using Bicep.Core.Extensions;
 using Bicep.Core.UnitTests.Assertions;
-using Bicep.Core.Parser;
+using Bicep.Core.Parsing;
 using Bicep.Core.Samples;
 using Bicep.Core.Syntax;
 using Bicep.Core.UnitTests.Utils;
@@ -112,13 +113,13 @@ namespace Bicep.Core.IntegrationTests
 
             TextSpan getSpan(SyntaxCollectorVisitor.SyntaxItem data) => data.Syntax.Span;
 
-            var sourceTextWithDiags = OutputHelper.AddDiagsToSourceText(dataSet, syntaxList, getSpan, getLoggingString);
+            var sourceTextWithDiags = DataSet.AddDiagsToSourceText(dataSet, syntaxList, getSpan, getLoggingString);
             var resultsFile = FileHelper.SaveResultFile(this.TestContext, Path.Combine(dataSet.Name, DataSet.TestFileMainSyntax), sourceTextWithDiags);
 
             sourceTextWithDiags.Should().EqualWithLineByLineDiffOutput(
                 TestContext, 
                 dataSet.Syntax,
-                expectedLocation: OutputHelper.GetBaselineUpdatePath(dataSet, DataSet.TestFileMainSyntax),
+                expectedLocation: DataSet.GetBaselineUpdatePath(dataSet, DataSet.TestFileMainSyntax),
                 actualLocation: resultsFile);
         }
 
@@ -163,7 +164,7 @@ namespace Bicep.Core.IntegrationTests
 
                 base.VisitInternal(node);
 
-                this.maxPosition.Should().Be(span.Position + span.Length);
+                this.maxPosition.Should().Be(span.GetEndPosition());
             }
 
             public override void VisitToken(Token token)
@@ -172,7 +173,7 @@ namespace Bicep.Core.IntegrationTests
 
                 var span = token.Span;
                 span.Position.Should().BeGreaterOrEqualTo(this.maxPosition);
-                this.maxPosition = span.Position + span.Length;
+                this.maxPosition = span.GetEndPosition();
             }
         }
     }

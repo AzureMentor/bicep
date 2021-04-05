@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Bicep.Core.Parser;
+using Bicep.Core.Parsing;
 using Bicep.Core.Syntax;
 using Bicep.Core.Syntax.Visitors;
 using Bicep.Core.UnitTests.Utils;
@@ -34,7 +34,7 @@ namespace Bicep.Core.UnitTests.Syntax
         }
 
         [TestMethod]
-        public void NonEmtyFile_GetParent_ShouldReturnExpectedNode()
+        public void NonEmptyFile_GetParent_ShouldReturnExpectedNode()
         {
             var hierarchy = new SyntaxHierarchy();
             var program = ParserHelper.Parse("param foo string\r\nvar bar = 42");

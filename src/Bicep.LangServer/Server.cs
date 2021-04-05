@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.Pipelines;
 using System.Threading;
 using System.Threading.Tasks;
+using Bicep.Core.Emit;
 using Bicep.Core.FileSystem;
 using Bicep.Core.TypeSystem;
 using Bicep.Core.TypeSystem.Az;
@@ -13,6 +14,7 @@ using Bicep.LanguageServer.CompilationManager;
 using Bicep.LanguageServer.Completions;
 using Bicep.LanguageServer.Handlers;
 using Bicep.LanguageServer.Providers;
+using Bicep.LanguageServer.Snippets;
 using Microsoft.Extensions.DependencyInjection;
 using OmniSharp.Extensions.LanguageServer.Server;
 using OmnisharpLanguageServer = OmniSharp.Extensions.LanguageServer.Server.LanguageServer;
@@ -42,6 +44,7 @@ namespace Bicep.LanguageServer
         
         private Server(CreationOptions creationOptions, Action<LanguageServerOptions> onOptionsFunc)
         {
+            BicepDeploymentsInterop.Initialize();
             server = OmniSharp.Extensions.LanguageServer.Server.LanguageServer.PreInit(options =>
             {
                 options
@@ -56,6 +59,7 @@ namespace Bicep.LanguageServer
                     .WithHandler<BicepCompletionHandler>()
                     .WithHandler<BicepCodeActionHandler>()
                     .WithHandler<BicepDidChangeWatchedFilesHandler>()
+                    .WithHandler<BicepSignatureHelpHandler>()
 #pragma warning disable 0612 // disable 'obsolete' warning for proposed LSP feature
                     .WithHandler<BicepSemanticTokensHandler>()
 #pragma warning restore 0612
@@ -83,6 +87,7 @@ namespace Bicep.LanguageServer
             services.AddSingleton<ICompilationProvider, BicepCompilationProvider>();
             services.AddSingleton<ISymbolResolver, BicepSymbolResolver>();
             services.AddSingleton<ICompletionProvider, BicepCompletionProvider>();
+            services.AddSingleton<IResourceSnippetsProvider, ResourceSnippetsProvider>();
         }
     }
 }

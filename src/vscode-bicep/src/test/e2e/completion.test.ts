@@ -7,7 +7,7 @@ import { Position } from "vscode";
 import { readExampleFile } from "./examples";
 import { executeCompletionItemProviderCommand } from "./commands";
 import { expectDefined } from "../utils/assert";
-import { sleep } from "../utils/time";
+import { retryWhile, sleep } from "../utils/time";
 
 describe("completion", (): void => {
   let document: vscode.TextDocument;
@@ -33,19 +33,25 @@ describe("completion", (): void => {
 
   it("should provide completion while typing an indentifier", async () => {
     await editor.edit((editBuilder) =>
-      editBuilder.insert(new Position(19, 0), "var foo = data")
+      editBuilder.insert(new Position(17, 0), "var foo = data")
     );
 
-    const completionList = await executeCompletionItemProviderCommand(
-      document.uri,
-      new vscode.Position(19, 14)
+    const completionList = await retryWhile(
+      async () =>
+        await executeCompletionItemProviderCommand(
+          document.uri,
+          new vscode.Position(17, 14)
+        ),
+      (completionList) =>
+        completionList === undefined ||
+        !completionList.items.map((item) => item.label).includes("dataUri")
     );
 
     expectDefined(completionList);
-    expect(completionList.items.length).toBeGreaterThan(0);
+    expect(completionList.items.map((item) => item.label)).toContain("dataUri");
 
     await editor.edit((editBuilder) =>
-      editBuilder.delete(new Range(new Position(19, 0), new Position(19, 14)))
+      editBuilder.delete(new Range(new Position(17, 0), new Position(17, 14)))
     );
   });
 });

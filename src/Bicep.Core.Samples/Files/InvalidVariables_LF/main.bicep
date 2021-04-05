@@ -90,6 +90,12 @@ var doubleString = "bad string"
 var resourceGroup = ''
 var rgName = resourceGroup().name
 
+// this does not work at the resource group scope
+var invalidLocationVar = deployment().location
+
+var invalidEnvironmentVar = environment().aosdufhsad
+var invalidEnvAuthVar = environment().authentication.asdgdsag
+
 // invalid use of reserved namespace
 var az = 1
 
@@ -137,3 +143,82 @@ var objectVarTopLevelArrayIndexCompletions = objectLiteralType[f]
 
 // #completionTest(58) -> twoIndexPlusSymbols
 var oneArrayIndexCompletions = objectLiteralType.sixth[0][]
+
+// Issue 486
+var myFloat = 3.14
+
+// secure cannot be used as a varaible decorator
+@sys.secure()
+var something = 1
+
+// #completionTest(1) -> empty
+@
+// #completionTest(5) -> empty
+@sys.
+var anotherThing = true
+
+// invalid identifier character classes
+var ☕ = true
+var a☕ = true
+
+var missingArrayVariable = [for thing in stuff: 4]
+
+// loops are only allowed at the top level
+var nonTopLevelLoop = {
+  notOkHere: [for thing in stuff: 4]
+}
+
+// loops with conditions won't even parse
+var noFilteredLoopsInVariables = [for thing in stuff: if]
+
+// nested loops are also not allowed
+var noNestedVariableLoopsEither = [for thing in stuff: {
+  hello: [for thing in []: 4]
+}]
+
+// loops in inner properties of a variable are also not supported
+var innerPropertyLoop = {
+  a: [for i in range(0,10): i]
+}
+var innerPropertyLoop2 = {
+  b: {
+    a: [for i in range(0,10): i]
+  }
+}
+
+// loops using expressions with a runtime dependency are also not allowed
+var keys = listKeys('fake','fake')
+var indirection = keys
+
+var runtimeLoop = [for (item, index) in []: indirection]
+var runtimeLoop2 = [for (item, index) in indirection.keys: 's']
+
+var zoneInput = []
+resource zones 'Microsoft.Network/dnsZones@2018-05-01' = [for (zone, i) in zoneInput: {
+  name: zone
+  location: az.resourceGroup().location
+}]
+var inlinedVariable = zones[0].properties.zoneType
+
+var runtimeLoop3 = [for (zone, i) in zoneInput: {
+  a: inlinedVariable
+}]
+
+var runtimeLoop4 = [for (zone, i) in zones[0].properties.registrationVirtualNetworks: {
+  a: 0
+}]
+
+var notRuntime = concat('a','b')
+var evenMoreIndirection = concat(notRuntime, string(moreIndirection))
+var moreIndirection = reference('s','s', 'Full')
+
+var myRef = [
+  evenMoreIndirection
+]
+var runtimeLoop5 = [for (item, index) in myRef: 's']
+
+// cannot use loops in expressions
+var loopExpression = union([for thing in stuff: 4], [for thing in stuff: true])
+
+@batchSize(1)
+var batchSizeMakesNoSenseHere = false

@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft Corporation.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -6,9 +6,9 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
 using Bicep.Core.Navigation;
-using Bicep.Core.Parser;
+using Bicep.Core.Parsing;
 using Bicep.Core.Samples;
-using Bicep.Core.SemanticModel;
+using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
 using Bicep.Core.Syntax.Visitors;
 using Bicep.Core.Text;
@@ -20,7 +20,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
-using SymbolKind = Bicep.Core.SemanticModel.SymbolKind;
+using SymbolKind = Bicep.Core.Semantics.SymbolKind;
 
 namespace Bicep.LangServer.IntegrationTests
 {
@@ -42,11 +42,12 @@ namespace Bicep.LangServer.IntegrationTests
             var symbolTable = compilation.ReconstructSymbolTable();
             var lineStarts = compilation.SyntaxTreeGrouping.EntryPoint.LineStarts;
 
-            var symbolToSyntaxLookup = symbolTable
-                .Where(pair => pair.Value.Kind != SymbolKind.Error)
-                .ToLookup(pair => pair.Value, pair => pair.Key);
+            // filter out bind failures and locals with invalid identifiers
+            // (locals are special because their span is equal to their identifier span)
+            var filteredSymbolTable = symbolTable.Where(pair => pair.Value.Kind != SymbolKind.Error && (pair.Value is not LocalVariableSymbol local || local.NameSyntax.IsValid));
+            var symbolToSyntaxLookup = filteredSymbolTable.ToLookup(pair => pair.Value, pair => pair.Key);
 
-            foreach (var (syntax, symbol) in symbolTable.Where(s => s.Value.Kind != SymbolKind.Error))
+            foreach (var (syntax, symbol) in filteredSymbolTable)
             {
                 var locations = await client.RequestReferences(new ReferenceParams
                 {
@@ -81,11 +82,12 @@ namespace Bicep.LangServer.IntegrationTests
             var symbolTable = compilation.ReconstructSymbolTable();
             var lineStarts = compilation.SyntaxTreeGrouping.EntryPoint.LineStarts;
 
-            var symbolToSyntaxLookup = symbolTable
-                .Where(pair => pair.Value.Kind != SymbolKind.Error)
-                .ToLookup(pair => pair.Value, pair => pair.Key);
+            // filter out bind failures and locals with invalid identifiers
+            // (locals are special because their span is equal to their identifier span)
+            var filteredSymbolTable = symbolTable.Where(pair => pair.Value.Kind != SymbolKind.Error && (pair.Value is not LocalVariableSymbol local || local.NameSyntax.IsValid));
+            var symbolToSyntaxLookup = filteredSymbolTable.ToLookup(pair => pair.Value, pair => pair.Key);
 
-            foreach (var (syntax, symbol) in symbolTable.Where(s => s.Value.Kind != SymbolKind.Error))
+            foreach (var (syntax, symbol) in filteredSymbolTable)
             {
                 var locations = await client.RequestReferences(new ReferenceParams
                 {
@@ -115,7 +117,11 @@ namespace Bicep.LangServer.IntegrationTests
         public async Task FindReferencesOnNonSymbolsShouldProduceEmptyResult(DataSet dataSet)
         {
             // local function
-            bool IsWrongNode(SyntaxBase node) => !(node is ISymbolReference) && !(node is INamedDeclarationSyntax) && !(node is Token);
+            static bool IsWrongNode(SyntaxBase node) =>
+                !(node is PropertyAccessSyntax propertyAccessSyntax && propertyAccessSyntax.BaseExpression is ISymbolReference) &&
+                node is not ISymbolReference &&
+                node is not ITopLevelNamedDeclarationSyntax &&
+                node is not Token;
 
             var uri = DocumentUri.From($"/{dataSet.Name}");
 
@@ -156,9 +162,7 @@ namespace Bicep.LangServer.IntegrationTests
 
         private static IEnumerable<object[]> GetData()
         {
-            return DataSets.AllDataSets.ToDynamicTestData();
+            return DataSets.NonStressDataSets.ToDynamicTestData();
         }
     }
-
-    
 }

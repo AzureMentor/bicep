@@ -20,9 +20,10 @@ namespace Bicep.Cli.UnitTests
 
             actual.Should().Contain("--help");
             actual.Should().Contain("--version");
-            actual.Should().Contain("build");
+            actual.Should().Contain("bicep build");
             actual.Should().Contain("options");
             actual.Should().Contain("--stdout");
+            actual.Should().Contain("bicep decompile");
         }
 
         [TestMethod]
@@ -51,102 +52,110 @@ namespace Bicep.Cli.UnitTests
         }
 
         [TestMethod]
-        public void Null_or_empty_parameters_should_return_UnrecognizedArguments_instance()
+        public void Empty_parameters_should_return_null()
         {
-            var arguments = ArgumentParser.Parse(Array.Empty<string>());
-            arguments.Should().BeOfType<UnrecognizedArguments>();
+            var arguments = ArgumentParser.TryParse(Array.Empty<string>());
+            arguments.Should().BeNull();
         }
 
         [TestMethod]
-        public void Wrong_command_should_return_UnrecognizedArguments_instance()
+        public void Wrong_command_should_return_null()
         {
-            var arguments = ArgumentParser.Parse(new[] {"wrong"});
-            arguments.Should().BeOfType<UnrecognizedArguments>();
+            var arguments = ArgumentParser.TryParse(new[] {"wrong"});
+            arguments.Should().BeNull();
         }
 
-        [TestMethod]
-        public void BuildNoFiles_ShouldThrow()
+        [DataTestMethod]
+        [DataRow(new [] { "build" }, "The input file path was not specified")]
+        [DataRow(new [] { "build", "--stdout" }, "The input file path was not specified")]
+        [DataRow(new [] { "build", "file1", "file2" }, "The input file path cannot be specified multiple times")]
+        [DataRow(new [] { "build", "--wibble" }, "Unrecognized parameter \"--wibble\"")]
+        [DataRow(new [] { "build", "--outdir" }, "The --outdir parameter expects an argument")]
+        [DataRow(new [] { "build", "--outdir", "dir1", "--outdir", "dir2" }, "The --outdir parameter cannot be specified twice")]
+        [DataRow(new [] { "build", "--outfile" }, "The --outfile parameter expects an argument")]
+        [DataRow(new [] { "build", "--outfile", "dir1", "--outfile", "dir2" }, "The --outfile parameter cannot be specified twice")]
+        [DataRow(new [] { "build", "--stdout", "--outfile", "dir1", "file1" }, "The --outfile and --stdout parameters cannot both be used")]
+        [DataRow(new [] { "build", "--stdout", "--outdir", "dir1", "file1" }, "The --outdir and --stdout parameters cannot both be used")]
+        [DataRow(new [] { "build", "--outfile", "dir1", "--outdir", "dir2", "file1" }, "The --outdir and --outfile parameters cannot both be used")]
+        [DataRow(new [] { "decompile" }, "The input file path was not specified")]
+        [DataRow(new [] { "decompile", "file1", "file2" }, "The input file path cannot be specified multiple times")]
+        [DataRow(new [] { "decompile", "--wibble" }, "Unrecognized parameter \"--wibble\"")]
+        public void Invalid_args_trigger_validation_exceptions(string[] parameters, string expectedException)
         {
-            Action noFiles = () => ArgumentParser.Parse(new[] {"build"});
+            Action parseFunc = () => ArgumentParser.TryParse(parameters);
 
-            noFiles.Should().Throw<CommandLineException>().WithMessage("At least one file must be specified to the build command.");
-        }
-
-        [TestMethod]
-        public void BuildNoFilesButStdOut_ShouldThrow()
-        {
-            Action noFiles = () => ArgumentParser.Parse(new[] {"build", "--stdout"});
-
-            noFiles.Should().Throw<CommandLineException>().WithMessage("At least one file must be specified to the build command.");
+            parseFunc.Should().Throw<CommandLineException>().WithMessage(expectedException);
         }
 
         [TestMethod]
         public void BuildOneFile_ShouldReturnOneFile()
         {
-            var arguments = (BuildArguments?)ArgumentParser.Parse(new[] {"build", "file1"});
+            var arguments = (BuildArguments?)ArgumentParser.TryParse(new[] {"build", "file1"});
 
             // using classic assert so R# understands the value is not null
             Assert.IsNotNull(arguments);
-            arguments!.Files.Should().Equal("file1");
+            arguments!.InputFile.Should().Be("file1");
             arguments!.OutputToStdOut.Should().BeFalse();
+            arguments!.OutputDir.Should().BeNull();
+            arguments!.OutputFile.Should().BeNull();
         }
 
         [TestMethod]
         public void BuildOneFileStdOut_ShouldReturnOneFileAndStdout()
         {
-            var arguments = (BuildArguments?)ArgumentParser.Parse(new[] {"build", "--stdout", "file1"});
+            var arguments = (BuildArguments?)ArgumentParser.TryParse(new[] {"build", "--stdout", "file1"});
 
             // using classic assert so R# understands the value is not null
             Assert.IsNotNull(arguments);
-            arguments!.Files.Should().Equal("file1");
+            arguments!.InputFile.Should().Be("file1");
             arguments!.OutputToStdOut.Should().BeTrue();
+            arguments!.OutputDir.Should().BeNull();
+            arguments!.OutputFile.Should().BeNull();
         }
 
-                [TestMethod]
+        [TestMethod]
         public void BuildOneFileStdOutAllCaps_ShouldReturnOneFileAndStdout()
         {
-            var arguments = (BuildArguments?)ArgumentParser.Parse(new[] {"build", "--STDOUT", "file1"});
+            var arguments = (BuildArguments?)ArgumentParser.TryParse(new[] {"build", "--STDOUT", "file1"});
 
             // using classic assert so R# understands the value is not null
             Assert.IsNotNull(arguments);
-            arguments!.Files.Should().Equal("file1");
+            arguments!.InputFile.Should().Be("file1");
             arguments!.OutputToStdOut.Should().BeTrue();
+            arguments!.OutputDir.Should().BeNull();
+            arguments!.OutputFile.Should().BeNull();
         }
 
         [TestMethod]
-        public void BuildMultipleFiles_ShouldReturnAllFiles()
+        public void Build_with_outputdir_parameter_should_parse_correctly()
         {
-            var arguments = (BuildArguments?) ArgumentParser.Parse(new[] {"build", "file1", "file2", "file3"});
+            var arguments = (BuildArguments?)ArgumentParser.TryParse(new[] {"build", "--outdir", "outdir", "file1"});
 
+            // using classic assert so R# understands the value is not null
             Assert.IsNotNull(arguments);
-            arguments!.Files.Should().Equal("file1", "file2", "file3");
+            arguments!.InputFile.Should().Be("file1");
             arguments!.OutputToStdOut.Should().BeFalse();
+            arguments!.OutputDir.Should().Be("outdir");
+            arguments!.OutputFile.Should().BeNull();
         }
 
         [TestMethod]
-        public void BuildMultipleFilesStdOut_ShouldReturnAllFilesAndStdOut()
+        public void Build_with_outputfile_parameter_should_parse_correctly()
         {
-            var arguments = (BuildArguments?) ArgumentParser.Parse(new[] {"build", "--stdout", "file1", "file2", "file3"});
+            var arguments = (BuildArguments?)ArgumentParser.TryParse(new[] {"build", "--outfile", "jsonFile", "file1"});
 
+            // using classic assert so R# understands the value is not null
             Assert.IsNotNull(arguments);
-            arguments!.Files.Should().Equal("file1", "file2", "file3");
-            arguments!.OutputToStdOut.Should().BeTrue();
-        }
-
-        [TestMethod]
-        public void BuildMultipleFilesStdOutTwice_ShouldReturnAllFilesAndStdOut()
-        {
-            var arguments = (BuildArguments?) ArgumentParser.Parse(new[] {"build", "--stdout", "file1", "file2", "--stdout", "file3"});
-
-            Assert.IsNotNull(arguments);
-            arguments!.Files.Should().Equal("file1", "file2", "file3");
-            arguments!.OutputToStdOut.Should().BeTrue();
+            arguments!.InputFile.Should().Be("file1");
+            arguments!.OutputToStdOut.Should().BeFalse();
+            arguments!.OutputDir.Should().BeNull();
+            arguments!.OutputFile.Should().Be("jsonFile");
         }
 
         [TestMethod]
         public void Version_argument_should_return_VersionArguments_instance()
         {
-            var arguments = ArgumentParser.Parse(new[] { "--version" });
+            var arguments = ArgumentParser.TryParse(new[] { "--version" });
 
             arguments.Should().BeOfType<VersionArguments>();
         }
@@ -154,7 +163,7 @@ namespace Bicep.Cli.UnitTests
         [TestMethod]
         public void Help_argument_should_return_HelpArguments_instance()
         {
-            var arguments = ArgumentParser.Parse(new[] { "--help" });
+            var arguments = ArgumentParser.TryParse(new[] { "--help" });
 
             arguments.Should().BeOfType<HelpArguments>();
         }
@@ -162,7 +171,7 @@ namespace Bicep.Cli.UnitTests
         [TestMethod]
         public void Version_argument_should_return_VersionShortArguments_instance()
         {
-            var arguments = ArgumentParser.Parse(new[] {"-v"});
+            var arguments = ArgumentParser.TryParse(new[] {"-v"});
 
             arguments.Should().BeOfType<VersionArguments>();
         }
@@ -170,9 +179,18 @@ namespace Bicep.Cli.UnitTests
         [TestMethod]
         public void Help_argument_should_return_HelpShortArguments_instance()
         {
-            var arguments = ArgumentParser.Parse(new[] {"-h"});
+            var arguments = ArgumentParser.TryParse(new[] {"-h"});
 
             arguments.Should().BeOfType<HelpArguments>();
+        }
+
+        [TestMethod]
+        public void DecompileOneFile_ShouldReturnOneFile()
+        {
+            var arguments = ArgumentParser.TryParse(new[] {"decompile", "file1"}) as DecompileArguments;
+
+            arguments!.Should().NotBeNull();
+            arguments!.InputFile.Should().Be("file1");
         }
     }
 }

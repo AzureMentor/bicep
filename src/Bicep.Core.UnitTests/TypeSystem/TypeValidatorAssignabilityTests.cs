@@ -6,12 +6,13 @@ using System.Linq;
 using System.Reflection;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Resources;
-using Bicep.Core.SemanticModel;
+using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
 using Bicep.Core.TypeSystem;
 using Bicep.Core.UnitTests.Utils;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
 
 namespace Bicep.Core.UnitTests.TypeSystem
 {
@@ -874,12 +875,12 @@ namespace Bicep.Core.UnitTests.TypeSystem
                 "myDiscriminator",
                 new []
                 {
-                    new NamedObjectType("typeA", TypeSymbolValidationFlags.Default, new []
+                    new ObjectType("typeA", TypeSymbolValidationFlags.Default, new []
                     { 
                         new TypeProperty("myDiscriminator", new StringLiteralType("valA")),
                         new TypeProperty("fieldA", LanguageConstants.Any, TypePropertyFlags.Required),
                     }, null),
-                    new NamedObjectType("typeB", TypeSymbolValidationFlags.Default, new []
+                    new ObjectType("typeB", TypeSymbolValidationFlags.Default, new []
                     { 
                         new TypeProperty("myDiscriminator", new StringLiteralType("valB")),
                         new TypeProperty("fieldB", LanguageConstants.Any, TypePropertyFlags.Required),
@@ -966,8 +967,8 @@ namespace Bicep.Core.UnitTests.TypeSystem
                     });
 
                 // we have the discriminator key, so we should have picked the correct object, rather than returning the discriminator
-                narrowedType.Should().BeOfType<NamedObjectType>();
-                var discriminatorProperty = (narrowedType as NamedObjectType)!.Properties["myDiscriminator"];
+                narrowedType.Should().BeOfType<ObjectType>();
+                var discriminatorProperty = (narrowedType as ObjectType)!.Properties["myDiscriminator"];
 
                 // verify we've got the expected key
                 discriminatorProperty.TypeReference.Type.Should().BeOfType<StringLiteralType>();
@@ -989,11 +990,11 @@ namespace Bicep.Core.UnitTests.TypeSystem
                 var narrowedType = TypeValidator.NarrowTypeAndCollectDiagnostics(CreateTypeManager(hierarchy), obj, discriminatedType, diagnosticWriter);
 
                 diagnosticWriter.GetDiagnostics().Should().BeEmpty();
-                narrowedType.Should().BeOfType<NamedObjectType>();
+                narrowedType.Should().BeOfType<ObjectType>();
 
                 // we have the discriminator key, so we should have picked the correct object, rather than returning the discriminator
-                narrowedType.Should().BeOfType<NamedObjectType>();
-                var discriminatorProperty = (narrowedType as NamedObjectType)!.Properties["myDiscriminator"];
+                narrowedType.Should().BeOfType<ObjectType>();
+                var discriminatorProperty = (narrowedType as ObjectType)!.Properties["myDiscriminator"];
 
                 // verify we've got the expected key
                 discriminatorProperty.TypeReference.Type.Should().BeOfType<StringLiteralType>();
@@ -1108,11 +1109,19 @@ namespace Bicep.Core.UnitTests.TypeSystem
 
         private TypeSymbol CreateDummyResourceType()
         {
+            var typeProvider = new TestResourceTypeProvider();
             var typeReference = ResourceTypeReference.Parse("Mock.Rp/mockType@2020-01-01");
 
-            return new ResourceType(typeReference, new NamedObjectType(typeReference.FormatName(), TypeSymbolValidationFlags.Default, LanguageConstants.CreateResourceProperties(typeReference), null));
+            return typeProvider.GetType(typeReference, ResourceTypeGenerationFlags.None);
         }
 
-        private TypeManager CreateTypeManager(SyntaxHierarchy hierarchy) => new TypeManager(TestResourceTypeProvider.Create(), new Dictionary<SyntaxBase, Symbol>(), new Dictionary<DeclaredSymbol, ImmutableArray<DeclaredSymbol>>(), hierarchy, ResourceScopeType.ResourceGroupScope);
+        private static TypeManager CreateTypeManager(SyntaxHierarchy hierarchy) 
+        {
+            var binderMock = new Mock<IBinder>();
+            binderMock.Setup(x => x.GetParent(It.IsAny<SyntaxBase>()))
+                .Returns<SyntaxBase>(x => hierarchy.GetParent(x));
+
+            return new TypeManager(TestResourceTypeProvider.Create(), binderMock.Object);
+        }
     }
 }
