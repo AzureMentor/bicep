@@ -1,4 +1,4 @@
-﻿// $1 = testContainerRegistry
+﻿// $1 = 'testContainerRegistry'
 // $2 = Classic
 // $3 = true
 
