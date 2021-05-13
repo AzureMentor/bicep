@@ -16,7 +16,7 @@ resource foo 'ddd'
 resource trailingSpace  
 //@[9:22) Resource trailingSpace. Type: error. Declaration start char: 0, length: 24
 
-// #completionTest(19,20) -> object
+// #completionTest(19,20) -> resourceObject
 resource foo 'ddd'= 
 //@[9:12) Resource foo. Type: error. Declaration start char: 0, length: 20
 
@@ -478,15 +478,15 @@ resource missingTopLevelProperties 'Microsoft.Storage/storageAccounts@2020-08-01
 }
 
 resource missingTopLevelPropertiesExceptName 'Microsoft.Storage/storageAccounts@2020-08-01-preview' = {
-//@[9:44) Resource missingTopLevelPropertiesExceptName. Type: Microsoft.Storage/storageAccounts@2020-08-01-preview. Declaration start char: 0, length: 304
-  // #completionTest(0, 1, 2) -> topLevelPropertiesMinusName
+//@[9:44) Resource missingTopLevelPropertiesExceptName. Type: Microsoft.Storage/storageAccounts@2020-08-01-preview. Declaration start char: 0, length: 358
+  // #completionTest(0, 1) -> topLevelPropertiesMinusName #completionTest(2) -> topLevelPropertiesMinusNameNoColon
   name: 'me'
   // do not remove whitespace before the closing curly
   // #completionTest(0, 1, 2) -> topLevelPropertiesMinusName
   
 }
 
-// #completionTest(24,25,26,49,65) -> resourceTypes
+// #completionTest(24,25,26,49,65,69,70) -> virtualNetworksResourceTypes
 resource unfinishedVnet 'Microsoft.Network/virtualNetworks@2020-06-01' = {
 //@[9:23) Resource unfinishedVnet. Type: Microsoft.Network/virtualNetworks@2020-06-01. Declaration start char: 0, length: 468
   name: 'v'
@@ -1782,4 +1782,86 @@ resource invalidExistingLocationRef 'Microsoft.Compute/virtualMachines/extension
     name: 'myExt'
     location: existingResProperty.location
 }
+
+resource anyTypeInDependsOn 'Microsoft.Network/dnsZones@2018-05-01' = {
+//@[9:27) Resource anyTypeInDependsOn. Type: Microsoft.Network/dnsZones@2018-05-01. Declaration start char: 0, length: 259
+  name: 'anyTypeInDependsOn'
+  location: resourceGroup().location
+  dependsOn: [
+    any(invalidExistingLocationRef.properties.autoUpgradeMinorVersion)
+    's'
+    any(true)
+  ]
+}
+
+resource anyTypeInParent 'Microsoft.Network/dnsZones/CNAME@2018-05-01' = {
+//@[9:24) Resource anyTypeInParent. Type: Microsoft.Network/dnsZones/CNAME@2018-05-01. Declaration start char: 0, length: 98
+  parent: any(true)
+}
+
+resource anyTypeInParentLoop 'Microsoft.Network/dnsZones/CNAME@2018-05-01' = [for thing in []: {
+//@[82:87) Local thing. Type: any. Declaration start char: 82, length: 5
+//@[9:28) Resource anyTypeInParentLoop. Type: Microsoft.Network/dnsZones/CNAME@2018-05-01[]. Declaration start char: 0, length: 121
+  parent: any(true)
+}]
+
+resource anyTypeInScope 'Microsoft.Authorization/locks@2016-09-01' = {
+//@[9:23) Resource anyTypeInScope. Type: Microsoft.Authorization/locks@2016-09-01. Declaration start char: 0, length: 115
+  scope: any(invalidExistingLocationRef)
+}
+
+resource anyTypeInScopeConditional 'Microsoft.Authorization/locks@2016-09-01' = if(true) {
+//@[9:34) Resource anyTypeInScopeConditional. Type: Microsoft.Authorization/locks@2016-09-01. Declaration start char: 0, length: 135
+  scope: any(invalidExistingLocationRef)
+}
+
+resource anyTypeInExistingScope 'Microsoft.Network/dnsZones/AAAA@2018-05-01' existing = {
+//@[9:31) Resource anyTypeInExistingScope. Type: Microsoft.Network/dnsZones/AAAA@2018-05-01. Declaration start char: 0, length: 132
+  parent: any('')
+  scope: any(false)
+}
+
+resource anyTypeInExistingScopeLoop 'Microsoft.Network/dnsZones/AAAA@2018-05-01' existing = [for thing in []: {
+//@[97:102) Local thing. Type: any. Declaration start char: 97, length: 5
+//@[9:35) Resource anyTypeInExistingScopeLoop. Type: Microsoft.Network/dnsZones/AAAA@2018-05-01[]. Declaration start char: 0, length: 155
+  parent: any('')
+  scope: any(false)
+}]
+
+resource tenantLevelResourceBlocked 'Microsoft.Management/managementGroups@2020-05-01' = {
+//@[9:35) Resource tenantLevelResourceBlocked. Type: Microsoft.Management/managementGroups@2020-05-01. Declaration start char: 0, length: 131
+  name: 'tenantLevelResourceBlocked'
+}
+
+// #completionTest(15,36,37) -> resourceTypes
+resource comp1 'Microsoft.Resources/'
+//@[9:14) Resource comp1. Type: error. Declaration start char: 0, length: 37
+
+// #completionTest(15,16,17) -> resourceTypes
+resource comp2 ''
+//@[9:14) Resource comp2. Type: error. Declaration start char: 0, length: 17
+
+// #completionTest(38) -> resourceTypes
+resource comp3 'Microsoft.Resources/t'
+//@[9:14) Resource comp3. Type: error. Declaration start char: 0, length: 38
+
+// #completionTest(40) -> resourceTypes
+resource comp4 'Microsoft.Resources/t/v'
+//@[9:14) Resource comp4. Type: error. Declaration start char: 0, length: 40
+
+// #completionTest(49) -> resourceTypes
+resource comp5 'Microsoft.Storage/storageAccounts'
+//@[9:14) Resource comp5. Type: error. Declaration start char: 0, length: 50
+
+// #completionTest(50) -> storageAccountsResourceTypes
+resource comp6 'Microsoft.Storage/storageAccounts@'
+//@[9:14) Resource comp6. Type: error. Declaration start char: 0, length: 51
+
+// #completionTest(52) -> templateSpecsResourceTypes
+resource comp7 'Microsoft.Resources/templateSpecs@20'
+//@[9:14) Resource comp7. Type: error. Declaration start char: 0, length: 53
+
+// #completionTest(60,61) -> virtualNetworksResourceTypes
+resource comp8 'Microsoft.Network/virtualNetworks@2020-06-01'
+//@[9:14) Resource comp8. Type: Microsoft.Network/virtualNetworks@2020-06-01. Declaration start char: 0, length: 61
 

@@ -79,6 +79,7 @@ namespace Bicep.Core.IntegrationTests
 
         [DataTestMethod]
         [DynamicData(nameof(GetWorkingExampleData), DynamicDataSourceType.Method, DynamicDataDisplayNameDeclaringType = typeof(ExampleData), DynamicDataDisplayName = nameof(ExampleData.GetDisplayName))]
+        [TestCategory(BaselineHelper.BaselineTestCategory)]
         public void Decompiler_generates_expected_bicep_files_with_diagnostics(ExampleData example)
         {
             // save all the files in the containing directory to disk so that we can test module resolution
@@ -107,7 +108,7 @@ namespace Bicep.Core.IntegrationTests
                     var diagnostics = diagnosticsBySyntaxTree[syntaxTree];
                     var bicepOutput = filesToSave[syntaxTree.FileUri];
 
-                    var sourceTextWithDiags = OutputHelper.AddDiagsToSourceText(bicepOutput, Environment.NewLine, diagnostics, diag => OutputHelper.GetDiagLoggingString(bicepOutput, outputDirectory, diag));
+                    var sourceTextWithDiags = OutputHelper.AddDiagsToSourceText(bicepOutput, "\n", diagnostics, diag => OutputHelper.GetDiagLoggingString(bicepOutput, outputDirectory, diag));
                     File.WriteAllText(syntaxTree.FileUri.LocalPath + ".actual", sourceTextWithDiags);
 
                     sourceTextWithDiags.Should().EqualWithLineByLineDiffOutput(
