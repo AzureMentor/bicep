@@ -49,6 +49,15 @@ module moduleWithoutPath = {
 //@[0:1) RightBrace |}|
 //@[1:3) NewLine |\n\n|
 
+// #completionTest(41) -> moduleBodyCompletions
+//@[47:48) NewLine |\n|
+module moduleWithPath './moduleb.bicep' =
+//@[0:6) Identifier |module|
+//@[7:21) Identifier |moduleWithPath|
+//@[22:39) StringComplete |'./moduleb.bicep'|
+//@[40:41) Assignment |=|
+//@[41:43) NewLine |\n\n|
+
 // missing identifier #completionTest(7) -> empty
 //@[49:50) NewLine |\n|
 module 
@@ -1926,8 +1935,9 @@ module paramNameCompletionsInFilteredLoops 'modulea.bicep' = [for (x,i) in empty
 //@[10:11) LeftBrace |{|
 //@[11:12) NewLine |\n|
     // #completionTest(0,1,2) -> moduleAParams
-//@[46:48) NewLine |\n\n|
-
+//@[46:47) NewLine |\n|
+  
+//@[2:3) NewLine |\n|
   }
 //@[2:3) RightBrace |}|
 //@[3:4) NewLine |\n|

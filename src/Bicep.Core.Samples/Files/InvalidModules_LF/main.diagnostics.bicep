@@ -23,6 +23,10 @@ module moduleWithoutPath = {
 }
 //@[0:1) [BCP007 (Error)] This declaration type is not recognized. Specify a parameter, variable, resource, or output declaration. |}|
 
+// #completionTest(41) -> moduleBodyCompletions
+module moduleWithPath './moduleb.bicep' =
+//@[41:41) [BCP118 (Error)] Expected the "{" character, the "[" character, or the "if" keyword at this location. ||
+
 // missing identifier #completionTest(7) -> empty
 module 
 //@[7:7) [BCP096 (Error)] Expected a module identifier at this location. ||
@@ -554,7 +558,7 @@ module paramNameCompletionsInFilteredLoops 'modulea.bicep' = [for (x,i) in empty
   params: {
 //@[2:8) [BCP035 (Error)] The specified "object" declaration is missing the following required properties: "arrayParam", "objParam", "stringParamB". |params|
     // #completionTest(0,1,2) -> moduleAParams
-
+  
   }
 }]
 

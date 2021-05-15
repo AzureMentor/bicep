@@ -16,6 +16,9 @@ module moduleWithoutPath = {
 
 }
 
+// #completionTest(41) -> moduleBodyCompletions
+module moduleWithPath './moduleb.bicep' =
+
 // missing identifier #completionTest(7) -> empty
 module 
 
@@ -406,7 +409,7 @@ module paramNameCompletionsInFilteredLoops 'modulea.bicep' = [for (x,i) in empty
   name: 'hello-${x}'
   params: {
     // #completionTest(0,1,2) -> moduleAParams
-
+  
   }
 }]
 

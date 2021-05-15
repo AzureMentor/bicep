@@ -15,10 +15,7 @@
     "textEdit": {
       "range": {},
       "newText": "dependsOn"
-    },
-    "commitCharacters": [
-      ":"
-    ]
+    }
   },
   {
     "label": "extendedLocation",
@@ -36,10 +33,7 @@
     "textEdit": {
       "range": {},
       "newText": "extendedLocation"
-    },
-    "commitCharacters": [
-      ":"
-    ]
+    }
   },
   {
     "label": "identity",
@@ -57,10 +51,7 @@
     "textEdit": {
       "range": {},
       "newText": "identity"
-    },
-    "commitCharacters": [
-      ":"
-    ]
+    }
   },
   {
     "label": "kind",
@@ -78,10 +69,7 @@
     "textEdit": {
       "range": {},
       "newText": "kind"
-    },
-    "commitCharacters": [
-      ":"
-    ]
+    }
   },
   {
     "label": "location",
@@ -99,10 +87,7 @@
     "textEdit": {
       "range": {},
       "newText": "location"
-    },
-    "commitCharacters": [
-      ":"
-    ]
+    }
   },
   {
     "label": "properties",
@@ -120,59 +105,6 @@
     "textEdit": {
       "range": {},
       "newText": "properties"
-    },
-    "commitCharacters": [
-      ":"
-    ]
-  },
-  {
-    "label": "resource",
-    "kind": "keyword",
-    "detail": "Resource keyword",
-    "deprecated": false,
-    "preselect": false,
-    "sortText": "2_resource",
-    "insertTextFormat": "plainText",
-    "insertTextMode": "adjustIndentation",
-    "textEdit": {
-      "range": {},
-      "newText": "resource"
-    }
-  },
-  {
-    "label": "resource",
-    "kind": "snippet",
-    "detail": "Nested resource with defaults",
-    "documentation": {
-      "kind": "markdown",
-      "value": "```bicep\nresource Identifier 'Type' = {\n  name: \n  properties: {\n    \n  }\n}\n```"
-    },
-    "deprecated": false,
-    "preselect": false,
-    "sortText": "2_resource",
-    "insertTextFormat": "snippet",
-    "insertTextMode": "adjustIndentation",
-    "textEdit": {
-      "range": {},
-      "newText": "resource ${1:Identifier} '${2:Type}' = {\n  name: $3\n  properties: {\n    $0\n  }\n}"
-    }
-  },
-  {
-    "label": "resource",
-    "kind": "snippet",
-    "detail": "Nested resource without defaults",
-    "documentation": {
-      "kind": "markdown",
-      "value": "```bicep\nresource Identifier 'Type' = {\n  name: \n  \n}\n\n```"
-    },
-    "deprecated": false,
-    "preselect": false,
-    "sortText": "2_resource",
-    "insertTextFormat": "snippet",
-    "insertTextMode": "adjustIndentation",
-    "textEdit": {
-      "range": {},
-      "newText": "resource ${1:Identifier} '${2:Type}' = {\n  name: $3\n  $0\n}\n"
     }
   },
   {
@@ -191,10 +123,7 @@
     "textEdit": {
       "range": {},
       "newText": "sku"
-    },
-    "commitCharacters": [
-      ":"
-    ]
+    }
   },
   {
     "label": "tags",
@@ -212,9 +141,6 @@
     "textEdit": {
       "range": {},
       "newText": "tags"
-    },
-    "commitCharacters": [
-      ":"
-    ]
+    }
   }
 ]

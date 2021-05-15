@@ -362,7 +362,7 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2015-10-31' 
             var objectTypeA = new ObjectType("objA", TypeSymbolValidationFlags.Default, new[]
             {
                 new TypeProperty("discKey", new StringLiteralType("keyA")),
-                new TypeProperty("name", LanguageConstants.String, TypePropertyFlags.Required),
+                new TypeProperty("name", new StringLiteralType("keyA"), TypePropertyFlags.Required),
                 new TypeProperty("location", LanguageConstants.String, TypePropertyFlags.Required),
                 new TypeProperty("id", LanguageConstants.String)
             }, null);
@@ -371,7 +371,7 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2015-10-31' 
             {
                 new TypeProperty("discKey", new StringLiteralType("keyB")),
                 new TypeProperty("name", LanguageConstants.String, TypePropertyFlags.Required),
-                new TypeProperty("kind", LanguageConstants.String, TypePropertyFlags.ReadOnly),
+                new TypeProperty("kind", new StringLiteralType("discKey"), TypePropertyFlags.ReadOnly),
                 new TypeProperty("hostPoolType", LanguageConstants.String)
             }, null);
 
@@ -398,8 +398,8 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2015-10-31' 
                     x.Detail.Should().Be("Required properties");
                     x.CompletionPriority.Should().Be(CompletionPriority.Medium);
                     x.Text.Should().BeEquivalentToIgnoringNewlines(@"{
-	name: $1
-	location: $2
+	name: 'keyA'
+	location: $1
 	$0
 }");
                 },
@@ -410,6 +410,65 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2015-10-31' 
                     x.CompletionPriority.Should().Be(CompletionPriority.Medium);
                     x.Text.Should().BeEquivalentToIgnoringNewlines(@"{
 	name: $1
+	$0
+}");
+                });
+        }
+
+        [TestMethod]
+        public void GetModuleBodyCompletionSnippets_WithNoRequiredProperties_ShouldReturnEmptySnippet()
+        {
+            SnippetsProvider snippetsProvider = new SnippetsProvider();
+            var objectType = new ObjectType("objA", TypeSymbolValidationFlags.Default, new[]
+            {
+                new TypeProperty("name", LanguageConstants.String, TypePropertyFlags.ReadOnly),
+                new TypeProperty("location", LanguageConstants.String, TypePropertyFlags.WriteOnly),
+                new TypeProperty("id", LanguageConstants.String)
+            }, null);
+            TypeSymbol typeSymbol = new ModuleType("module", ResourceScope.Module, objectType);
+
+            IEnumerable<Snippet> snippets = snippetsProvider.GetModuleBodyCompletionSnippets(typeSymbol);
+
+            snippets.Should().SatisfyRespectively(
+                x =>
+                {
+                    x.Prefix.Should().Be("{}");
+                    x.Detail.Should().Be("{}");
+                    x.CompletionPriority.Should().Be(CompletionPriority.Medium);
+                    x.Text.Should().Be("{\n\t$0\n}");
+                });
+        }
+
+        [TestMethod]
+        public void GetModuleBodyCompletionSnippets_WithRequiredProperties_ShouldReturnEmptyAndRequiredPropertiesSnippets()
+        {
+            SnippetsProvider snippetsProvider = new SnippetsProvider();
+            var objectType = new ObjectType("objA", TypeSymbolValidationFlags.Default, new[]
+            {
+                new TypeProperty("name", LanguageConstants.String, TypePropertyFlags.Required),
+                new TypeProperty("location", LanguageConstants.String, TypePropertyFlags.Required),
+                new TypeProperty("id", LanguageConstants.String)
+            }, null);
+            TypeSymbol typeSymbol = new ModuleType("module", ResourceScope.Module, objectType);
+
+            IEnumerable<Snippet> snippets = snippetsProvider.GetModuleBodyCompletionSnippets(typeSymbol);
+
+            snippets.Should().SatisfyRespectively(
+                x =>
+                {
+                    x.Prefix.Should().Be("{}");
+                    x.Detail.Should().Be("{}");
+                    x.CompletionPriority.Should().Be(CompletionPriority.Medium);
+                    x.Text.Should().Be("{\n\t$0\n}");
+                },
+                x =>
+                {
+                    x.Prefix.Should().Be("required-properties");
+                    x.Detail.Should().Be("Required properties");
+                    x.CompletionPriority.Should().Be(CompletionPriority.Medium);
+                    x.Text.Should().BeEquivalentToIgnoringNewlines(@"{
+	name: $1
+	location: $2
 	$0
 }");
                 });

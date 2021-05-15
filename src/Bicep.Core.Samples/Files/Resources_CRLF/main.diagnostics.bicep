@@ -42,7 +42,7 @@ resource withExpressions 'Microsoft.Storage/storageAccounts@2017-10-01' = {
   properties: {
     supportsHttpsTrafficOnly: !false
     accessTier: true ? 'Hot' : 'Cold'
-//@[16:37) [BCP036 (Warning)] The property "accessTier" expected a value of type "'Cool' | 'Hot'" but the provided value is of type "'Cold' | 'Hot'". |true ? 'Hot' : 'Cold'|
+//@[16:37) [BCP036 (Warning)] The property "accessTier" expected a value of type "'Cool' | 'Hot' | null" but the provided value is of type "'Cold' | 'Hot'". |true ? 'Hot' : 'Cold'|
     encryption: {
       keySource: 'Microsoft.Storage'
       services: {
@@ -322,7 +322,9 @@ resource vnet 'Microsoft.Network/virtualNetworks@2020-06-01' = [for i in range(0
   name: 'vnet-${i}'
   properties: {
     subnets: [for j in range(0, 4): {
-      // #completionTest(0,1,2,3,4,5) -> subnetIdAndProperties #completionTest(6) -> subnetIdAndPropertiesNoColon
+      // #completionTest(0,1,2,3,4,5) -> subnetIdAndProperties
+     
+      // #completionTest(6) -> subnetIdAndPropertiesNoColon
       name: 'subnet-${i}-${j}'
     }]
   }
