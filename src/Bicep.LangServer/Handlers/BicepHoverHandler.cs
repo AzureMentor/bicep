@@ -1,9 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 using System.Collections.Immutable;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Bicep.Core;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
 using Bicep.LanguageServer.Providers;
@@ -17,6 +19,9 @@ namespace Bicep.LanguageServer.Handlers
     public class BicepHoverHandler : HoverHandlerBase
     {
         private readonly ISymbolResolver symbolResolver;
+
+        private const int MaxHoverMarkdownCodeBlockLength = 90000;
+        //actual limit for hover in VS code is 100,000 characters.
 
         public BicepHoverHandler(ISymbolResolver symbolResolver)
         {
@@ -52,61 +57,81 @@ namespace Bicep.LanguageServer.Handlers
         {
             // all of the generated markdown includes the language id to avoid VS code rendering 
             // with multiple borders
+            var compilation = result.Context.Compilation;
             switch (result.Symbol)
             {
                 case ParameterSymbol parameter:
-                    return $"```bicep\nparam {parameter.Name}: {parameter.Type}\n```";
+                    return CodeBlockWithDescriptionDecorator(
+                        $"param {parameter.Name}: {parameter.Type}", parameter.DeclaringParameter.TryGetDecoratorSyntax(LanguageConstants.MetadataDescriptionPropertyName, "sys"));
 
                 case VariableSymbol variable:
-                    return $"```bicep\nvar {variable.Name}: {variable.Type}\n```";
+                    return CodeBlockWithDescriptionDecorator($"var {variable.Name}: {variable.Type}", variable.DeclaringVariable.TryGetDecoratorSyntax(LanguageConstants.MetadataDescriptionPropertyName, "sys"));
 
                 case ResourceSymbol resource:
-                    return $"```bicep\nresource {resource.Name}\n{resource.Type}\n```";
+                    return CodeBlockWithDescriptionDecorator(
+                        $"resource {resource.Name}\n{resource.Type}", resource.DeclaringResource.TryGetDecoratorSyntax(LanguageConstants.MetadataDescriptionPropertyName, "sys"));
 
                 case ModuleSymbol module:
                     var filePath = SyntaxHelper.TryGetModulePath(module.DeclaringModule, out _);
                     if (filePath != null)
                     {
-                        return $"```bicep\nmodule {module.Name}\n{filePath}\n```";
+                        return CodeBlockWithDescriptionDecorator($"module {module.Name}\n'{filePath}'", module.DeclaringModule.TryGetDecoratorSyntax(LanguageConstants.MetadataDescriptionPropertyName, "sys"));
                     }
 
-                    return $"```bicep\nmodule {module.Name}\n```";
+                    return CodeBlockWithDescriptionDecorator($"module {module.Name}", module.DeclaringModule.TryGetDecoratorSyntax(LanguageConstants.MetadataDescriptionPropertyName, "sys"));
 
                 case OutputSymbol output:
-                    return $"```bicep\noutput {output.Name}: {output.Type}\n```";
+                    return CodeBlockWithDescriptionDecorator(
+                        $"output {output.Name}: {output.Type}", output.DeclaringOutput.TryGetDecoratorSyntax(LanguageConstants.MetadataDescriptionPropertyName, "sys"));
 
                 case NamespaceSymbol namespaceSymbol:
-                    return $"```bicep\n{namespaceSymbol.Name} namespace\n```";
+                    return CodeBlock($"{namespaceSymbol.Name} namespace");
 
                 case FunctionSymbol function when result.Origin is FunctionCallSyntax functionCall:
                     // it's not possible for a non-function call syntax to resolve to a function symbol
                     // but this simplifies the checks
-                    return GetFunctionMarkdown(function, functionCall.Arguments, result.Origin, result.Context.Compilation.GetEntrypointSemanticModel());
+                    return CodeBlock(GetFunctionMarkdown(function, functionCall.Arguments, result.Origin, result.Context.Compilation.GetEntrypointSemanticModel()));
 
                 case PropertySymbol property:
-                    var markdown =  $"```bicep\n{property.Name}: {property.Type}\n```\n";
-                    if (property.Description is not null)
-                    {
-                        markdown += $"{property.Description}\n";
-                    }
-
-                    return markdown;
+                    return CodeBlockWithDescription($"{property.Name}: {property.Type}", property.Description);
 
                 case FunctionSymbol function when result.Origin is InstanceFunctionCallSyntax functionCall:
-                    return GetFunctionMarkdown(function, functionCall.Arguments, result.Origin, result.Context.Compilation.GetEntrypointSemanticModel());
+                    return CodeBlock(
+                        GetFunctionMarkdown(function, functionCall.Arguments, result.Origin, result.Context.Compilation.GetEntrypointSemanticModel()));
 
                 case LocalVariableSymbol local:
-                    return $"```bicep\n{local.Name}: {local.Type}\n```";
+                    return CodeBlock($"{local.Name}: {local.Type}");
 
                 default:
                     return null;
             }
         }
 
+        
+        //we need to check for overflow due to using code blocks.
+        //if we reach limit in a code block vscode will truncate it automatically, the block will not be terminated so the hover will not be properly formatted
+        //therefore we need to check for the limit ourselves and truncate text inside code block, making sure it's terminated properly.
+        private static string CodeBlock(string content) =>
+        $"```bicep\n{(content.Length > MaxHoverMarkdownCodeBlockLength ? content.Substring(0, MaxHoverMarkdownCodeBlockLength) : content)}\n```\n";
+        
+        // Markdown needs two leading whitespaces before newline to insert a line break
+        private static string CodeBlockWithDescription(string content, string? description) => CodeBlock(content) + (description is not null ? $"{description.Replace("\n", "  \n")}\n" : string.Empty);
+
+        private static string CodeBlockWithDescriptionDecorator(string content, DecoratorSyntax? descriptionDecorator)
+        {
+            if (descriptionDecorator is not null &&
+                descriptionDecorator.Arguments.FirstOrDefault()?.Expression is StringSyntax stringSyntax
+                && stringSyntax.TryGetLiteralValue() is string description)
+            {
+                return CodeBlockWithDescription(content, description);
+            }
+            return CodeBlock(content);
+        }
+
         private static string GetFunctionMarkdown(FunctionSymbol function, ImmutableArray<FunctionArgumentSyntax> arguments, SyntaxBase functionCall, SemanticModel model)
         {
             var buffer = new StringBuilder();
-            buffer.Append($"```bicep\nfunction ");
+            buffer.Append($"function ");
             buffer.Append(function.Name);
             buffer.Append('(');
 
@@ -115,7 +140,7 @@ namespace Bicep.LanguageServer.Handlers
             {
                 var argumentType = model.GetTypeInfo(argumentSyntax);
                 buffer.Append(argumentType);
-                
+
                 buffer.Append(argumentSeparator);
             }
 
@@ -127,7 +152,6 @@ namespace Bicep.LanguageServer.Handlers
 
             buffer.Append("): ");
             buffer.Append(model.GetTypeInfo(functionCall));
-            buffer.Append("\n```");
 
             return buffer.ToString();
         }

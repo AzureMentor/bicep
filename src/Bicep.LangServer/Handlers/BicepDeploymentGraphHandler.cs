@@ -88,8 +88,8 @@ namespace Bicep.LanguageServer.Handlers
 
                     if (symbol is ResourceSymbol resourceSymbol)
                     {
-                        var resourceType = TryGetTypeReference(resourceSymbol)?.FullyQualifiedType ?? "<unknown>";
-                        var isCollection = resourceSymbol.Type is ArrayType { Item: ResourceType };
+                        var resourceType = resourceSymbol.TryGetResourceTypeReference()?.FullyQualifiedType ?? "<unknown>";
+                        var isCollection = resourceSymbol.IsCollection;
                         var resourceSpan = resourceSymbol.DeclaringResource.Span;
                         var range = resourceSpan.ToRange(context.LineStarts);
                         var resourceHasError = errors.Any(error => TextSpan.AreOverlapping(resourceSpan, error.Span));
@@ -105,7 +105,7 @@ namespace Bicep.LanguageServer.Handlers
                             ? Path.GetFullPath(Path.Combine(directory, moduleRelativePath))
                             : null;
 
-                        var isCollection = moduleSymbol.Type is ArrayType { Item: ModuleType };
+                        var isCollection = moduleSymbol.IsCollection;
                         var moduleSpan = moduleSymbol.DeclaringModule.Span;
                         var range = moduleSpan.ToRange(context.LineStarts);
                         var moduleHasError = errors.Any(error => TextSpan.AreOverlapping(moduleSpan, error.Span));
@@ -114,10 +114,11 @@ namespace Bicep.LanguageServer.Handlers
 
                         if (moduleFilePath is not null &&
                             moduleSymbol.TryGetSemanticModel(out var moduleSemanticModel, out var _) &&
-                            (moduleSemanticModel.Root.ResourceDeclarations.Any() || moduleSemanticModel.Root.ModuleDeclarations.Any()))
+                            moduleSemanticModel is SemanticModel bicepModel &&
+                            (bicepModel.Root.ResourceDeclarations.Any() || bicepModel.Root.ModuleDeclarations.Any()))
                         {
                             hasChildren = true;
-                            queue.Enqueue((moduleSemanticModel, moduleFilePath, id));
+                            queue.Enqueue((bicepModel, moduleFilePath, id));
                         }
 
                         nodesBySymbol[symbol] = new BicepDeploymentGraphNode(id, "<module>", isCollection, range, hasChildren, moduleHasError, moduleFilePath);
@@ -151,12 +152,5 @@ namespace Bicep.LanguageServer.Handlers
                 edges.OrderBy(edge => $"{edge.SourceId}>{edge.TargetId}"),
                 entrySemanticModel.GetAllDiagnostics().Count(x => x.Level == DiagnosticLevel.Error));
         }
-
-        private static ResourceTypeReference? TryGetTypeReference(ResourceSymbol resourceSymbol) => resourceSymbol.Type switch
-        {
-            ResourceType resourceType => resourceType.TypeReference,
-            ArrayType { Item: ResourceType resourceType } => resourceType.TypeReference,
-            _ => null
-        };
     }
 }

@@ -4,6 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
 using Bicep.Core.Parsing;
 using Bicep.Core.Resources;
 using Bicep.Core.TypeSystem;
@@ -15,8 +17,19 @@ namespace Bicep.Core
         public const string LanguageId = "bicep";
         public const string LanguageFileExtension = ".bicep";
 
+        public const string JsonLanguageId = "json";
+        public const string JsoncLanguageId = "jsonc";
+        public const string ArmTemplateLanguageId = "arm-template"; // Provided by the ARM Tools VSCode extension.
+
+        public const string JsonFileExtension = ".json";
+        public const string JsoncFileExtension = ".jsonc";
+        public const string ArmTemplateFileExtension = ".arm";
+
+        public const string Build = "build";
+
         public const int MaxParameterCount = 256;
         public const int MaxIdentifierLength = 255;
+        public const int MaxLiteralCharacterLimit = 131072;
 
         public const string ErrorName = "<error>";
         public const string MissingName = "<missing>";
@@ -38,9 +51,11 @@ namespace Bicep.Core
         public const string TargetScopeTypeSubscription = "subscription";
         public const string TargetScopeTypeResourceGroup = "resourceGroup";
 
-        public static ImmutableSortedSet<string> DeclarationKeywords = new[] { ParameterKeyword, VariableKeyword, ResourceKeyword, OutputKeyword, ModuleKeyword }.ToImmutableSortedSet(StringComparer.Ordinal);
+        public static readonly Regex ArmTemplateSchemaRegex = new(@"https?:\/\/schema\.management\.azure\.com\/schemas\/([^""\/]+\/[a-zA-Z]*[dD]eploymentTemplate\.json)#?");
 
-        public static ImmutableSortedSet<string> ContextualKeywords = DeclarationKeywords
+        public static readonly ImmutableSortedSet<string> DeclarationKeywords = new[] { ParameterKeyword, VariableKeyword, ResourceKeyword, OutputKeyword, ModuleKeyword }.ToImmutableSortedSet(StringComparer.Ordinal);
+
+        public static readonly ImmutableSortedSet<string> ContextualKeywords = DeclarationKeywords
             .Add(TargetScopeKeyword)
             .Add(IfKeyword)
             .Add(ForKeyword)
@@ -57,13 +72,22 @@ namespace Bicep.Core
             [NullKeyword] = TokenType.NullKeyword
         }.ToImmutableDictionary();
 
+        // Decorators
         public const string ParameterAllowedPropertyName = "allowed";
-        public const string ParameterDefaultPropertyName = "default";
         public const string ParameterSecurePropertyName = "secure";
+        public const string ParameterMinValuePropertyName = "minValue";
+        public const string ParameterMaxValuePropertyName = "maxValue";
+        public const string ParameterMinLengthPropertyName = "minLength";
+        public const string ParameterMaxLengthPropertyName = "maxLength";
+        public const string ParameterMetadataPropertyName = "metadata";
+        public const string MetadataDescriptionPropertyName = "description";
+        public const string BatchSizePropertyName = "batchSize";
 
+        // module properties
         public const string ModuleParamsPropertyName = "params";
         public const string ModuleOutputsPropertyName = "outputs";
 
+        // resource properties
         public const string ResourceIdPropertyName = "id";
         public const string ResourceLocationPropertyName = "location";
         public const string ResourceNamePropertyName = "name";
@@ -72,7 +96,10 @@ namespace Bicep.Core
         public const string ResourceScopePropertyName = "scope";
         public const string ResourceParentPropertyName = "parent";
         public const string ResourceDependsOnPropertyName = "dependsOn";
+
+        // types
         public const string TypeNameString = "string";
+        public const string TypeNameModule = "module";
 
         /*
          * The following top-level properties must be set deploy-time constant values,
@@ -117,7 +144,9 @@ namespace Bicep.Core
         public const string StringHoleOpen = "${";
         public const string StringHoleClose = "}";
 
+        public const string AnyFunction = "any";
         public static readonly TypeSymbol Any = new AnyType();
+
         public static readonly TypeSymbol ResourceRef = CreateResourceScopeReference(ResourceScope.Module | ResourceScope.Resource);
 
         // type used for the item type in the dependsOn array type
@@ -140,6 +169,17 @@ namespace Bicep.Core
         public static readonly TypeSymbol Bool = new PrimitiveType("bool", TypeSymbolValidationFlags.Default);
         public static readonly TypeSymbol Null = new PrimitiveType(NullKeyword, TypeSymbolValidationFlags.Default);
         public static readonly TypeSymbol Array = new ArrayType("array");
+        //Type for available loadTextContent encoding
+
+        public static readonly ImmutableArray<(string name, Encoding encoding)> SupportedEncodings = new[]{
+            ("us-ascii", Encoding.ASCII),
+            ("iso-8859-1", Encoding.GetEncoding("iso-8859-1")),
+            ("utf-8", Encoding.UTF8),
+            ("utf-16BE", Encoding.BigEndianUnicode),
+            ("utf-16", Encoding.Unicode)
+        }.ToImmutableArray();
+
+        public static readonly TypeSymbol LoadTextContentEncodings = UnionType.Create(SupportedEncodings.Select(s => new StringLiteralType(s.name)));
 
         // declares the description property but also allows any other property of any type
         public static readonly TypeSymbol ParameterModifierMetadata = new ObjectType(nameof(ParameterModifierMetadata), TypeSymbolValidationFlags.Default, CreateParameterModifierMetadataProperties(), Any, TypePropertyFlags.Constant);
@@ -157,48 +197,6 @@ namespace Bicep.Core
             }
 
             return null;
-        }
-
-        public static TypeSymbol CreateParameterModifierType(TypeSymbol primitiveType, TypeSymbol allowedValuesType)
-        {
-            return new ObjectType($"ParameterModifier<{allowedValuesType.Name}>", TypeSymbolValidationFlags.Default, CreateParameterModifierProperties(primitiveType, allowedValuesType), additionalPropertiesType: null);
-        }
-
-        private static IEnumerable<TypeProperty> CreateParameterModifierProperties(TypeSymbol primitiveType, TypeSymbol allowedValuesType)
-        {
-            /*
-             * The primitiveType may be set to "any" when there's a parse error in the declared type syntax node.
-             * In that case, we cannot determine which modifier properties are allowed, so we allow them all.
-             */
-
-            if (ReferenceEquals(primitiveType, String) || ReferenceEquals(primitiveType, Object) || ReferenceEquals(primitiveType, Any))
-            {
-                // only string and object types have secure equivalents
-                yield return new TypeProperty(ParameterSecurePropertyName, Bool, TypePropertyFlags.Constant);
-            }
-
-            // default value is allowed to have expressions
-            yield return new TypeProperty(ParameterDefaultPropertyName, allowedValuesType);
-
-            //if (premitiveType is ArrayType && allowedValuesType)
-            allowedValuesType = allowedValuesType is TypedArrayType ? allowedValuesType : new TypedArrayType(allowedValuesType, TypeSymbolValidationFlags.Default);
-            yield return new TypeProperty(ParameterAllowedPropertyName, allowedValuesType, TypePropertyFlags.Constant);
-
-            if (ReferenceEquals(primitiveType, Int) || ReferenceEquals(primitiveType, Any))
-            {
-                // value constraints are valid on integer parameters only
-                yield return new TypeProperty("minValue", Int, TypePropertyFlags.Constant);
-                yield return new TypeProperty("maxValue", Int, TypePropertyFlags.Constant);
-            }
-
-            if (ReferenceEquals(primitiveType, String) || ReferenceEquals(primitiveType, Array) || ReferenceEquals(primitiveType, Any))
-            {
-                // strings and arrays can have length constraints
-                yield return new TypeProperty("minLength", Int, TypePropertyFlags.Constant);
-                yield return new TypeProperty("maxLength", Int, TypePropertyFlags.Constant);
-            }
-
-            yield return new TypeProperty("metadata", ParameterModifierMetadata, TypePropertyFlags.Constant);
         }
 
         private static IEnumerable<TypeProperty> CreateParameterModifierMetadataProperties()
@@ -300,6 +298,20 @@ namespace Bicep.Core
                 yield return prop;
             }
 
+            foreach (var prop in KnownTopLevelResourceProperties())
+            {
+                yield return prop;
+            }
+        }
+
+        public static IEnumerable<TypeProperty> KnownTopLevelResourceProperties()
+        {
+            yield return new TypeProperty("location", String);
+
+            yield return new TypeProperty("tags", Tags);
+
+            yield return new TypeProperty("properties", Object);
+
             // TODO: Model type fully
             yield return new TypeProperty("sku", Object);
 
@@ -308,8 +320,6 @@ namespace Bicep.Core
 
             var stringArray = new TypedArrayType(String, TypeSymbolValidationFlags.Default);
             yield return new TypeProperty("managedByExtended", stringArray);
-
-            yield return new TypeProperty("location", String);
 
             // TODO: Model type fully
             yield return new TypeProperty("extendedLocation", Object);
@@ -320,18 +330,12 @@ namespace Bicep.Core
 
             yield return new TypeProperty("eTag", String);
 
-            yield return new TypeProperty("tags", Tags);
-
             // TODO: Model type fully
             yield return new TypeProperty("scale", Object);
 
             // TODO: Model type fully
             yield return new TypeProperty("identity", Object);
 
-            yield return new TypeProperty("properties", Object);
-
-            var resourceRefArray = new TypedArrayType(ResourceRef, TypeSymbolValidationFlags.Default);
-            yield return new TypeProperty(ResourceDependsOnPropertyName, resourceRefArray, TypePropertyFlags.WriteOnly | TypePropertyFlags.DisallowAny);
         }
     }
 }

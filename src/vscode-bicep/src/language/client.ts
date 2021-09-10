@@ -44,6 +44,9 @@ async function launchLanguageService(
   const serverExecutable: lsp.Executable = {
     command: dotnetCommandPath,
     args: [languageServerPath],
+    options: {
+      env: process.env,
+    },
   };
 
   const serverOptions: lsp.ServerOptions = {
@@ -74,6 +77,7 @@ async function launchLanguageService(
       fileEvents: [
         vscode.workspace.createFileSystemWatcher("**/"), // folder changes
         vscode.workspace.createFileSystemWatcher("**/*.bicep"), // .bicep file changes
+        vscode.workspace.createFileSystemWatcher("**/*.{json,jsonc,arm}"), // ARM template file changes
       ],
     },
   };

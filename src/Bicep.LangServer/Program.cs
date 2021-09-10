@@ -1,28 +1,28 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 using System;
+using System.Runtime;
 using System.Threading;
 using System.Threading.Tasks;
-using Bicep.Core.FileSystem;
-using Bicep.Core.TypeSystem.Az;
+using Bicep.Core.Utils;
 
 namespace Bicep.LanguageServer
 {
     public class Program
     {
-        public static async Task Main(string[] args)
+        public static async Task Main()
             => await RunWithCancellationAsync(async cancellationToken =>
             {
+                string profilePath = DirHelper.GetTempPath();
+                ProfileOptimization.SetProfileRoot(profilePath);
+                ProfileOptimization.StartProfile("bicepserver.profile");
+
                 // the server uses JSON-RPC over stdin & stdout to communicate,
                 // so be careful not to use console for logging!
                 var server = new Server(
                     Console.OpenStandardInput(),
                     Console.OpenStandardOutput(),
-                    new Server.CreationOptions
-                    {
-                        ResourceTypeProvider = AzResourceTypeProvider.CreateWithAzTypes(),
-                        FileResolver = new FileResolver(),
-                    });
+                    new Server.CreationOptions());
 
                 await server.RunAsync(cancellationToken);
             });

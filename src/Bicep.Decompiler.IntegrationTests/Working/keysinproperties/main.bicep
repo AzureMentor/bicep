@@ -1,8 +1,8 @@
+@description('Storage account type')
 @allowed([
   'Standard_LRS'
   'Standard_GRS'
 ])
-@description('Storage account type')
 param storageAccountType string = 'Standard_LRS'
 
 @description('Name of file share to be created')
@@ -39,7 +39,7 @@ resource roleDefinitionName 'Microsoft.Authorization/roleAssignments@2020-04-01-
     roleDefinitionId: roleDefinitionId
     principalId: identityName.properties.principalId
     scope: resourceGroup().id
-//@[4:9) [BCP073 (Warning)] The property "scope" is read-only. Expressions cannot be assigned to read-only properties. |scope|
+//@[4:9) [BCP073 (Warning)] The property "scope" is read-only. Expressions cannot be assigned to read-only properties. (CodeDescription: none) |scope|
     principalType: 'ServicePrincipal'
   }
 }

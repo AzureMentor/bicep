@@ -1,13 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Immutable;
-using System.Linq;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
-using Bicep.Core.TypeSystem;
+using System;
 
 namespace Bicep.Core.Emit
 {
@@ -20,6 +17,30 @@ namespace Bicep.Core.Emit
         private readonly SemanticModel semanticModel;
 
         private SyntaxBase? activeLoopCapableTopLevelDeclaration = null;
+
+        private enum PropertyLoopCapability
+        {
+            /// <summary>
+            /// Node is not derived from expression syntax so property loop capability depends on other nodes in the hierarchy.
+            /// </summary>
+            Inconclusive,
+
+            /// <summary>
+            /// Property loops are not allowed due to nodes that prevent such usage.
+            /// </summary>
+            DisallowedInExpression,
+
+            /// <summary>
+            /// Property loops may be allowed.
+            /// </summary>
+            PotentiallyAllowed
+        }
+
+        // this is used to block property for-expression usages in object properties that are children of operators or function calls
+        // null - not in an expression
+        // true - property loop allowed IF other rules are satisfied as well
+        // false - property loop definitely NOT allowed
+        private PropertyLoopCapability isPropertyLoopPotentiallyAllowed = PropertyLoopCapability.Inconclusive;
 
         private int propertyLoopCount = 0;
 
@@ -39,7 +60,7 @@ namespace Bicep.Core.Emit
             var visitor = new ForSyntaxValidatorVisitor(semanticModel, diagnosticWriter);
 
             // visiting writes diagnostics in some cases
-            visitor.Visit(semanticModel.SyntaxTree.ProgramSyntax);
+            visitor.Visit(semanticModel.SourceFile.ProgramSyntax);
         }
 
         public static bool IsAddingPropertyLoopAllowed(SemanticModel semanticModel, ObjectPropertySyntax property)
@@ -48,7 +69,7 @@ namespace Bicep.Core.Emit
             int propertyLoopCount = 0;
             while(current is not null)
             {
-                var parent = semanticModel.SyntaxTree.Hierarchy.GetParent(current);
+                var parent = semanticModel.SourceFile.Hierarchy.GetParent(current);
                 if (current is ForSyntax @for && IsPropertyLoop(parent, @for))
                 {
                     ++propertyLoopCount;
@@ -126,16 +147,6 @@ namespace Bicep.Core.Emit
                     this.diagnosticWriter.Write(DiagnosticBuilder.ForPosition(syntax.ForKeyword).ForExpressionsNotSupportedHere());
                     break;
 
-                case true when this.activeLoopCapableTopLevelDeclaration is VariableDeclarationSyntax variable && InlineDependencyVisitor.ShouldInlineVariable(this.semanticModel, variable, out var variableChain):
-                    // this is a loop variable that has a dependency on functions that are not supported in JSON variables
-                    // we are initially blocking this because not all cases can be generated in the JSON
-                    
-                    // unable to get a detailed variable dependency chain
-                    // log a generic error instead and put it on the "for" keyword
-                    this.diagnosticWriter.Write(DiagnosticBuilder.ForPosition(syntax.ForKeyword).VariableLoopsRuntimeDependencyNotAllowed(variableChain));
-
-                    break;
-
                 case null:
                     // this is a property loop
                     this.propertyLoopCount += 1;
@@ -196,6 +207,33 @@ namespace Bicep.Core.Emit
             base.VisitResourceAccessSyntax(syntax);
         }
 
+        protected override void VisitInternal(SyntaxBase node)
+        {
+            var previousIsPropertyLoopPotentiallyAllowed = this.isPropertyLoopPotentiallyAllowed;
+
+            var isAllowed = IsPropertyLoopUsagePossibleInside(node);
+            this.isPropertyLoopPotentiallyAllowed = (previousIsPropertyLoopPotentiallyAllowed, isAllowed) switch
+            {
+                // expression nodes live inside non-expression nodes, so any value replaces null
+                (PropertyLoopCapability.Inconclusive, _) => isAllowed,
+
+                // once it's not allowed, it can't be allowed deeper in the tree
+                (PropertyLoopCapability.DisallowedInExpression, _) => PropertyLoopCapability.DisallowedInExpression,
+
+                // once we are in an expression, the children can only be expression nodes, so true or false can replace the true value
+                (PropertyLoopCapability.PotentiallyAllowed, not PropertyLoopCapability.Inconclusive) => isAllowed,
+
+                // non-expression nodes (like tokens) can live inside an expression node, but do not alter the decision
+                (PropertyLoopCapability.PotentiallyAllowed, PropertyLoopCapability.Inconclusive) => previousIsPropertyLoopPotentiallyAllowed,
+
+                _ => throw new NotImplementedException("Unexpected value of property loop capability.")
+            };
+
+            base.VisitInternal(node);
+
+            this.isPropertyLoopPotentiallyAllowed = previousIsPropertyLoopPotentiallyAllowed;
+        }
+
         private void ValidateDirectAccessToResourceOrModuleCollection(SyntaxBase variableOrResourceAccessSyntax)
         {
             var symbol = this.semanticModel.GetSymbolInfo(variableOrResourceAccessSyntax);
@@ -236,9 +274,9 @@ namespace Bicep.Core.Emit
             }
 
             // could be a property loop
-            if(!this.IsPropertyLoop(syntax))
+            if(this.isPropertyLoopPotentiallyAllowed == PropertyLoopCapability.DisallowedInExpression || !this.IsPropertyLoop(syntax))
             {
-                // not a proeprty loop
+                // not a property loop or property loop inside an operator or function call
                 return false;
             }
 
@@ -248,7 +286,7 @@ namespace Bicep.Core.Emit
 
         private bool IsPropertyLoop(ForSyntax syntax)
         {
-            var parent = this.semanticModel.SyntaxTree.Hierarchy.GetParent(syntax);
+            var parent = this.semanticModel.SourceFile.Hierarchy.GetParent(syntax);
             return IsPropertyLoop(parent, syntax);
         }
 
@@ -257,9 +295,35 @@ namespace Bicep.Core.Emit
             return parent is ObjectPropertySyntax property && ReferenceEquals(property.Value, syntax);
         }
 
+        /// <summary>
+        /// We cannot compile for-expressions when they are inside function calls or operators. This function
+        /// checks if the specified node allows for-expression usage.
+        /// </summary>
+        /// <param name="syntax">The node to check</param>
+        /// <returns></returns>
+        private static PropertyLoopCapability IsPropertyLoopUsagePossibleInside(SyntaxBase syntax)
+        {
+            // property loops can be used as long as the path to get to the property is constructed via object or array literals
+            // operators or function calls prevent usage of property loops inside
+            switch(syntax)
+            {
+                case not ExpressionSyntax:
+                    return PropertyLoopCapability.Inconclusive;
+
+                case ObjectSyntax:
+                case ObjectPropertySyntax:
+                case ArraySyntax:
+                case ArrayItemSyntax:
+                    return PropertyLoopCapability.PotentiallyAllowed;
+
+                default:
+                    return PropertyLoopCapability.DisallowedInExpression;
+            }
+        }
+
         private bool IsTopLevelLoop(ForSyntax syntax)
         {
-            var parent = this.semanticModel.SyntaxTree.Hierarchy.GetParent(syntax);
+            var parent = this.semanticModel.SourceFile.Hierarchy.GetParent(syntax);
 
             switch(parent)
             {

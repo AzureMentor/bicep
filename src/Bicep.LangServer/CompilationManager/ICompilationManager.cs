@@ -10,7 +10,9 @@ namespace Bicep.LanguageServer.CompilationManager
     {
         void HandleFileChanges(IEnumerable<FileEvent> fileEvents);
 
-        void UpsertCompilation(DocumentUri uri, int? version, string text);
+        void RefreshCompilation(DocumentUri uri);
+
+        void UpsertCompilation(DocumentUri uri, int? version, string text, string? languageId = null);
 
         void CloseCompilation(DocumentUri uri);
 

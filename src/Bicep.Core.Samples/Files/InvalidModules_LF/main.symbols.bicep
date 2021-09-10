@@ -702,3 +702,48 @@ module secureModule1 'moduleb.bicep' = {
   }
 }
 
+module secureModule2 'BAD_MODULE_PATH.bicep' = {
+//@[7:20) Module secureModule2. Type: error. Declaration start char: 0, length: 134
+  name: 'secureModule2'
+  params: {       
+    secret: kv.getSecret('mySecret')
+  }
+}
+
+module issue3000 'empty.bicep' = {
+//@[7:16) Module issue3000. Type: module. Declaration start char: 0, length: 305
+  name: 'issue3000Module'
+  params: {}
+  identity: {
+    type: 'SystemAssigned'
+  }
+  extendedLocation: {}
+  sku: {}
+  kind: 'V1'
+  managedBy: 'string'
+  mangedByExtended: [
+   'str1'
+   'str2'
+  ]
+  zones: [
+   'str1'
+   'str2'
+  ]
+  plan: {}
+  eTag: ''
+  scale: {}  
+}
+
+module invalidJsonMod 'modulec.json' = {
+//@[7:21) Module invalidJsonMod. Type: module. Declaration start char: 0, length: 42
+}
+
+module jsonModMissingParam 'moduled.json' = {
+//@[7:26) Module jsonModMissingParam. Type: module. Declaration start char: 0, length: 119
+  name: 'jsonModMissingParam'
+  params: {
+    foo: 123
+    baz: 'C'
+  }
+}
+

@@ -58,7 +58,10 @@
     "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
-      "newText": "az"
+      "newText": "az."
+    },
+    "command": {
+      "command": "editor.action.triggerSuggest"
     }
   },
   {
@@ -498,6 +501,40 @@
     }
   },
   {
+    "label": "loadFileAsBase64",
+    "kind": "function",
+    "detail": "loadFileAsBase64()",
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "3_loadFileAsBase64",
+    "insertTextFormat": "snippet",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "loadFileAsBase64($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
+    }
+  },
+  {
+    "label": "loadTextContent",
+    "kind": "function",
+    "detail": "loadTextContent()",
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "3_loadTextContent",
+    "insertTextFormat": "snippet",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "loadTextContent($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
+    }
+  },
+  {
     "label": "managementGroup",
     "kind": "function",
     "detail": "managementGroup()",
@@ -814,7 +851,10 @@
     "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
-      "newText": "sys"
+      "newText": "sys."
+    },
+    "command": {
+      "command": "editor.action.triggerSuggest"
     }
   },
   {

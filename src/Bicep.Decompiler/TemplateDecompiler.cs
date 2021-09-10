@@ -1,29 +1,41 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+
+using System;
+using System.Collections.Generic;
+using System.Collections.Immutable;
 using Bicep.Core.Decompiler.Rewriters;
 using Bicep.Core.Extensions;
 using Bicep.Core.FileSystem;
+using Bicep.Core.Modules;
 using Bicep.Core.PrettyPrint;
 using Bicep.Core.PrettyPrint.Options;
+using Bicep.Core.Registry;
 using Bicep.Core.Rewriters;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
 using Bicep.Core.TypeSystem;
 using Bicep.Core.Workspaces;
-using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
 
 namespace Bicep.Decompiler
 {
-    public static class TemplateDecompiler
+    public class TemplateDecompiler
     {
-        public static (Uri entrypointUri, ImmutableDictionary<Uri, string> filesToSave) DecompileFileWithModules(IResourceTypeProvider resourceTypeProvider, IFileResolver fileResolver, Uri entryJsonUri)
+        private readonly IResourceTypeProvider resourceTypeProvider;
+        private readonly IFileResolver fileResolver;
+        private readonly IModuleRegistryProvider registryProvider;
+
+        public TemplateDecompiler(IResourceTypeProvider resourceTypeProvider, IFileResolver fileResolver, IModuleRegistryProvider registryProvider)
+        {
+            this.resourceTypeProvider = resourceTypeProvider;
+            this.fileResolver = fileResolver;
+            this.registryProvider = registryProvider;
+        }
+
+        public (Uri entrypointUri, ImmutableDictionary<Uri, string> filesToSave) DecompileFileWithModules(Uri entryJsonUri, Uri entryBicepUri)
         {
             var workspace = new Workspace();
             var decompileQueue = new Queue<(Uri, Uri)>();
-            var entryBicepUri = PathHelper.ChangeToBicepExtension(entryJsonUri);
 
             decompileQueue.Enqueue((entryJsonUri, entryBicepUri));
 
@@ -36,7 +48,7 @@ namespace Bicep.Decompiler
                     throw new InvalidOperationException($"Cannot decompile the file with .bicep extension: {jsonUri}.");
                 }
 
-                if (workspace.TryGetSyntaxTree(bicepUri, out _))
+                if (workspace.TryGetSourceFile(bicepUri, out _))
                 {
                     continue;
                 }
@@ -46,37 +58,37 @@ namespace Bicep.Decompiler
                     throw new InvalidOperationException($"Failed to read {jsonUri}");
                 }
 
-                var (program, jsonTemplateUrisByModule) = TemplateConverter.DecompileTemplate(workspace, fileResolver, jsonUri, jsonInput);
-                var syntaxTree = new SyntaxTree(bicepUri, ImmutableArray<int>.Empty, program);
-                workspace.UpsertSyntaxTrees(syntaxTree.AsEnumerable());
+                var (program, jsonTemplateUrisByModule) = TemplateConverter.DecompileTemplate(workspace, fileResolver, bicepUri, jsonInput);
+                var bicepFile = new BicepFile(bicepUri, ImmutableArray<int>.Empty, program);
+                workspace.UpsertSourceFile(bicepFile);
 
                 foreach (var module in program.Children.OfType<ModuleDeclarationSyntax>())
                 {
                     var moduleRelativePath = SyntaxHelper.TryGetModulePath(module, out _);
                     if (moduleRelativePath == null ||
-                        !SyntaxTreeGroupingBuilder.ValidateModulePath(moduleRelativePath, out _) ||
+                        !LocalModuleReference.Validate(moduleRelativePath, out _) ||
                         !Uri.TryCreate(bicepUri, moduleRelativePath, out var moduleUri))
                     {
                         // Do our best, but keep going if we fail to resolve a module file
                         continue;
                     }
 
-                    if (!workspace.TryGetSyntaxTree(moduleUri, out _) && jsonTemplateUrisByModule.TryGetValue(module, out var linkedTemplateUri))
+                    if (!workspace.TryGetSourceFile(moduleUri, out _) && jsonTemplateUrisByModule.TryGetValue(module, out var linkedTemplateUri))
                     {
                         decompileQueue.Enqueue((linkedTemplateUri, moduleUri));
                     }
                 }
             }
 
-            RewriteSyntax(resourceTypeProvider, workspace, entryBicepUri, semanticModel => new ParentChildResourceNameRewriter(semanticModel));
-            RewriteSyntax(resourceTypeProvider, workspace, entryBicepUri, semanticModel => new DependsOnRemovalRewriter(semanticModel));
-            RewriteSyntax(resourceTypeProvider, workspace, entryBicepUri, semanticModel => new ForExpressionSimplifierRewriter(semanticModel));
+            RewriteSyntax(workspace, entryBicepUri, semanticModel => new ParentChildResourceNameRewriter(semanticModel));
+            RewriteSyntax(workspace, entryBicepUri, semanticModel => new DependsOnRemovalRewriter(semanticModel));
+            RewriteSyntax(workspace, entryBicepUri, semanticModel => new ForExpressionSimplifierRewriter(semanticModel));
             for (var i = 0; i < 5; i++)
             {
                 // This is a little weird. If there are casing issues nested inside casing issues (e.g. in an object), then the inner casing issue will have no type information
                 // available, as the compilation will not have associated a type with it (since there was no match on the outer object). So we need to correct the outer issue first,
                 // and then move to the inner one. We need to recompute the entire compilation to do this. It feels simpler to just do this in passes over the file, rather than on demand.
-                if (!RewriteSyntax(resourceTypeProvider, workspace, entryBicepUri, semanticModel => new TypeCasingFixerRewriter(semanticModel)))
+                if (!RewriteSyntax(workspace, entryBicepUri, semanticModel => new TypeCasingFixerRewriter(semanticModel)))
                 {
                     break;
                 }
@@ -88,35 +100,43 @@ namespace Bicep.Decompiler
         private static ImmutableDictionary<Uri, string> PrintFiles(Workspace workspace)
         {
             var filesToSave = new Dictionary<Uri, string>();
-            foreach (var (fileUri, syntaxTree) in workspace.GetActiveSyntaxTrees())
+            foreach (var (fileUri, sourceFile) in workspace.GetActiveSourceFilesByUri())
             {
-                filesToSave[fileUri] = PrettyPrinter.PrintProgram(syntaxTree.ProgramSyntax, new PrettyPrintOptions(NewlineOption.LF, IndentKindOption.Space, 2, false));
+                if (sourceFile is not BicepFile bicepFile)
+                {
+                    continue;
+                }
+
+                filesToSave[fileUri] = PrettyPrinter.PrintProgram(bicepFile.ProgramSyntax, new PrettyPrintOptions(NewlineOption.LF, IndentKindOption.Space, 2, false));
             }
 
             return filesToSave.ToImmutableDictionary();
         }
 
-        private static bool RewriteSyntax(IResourceTypeProvider resourceTypeProvider, Workspace workspace, Uri entryUri, Func<SemanticModel, SyntaxRewriteVisitor> rewriteVisitorBuilder)
+        private bool RewriteSyntax(Workspace workspace, Uri entryUri, Func<SemanticModel, SyntaxRewriteVisitor> rewriteVisitorBuilder)
         {
             var hasChanges = false;
-            var syntaxTreeGrouping = SyntaxTreeGroupingBuilder.Build(new FileResolver(), workspace, entryUri);
-            var compilation = new Compilation(resourceTypeProvider, syntaxTreeGrouping);
+            var dispatcher = new ModuleDispatcher(this.registryProvider);
+            var sourceFileGrouping = SourceFileGroupingBuilder.Build(fileResolver, dispatcher, workspace, entryUri);
+            var compilation = new Compilation(resourceTypeProvider, sourceFileGrouping);
 
-            foreach (var (fileUri, syntaxTree) in workspace.GetActiveSyntaxTrees())
+            foreach (var (fileUri, sourceFile) in workspace.GetActiveSourceFilesByUri())
             {
-                var entryFile = syntaxTreeGrouping.EntryPoint;
-                var entryModel = compilation.GetEntrypointSemanticModel();
+                if (sourceFile is not BicepFile bicepFile)
+                {
+                    throw new InvalidOperationException("Expected a bicep source file.");
+                }
 
-                var newProgramSyntax = rewriteVisitorBuilder(compilation.GetSemanticModel(syntaxTree)).Rewrite(syntaxTree.ProgramSyntax);
+                var newProgramSyntax = rewriteVisitorBuilder(compilation.GetSemanticModel(bicepFile)).Rewrite(bicepFile.ProgramSyntax);
 
-                if (!object.ReferenceEquals(syntaxTree.ProgramSyntax, newProgramSyntax))
+                if (!object.ReferenceEquals(bicepFile.ProgramSyntax, newProgramSyntax))
                 {
                     hasChanges = true;
-                    var newSyntaxTree = new SyntaxTree(fileUri, ImmutableArray<int>.Empty, newProgramSyntax);
-                    workspace.UpsertSyntaxTrees(newSyntaxTree.AsEnumerable());
+                    var newFile = new BicepFile(fileUri, ImmutableArray<int>.Empty, newProgramSyntax);
+                    workspace.UpsertSourceFile(newFile);
 
-                    syntaxTreeGrouping = SyntaxTreeGroupingBuilder.Build(new FileResolver(), workspace, entryUri);
-                    compilation = new Compilation(resourceTypeProvider, syntaxTreeGrouping);
+                    sourceFileGrouping = SourceFileGroupingBuilder.Build(fileResolver, dispatcher, workspace, entryUri);
+                    compilation = new Compilation(resourceTypeProvider, sourceFileGrouping);
                 }
             }
 

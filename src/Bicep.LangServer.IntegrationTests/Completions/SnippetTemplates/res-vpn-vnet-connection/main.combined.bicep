@@ -1,13 +1,21 @@
+// $1 = vpnVnetConnection
+// $2 = 'name'
+// $3 = 'virtualNetworkGateways.id'
+// $4 = 'localNetworkGateways.id'
+// $5 = IPsec
+// $6 = 0
+// $7 = 'sharedkey'
+
 resource vpnVnetConnection 'Microsoft.Network/connections@2020-11-01' = {
   name: 'name'
   location: resourceGroup().location
   properties: {
     virtualNetworkGateway1: {
-      id: resourceId('Microsoft.Network/virtualNetworkGateways', 'vnetGateway')
+      id: 'virtualNetworkGateways.id'
       properties:{}
     }
     localNetworkGateway2: {
-      id: resourceId('Microsoft.Network/localNetworkGateways', 'localGateway')
+      id: 'localNetworkGateways.id'
       properties:{}
     }
     connectionType: 'IPsec'
@@ -15,4 +23,5 @@ resource vpnVnetConnection 'Microsoft.Network/connections@2020-11-01' = {
     sharedKey: 'sharedkey'
   }
 }
+// Insert snippet here
 

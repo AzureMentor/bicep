@@ -51,11 +51,11 @@ namespace Bicep.LangServer.IntegrationTests
             var diagsListener = new MultipleMessageListener<PublishDiagnosticsParams>();
             var client = await IntegrationTestHelper.StartServerWithClientConnectionAsync(
                 this.TestContext,
-                options => 
+                options =>
                 {
                     options.OnPublishDiagnostics(diags => diagsListener.AddMessage(diags));
                 },
-                fileResolver: new InMemoryFileResolver(fileSystemDict));
+                creationOptions: new LanguageServer.Server.CreationOptions(FileResolver: new InMemoryFileResolver(fileSystemDict)));
 
             var mainUri = DocumentUri.FromFileSystemPath("/path/to/main.bicep");
             fileSystemDict[mainUri.ToUri()] = @"
@@ -88,7 +88,8 @@ param requiredIpnut string
 
                 var diagsParams = await diagsListener.WaitNext();
                 diagsParams.Uri.Should().Be(moduleUri);
-                diagsParams.Diagnostics.Should().Contain(x => x.Code == ParametersMustBeUsedRule.Code);
+                // note that linter diagnostics do a fix up on the "Code" so check the expected documentation Uri
+                diagsParams.Diagnostics.Should().Contain(x => x.CodeDescription!.Href == new NoUnusedParametersRule().Uri);
 
                 diagsParams = await diagsListener.WaitNext();
                 diagsParams.Uri.Should().Be(mainUri);
@@ -105,8 +106,9 @@ param requiredInput string
 
                 var diagsParams = await diagsListener.WaitNext();
                 diagsParams.Uri.Should().Be(moduleUri);
-                diagsParams.Diagnostics.Should().Contain(x => x.Code == ParametersMustBeUsedRule.Code);
-                
+                // note that linter diagnostics do a fix up on the "Code" so check the expected documentation Uri
+                diagsParams.Diagnostics.Should().Contain(x => x.CodeDescription!.Href == new NoUnusedParametersRule().Uri);
+
                 diagsParams = await diagsListener.WaitNext();
                 diagsParams.Uri.Should().Be(mainUri);
                 diagsParams.Diagnostics.Should().BeEmpty();
@@ -129,11 +131,11 @@ param requiredInput string
             var diagsListener = new MultipleMessageListener<PublishDiagnosticsParams>();
             var client = await IntegrationTestHelper.StartServerWithClientConnectionAsync(
                 this.TestContext,
-                options => 
+                options =>
                 {
                     options.OnPublishDiagnostics(diags => diagsListener.AddMessage(diags));
                 },
-                fileResolver: new InMemoryFileResolver(fileSystemDict));
+                creationOptions: new LanguageServer.Server.CreationOptions(FileResolver: new InMemoryFileResolver(fileSystemDict)));
 
             var mainUri = DocumentUri.FromFileSystemPath("/path/to/main.bicep");
             fileSystemDict[mainUri.ToUri()] = @"
@@ -196,11 +198,11 @@ param requiredIpnut string
             var diagsListener = new MultipleMessageListener<PublishDiagnosticsParams>();
             var client = await IntegrationTestHelper.StartServerWithClientConnectionAsync(
                 this.TestContext,
-                options => 
+                options =>
                 {
                     options.OnPublishDiagnostics(diags => diagsListener.AddMessage(diags));
                 },
-                fileResolver: new InMemoryFileResolver(fileSystemDict));
+                creationOptions: new LanguageServer.Server.CreationOptions(FileResolver: new InMemoryFileResolver(fileSystemDict)));
 
             var mainUri = DocumentUri.FromFileSystemPath("/path/to/main.bicep");
             fileSystemDict[mainUri.ToUri()] = @"

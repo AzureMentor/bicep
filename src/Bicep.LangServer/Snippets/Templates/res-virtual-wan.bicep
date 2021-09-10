@@ -1,12 +1,12 @@
 // Virtual WAN
-resource ${1:virtualWan} 'Microsoft.Network/virtualWans@2020-07-01' = {
-  name: ${2:'name'}
+resource /*${1:virtualWan}*/virtualWan 'Microsoft.Network/virtualWans@2020-07-01' = {
+  name: /*${2:'name'}*/'name'
   location: resourceGroup().location
-  properties: {
-    type: ${3|'Standard','Basic'|}
+  properties: any({
+    type: /*${3|'Standard','Basic'|}*/'Standard'
     disableVpnEncryption: false
     allowBranchToBranchTraffic: true
     allowVnetToVnetTraffic: true
-    office365LocalBreakoutCategory: ${4|'Optimize','OptimizeAndAllow','All','None'|}
-  }
+    office365LocalBreakoutCategory: /*${4|'Optimize','OptimizeAndAllow','All','None'|}*/'Optimize'
+  })
 }

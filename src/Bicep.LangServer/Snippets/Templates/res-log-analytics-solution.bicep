@@ -1,17 +1,17 @@
 ﻿// Log Analytics Solution
-resource ${1:logAnalyticsSolution} 'Microsoft.OperationsManagement/solutions@2015-11-01-preview' = {
-  name: ${2:'name'}
+resource /*${1:logAnalyticsSolution}*/logAnalyticsSolution 'Microsoft.OperationsManagement/solutions@2015-11-01-preview' = {
+  name: /*${2:'name'}*/'name'
   location: resourceGroup().location
   properties: {
-    workspaceResourceId: resourceId('Microsoft.OperationalInsights/workspaces', ${3:'logAnalyticsWorkspace'})
+    workspaceResourceId: /*${3:'operationalInsightsWorkspace.id'}*/'operationalInsightsWorkspace.id'
     containedResources: [
-      resourceId('Microsoft.OperationalInsights/workspaces/views', ${3:'logAnalyticsWorkspace'}, ${4:'logAnalyticsSolution'})
+      /*${4:'view.id'}*/'view.id'
     ]
   }
   plan: {
-    name: ${5:'name'}
-    product: ${6:'product'}
-    publisher: ${7:'publisher'}
-    promotionCode: ${8:'promotionCode'}
+    name: /*${5:'name'}*/'name'
+    product: /*${6:'product'}*/'product'
+    publisher: /*${7:'publisher'}*/'publisher'
+    promotionCode: /*${8:'promotionCode'}*/'promotionCode'
   }
 }

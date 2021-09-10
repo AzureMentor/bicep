@@ -5,12 +5,15 @@
     "_generator": {
       "name": "bicep",
       "version": "dev",
-      "templateHash": "6019636043464107368"
+      "templateHash": "1706136566230351855"
     }
   },
   "parameters": {
     "myString": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "this is my multi line \ndescription for my myString\n"
+      }
     },
     "myInt": {
       "type": "int"
@@ -20,7 +23,10 @@
     },
     "myString2": {
       "type": "string",
-      "defaultValue": "[format('strin{0}g value', 2)]"
+      "defaultValue": "string value",
+      "metadata": {
+        "description": "this is myString2"
+      }
     },
     "myInt2": {
       "type": "int",
@@ -36,15 +42,7 @@
     },
     "myEscapedString": {
       "type": "string",
-      "defaultValue": "First line\nSecond\ttabbed\tline"
-    },
-    "myNewGuid": {
-      "type": "string",
-      "defaultValue": "[newGuid()]"
-    },
-    "myUtcTime": {
-      "type": "string",
-      "defaultValue": "[utcNow()]"
+      "defaultValue": "First line\r\nSecond\ttabbed\tline"
     },
     "foo": {
       "type": "object",
@@ -67,11 +65,11 @@
           {
             "a": "b"
           }
-        ],
-        "test": {
-          "time": "[utcNow('u')]",
-          "guid": "[newGuid()]"
-        }
+        ]
+      },
+      "metadata": {
+        "description": "this is foo",
+        "another": "just for fun"
       }
     },
     "myArrayParam": {
@@ -82,29 +80,10 @@
         "c"
       ]
     },
-    "myAlternativeArrayParam": {
-      "type": "array",
-      "defaultValue": [
-        "a",
-        "b",
-        "c",
-        "[newGuid()]",
-        "[utcNow()]"
-      ]
-    },
     "password": {
       "type": "secureString"
     },
-    "passwordWithDecorator": {
-      "type": "secureString"
-    },
-    "nonSecure": {
-      "type": "string"
-    },
     "secretObject": {
-      "type": "secureObject"
-    },
-    "secureObjectWithDecorator": {
       "type": "secureObject"
     },
     "storageSku": {
@@ -114,38 +93,17 @@
         "Standard_GRS"
       ]
     },
-    "storageSkuWithDecorator": {
-      "type": "string",
-      "allowedValues": [
-        "Standard_LRS",
-        "Standard_GRS"
-      ]
-    },
     "storageName": {
-      "type": "string",
-      "minLength": 3,
-      "maxLength": 24
-    },
-    "storageNameWithDecorator": {
       "type": "string",
       "maxLength": 24,
       "minLength": 3
     },
     "someArray": {
       "type": "array",
-      "minLength": 3,
-      "maxLength": 24
-    },
-    "someArrayWithDecorator": {
-      "type": "array",
       "maxLength": 24,
       "minLength": 3
     },
     "emptyMetadata": {
-      "type": "string",
-      "metadata": {}
-    },
-    "emptyMetadataWithDecorator": {
       "type": "string",
       "metadata": {}
     },
@@ -155,13 +113,7 @@
         "description": "my description"
       }
     },
-    "descriptionWithDecorator": {
-      "type": "string",
-      "metadata": {
-        "description": "my description"
-      }
-    },
-    "descriptionWithDecorator2": {
+    "description2": {
       "type": "string",
       "metadata": {
         "description": "my description"
@@ -179,35 +131,8 @@
         }
       }
     },
-    "additionalMetadataWithDecorator": {
-      "type": "string",
-      "metadata": {
-        "description": "my description",
-        "a": 1,
-        "b": true,
-        "c": [],
-        "d": {
-          "test": "abc"
-        }
-      }
-    },
     "someParameter": {
       "type": "secureString",
-      "minLength": 3,
-      "maxLength": 24,
-      "metadata": {
-        "description": "Name of the storage account"
-      },
-      "defaultValue": "one",
-      "allowedValues": [
-        "one",
-        "two",
-        "three"
-      ]
-    },
-    "someParameterWithDecorator": {
-      "type": "secureString",
-      "defaultValue": "one",
       "metadata": {
         "description": "Name of the storage account"
       },
@@ -219,13 +144,25 @@
       "maxLength": 24,
       "minLength": 3
     },
-    "defaultValueExpression": {
-      "type": "int",
-      "defaultValue": "[if(true(), add(4, mul(2, 3)), 0)]"
-    },
     "defaultExpression": {
       "type": "bool",
       "defaultValue": "[not(equals(18, or(true(), false())))]"
+    },
+    "stringLiteral": {
+      "type": "string",
+      "allowedValues": [
+        "abc",
+        "def"
+      ]
+    },
+    "stringLiteralWithAllowedValuesSuperset": {
+      "type": "string",
+      "defaultValue": "[parameters('stringLiteral')]",
+      "allowedValues": [
+        "abc",
+        "def",
+        "ghi"
+      ]
     },
     "decoratedString": {
       "type": "secureString",
@@ -246,18 +183,9 @@
       "maxValue": -3,
       "minValue": -10
     },
-    "negativeZeros": {
-      "type": "string",
-      "maxLength": 0,
-      "minLength": 0
-    },
-    "negativeModifiers": {
-      "type": "int",
-      "minValue": -100,
-      "maxValue": -33
-    },
     "decoratedBool": {
       "type": "bool",
+      "defaultValue": "[not(equals(and(true(), false()), true()))]",
       "metadata": {
         "description": "A boolean.",
         "foo": "something",
@@ -271,81 +199,37 @@
     "decoratedObject": {
       "type": "secureObject",
       "defaultValue": {
-        "location": "westus"
+        "enabled": true,
+        "name": "this is my object",
+        "priority": 3,
+        "info": {
+          "a": "b"
+        },
+        "empty": {},
+        "array": [
+          "string item",
+          12,
+          true,
+          [
+            "inner",
+            false
+          ],
+          {
+            "a": "b"
+          }
+        ]
       }
     },
     "decoratedArray": {
       "type": "array",
+      "defaultValue": [
+        "[utcNow()]",
+        "[newGuid()]"
+      ],
       "metadata": {
         "description": "An array."
       },
       "maxLength": 20
-    },
-    "allowedPermutation": {
-      "type": "array",
-      "defaultValue": [
-        "Microsoft.AnalysisServices/servers",
-        "Microsoft.ContainerRegistry/registries"
-      ],
-      "allowedValues": [
-        "Microsoft.AnalysisServices/servers",
-        "Microsoft.ApiManagement/service",
-        "Microsoft.Network/applicationGateways",
-        "Microsoft.Automation/automationAccounts",
-        "Microsoft.ContainerInstance/containerGroups",
-        "Microsoft.ContainerRegistry/registries",
-        "Microsoft.ContainerService/managedClusters"
-      ]
-    },
-    "allowedPermutationWithDecorator": {
-      "type": "array",
-      "defaultValue": [
-        "Microsoft.AnalysisServices/servers",
-        "Microsoft.ContainerRegistry/registries"
-      ],
-      "allowedValues": [
-        "Microsoft.AnalysisServices/servers",
-        "Microsoft.ApiManagement/service",
-        "Microsoft.Network/applicationGateways",
-        "Microsoft.Automation/automationAccounts",
-        "Microsoft.ContainerInstance/containerGroups",
-        "Microsoft.ContainerRegistry/registries",
-        "Microsoft.ContainerService/managedClusters"
-      ]
-    },
-    "allowedArray": {
-      "type": "array",
-      "defaultValue": [
-        "Microsoft.AnalysisServices/servers",
-        "Microsoft.ApiManagement/service"
-      ],
-      "allowedValues": [
-        [
-          "Microsoft.AnalysisServices/servers",
-          "Microsoft.ApiManagement/service"
-        ],
-        [
-          "Microsoft.Network/applicationGateways",
-          "Microsoft.Automation/automationAccounts"
-        ]
-      ]
-    },
-    "allowedArrayWithDecorator": {
-      "type": "array",
-      "defaultValue": [
-        "Microsoft.AnalysisServices/servers",
-        "Microsoft.ApiManagement/service"
-      ],
-      "allowedValues": [
-        [
-          "Microsoft.AnalysisServices/servers",
-          "Microsoft.ApiManagement/service"
-        ],
-        [
-          "Microsoft.Network/applicationGateways",
-          "Microsoft.Automation/automationAccounts"
-        ]
-      ]
     }
   },
   "functions": [],

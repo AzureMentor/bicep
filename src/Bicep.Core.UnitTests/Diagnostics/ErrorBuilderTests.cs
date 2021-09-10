@@ -1,9 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Parsing;
 using Bicep.Core.Resources;
@@ -11,6 +7,11 @@ using Bicep.Core.Semantics;
 using Bicep.Core.TypeSystem;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System;
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Linq;
+using System.Reflection;
 
 namespace Bicep.Core.UnitTests.Diagnostics
 {
@@ -34,7 +35,7 @@ namespace Bicep.Core.UnitTests.Diagnostics
             foreach (var diagnosticMethod in diagnosticMethods)
             {
                 var mockParams = diagnosticMethod.GetParameters().Select(CreateMockParameter);
-                
+
                 var diagnostic = diagnosticMethod.Invoke(builder, mockParams.ToArray()) as Diagnostic;
 
                 // verify that the Code is unique
@@ -90,17 +91,22 @@ namespace Bicep.Core.UnitTests.Diagnostics
 
             if (parameter.ParameterType == typeof(IList<TypeSymbol>))
             {
-                return new List<TypeSymbol> {new PrimitiveType($"<list_type_{index}>", TypeSymbolValidationFlags.Default)};
+                return new List<TypeSymbol> { new PrimitiveType($"<list_type_{index}>", TypeSymbolValidationFlags.Default) };
             }
 
             if (parameter.ParameterType == typeof(IEnumerable<string>))
             {
-                return new List<string> {$"<value_{index}"};
+                return new List<string> { $"<value_{index}" };
             }
 
             if (parameter.ParameterType == typeof(IList<string>))
             {
-                return new List<string> {$"<value_{index}"};
+                return new List<string> { $"<value_{index}" };
+            }
+
+            if (parameter.ParameterType == typeof(ImmutableArray<string>))
+            {
+                return new[] { $"<value_{index}" }.ToImmutableArray();
             }
 
             if (parameter.ParameterType == typeof(Uri))
@@ -119,7 +125,7 @@ namespace Bicep.Core.UnitTests.Diagnostics
                 return 0;
             }
 
-            if(parameter.ParameterType == typeof(long) || parameter.ParameterType == typeof(long?))
+            if (parameter.ParameterType == typeof(long) || parameter.ParameterType == typeof(long?))
             {
                 return 0;
             }
@@ -144,7 +150,12 @@ namespace Bicep.Core.UnitTests.Diagnostics
                 return ResourceScope.ResourceGroup;
             }
 
-            return $"<param_{index}>";
+            if (parameter.ParameterType == typeof(string) || parameter.ParameterType == typeof(IEnumerable<char>))
+            {
+                return $"<param_{index}>";
+            }
+
+            throw new AssertFailedException($"Unable to generate mock parameter value of type '{parameter.ParameterType}' for the diagnostic builder method.");
         }
     }
 }

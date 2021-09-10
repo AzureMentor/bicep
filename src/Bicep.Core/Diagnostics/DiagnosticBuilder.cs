@@ -3,10 +3,13 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
+using Azure.ResourceManager.Resources.Models;
 using Bicep.Core.CodeAction;
 using Bicep.Core.Extensions;
+using Bicep.Core.Modules;
 using Bicep.Core.Parsing;
 using Bicep.Core.Resources;
 using Bicep.Core.Semantics;
@@ -23,6 +26,9 @@ namespace Bicep.Core.Diagnostics
 
         public class DiagnosticBuilderInternal
         {
+            private const string TypeInaccuracyClause = " If this is an inaccuracy in the documentation, please report it to the Bicep Team.";
+            private static readonly Uri TypeInaccuracyLink = new("https://aka.ms/bicep-type-issues");
+
             public DiagnosticBuilderInternal(TextSpan textSpan)
             {
                 TextSpan = textSpan;
@@ -32,6 +38,14 @@ namespace Bicep.Core.Diagnostics
 
             private static string ToQuotedString(IEnumerable<string> elements)
                 => elements.Any() ? $"\"{elements.ConcatString("\", \"")}\"" : "";
+
+            private static string BuildVariableDependencyChainClause(IEnumerable<string>? variableDependencyChain) => variableDependencyChain is not null
+                ? $" You are referencing a variable which cannot be calculated at the start (\"{string.Join("\" -> \"", variableDependencyChain)}\")."
+                : string.Empty;
+
+            private static string BuildAccessiblePropertiesClause(string? accessedSymbolName, IEnumerable<string>? accessiblePropertyNames) => accessedSymbolName is not null && accessiblePropertyNames is not null
+                ? $" Properties of {accessedSymbolName} which can be calculated at the start include {ToQuotedString(accessiblePropertyNames.OrderBy(s => s))}."
+                : string.Empty;
 
             public ErrorDiagnostic UnrecognizedToken(string token) => new(
                 TextSpan,
@@ -71,7 +85,7 @@ namespace Bicep.Core.Diagnostics
             public ErrorDiagnostic ExpectedParameterContinuation() => new(
                 TextSpan,
                 "BCP008",
-                "Expected the \"=\" token, a parameter modifier, or a newline at this location.");
+                "Expected the \"=\" token, or a newline at this location.");
 
             public ErrorDiagnostic UnrecognizedExpression() => new(
                 TextSpan,
@@ -231,7 +245,7 @@ namespace Bicep.Core.Diagnostics
                     $"The property \"{property}\" expected a value of type \"{expectedType}\" but the provided value{sourceDeclarationClause} is of type \"{actualType}\".");
             }
 
-            public Diagnostic DisallowedProperty(bool warnInsteadOfError, Symbol? sourceDeclaration, string property, TypeSymbol type, IEnumerable<string> validUnspecifiedProperties)
+            public Diagnostic DisallowedProperty(bool warnInsteadOfError, Symbol? sourceDeclaration, string property, TypeSymbol type, IEnumerable<string> validUnspecifiedProperties, bool isResourceSyntax)
             {
                 var permissiblePropertiesClause = validUnspecifiedProperties.Any()
                     ? $" Permissible properties include {ToQuotedString(validUnspecifiedProperties)}."
@@ -245,7 +259,7 @@ namespace Bicep.Core.Diagnostics
                     TextSpan,
                     warnInsteadOfError ? DiagnosticLevel.Warning : DiagnosticLevel.Error,
                     "BCP037",
-                    $"The property \"{property}\"{sourceDeclarationClause} is not allowed on objects of type \"{type}\".{permissiblePropertiesClause}");
+                    $"The property \"{property}\"{sourceDeclarationClause} is not allowed on objects of type \"{type}\".{permissiblePropertiesClause}{(isResourceSyntax ? TypeInaccuracyClause : string.Empty)}", isResourceSyntax ? TypeInaccuracyLink : null);
             }
 
             public Diagnostic DisallowedInterpolatedKeyProperty(bool warnInsteadOfError, Symbol? sourceDeclaration, TypeSymbol type, IEnumerable<string> validUnspecifiedProperties)
@@ -323,15 +337,15 @@ namespace Bicep.Core.Diagnostics
                 "BCP049",
                 $"The array index must be of type \"{LanguageConstants.String}\" or \"{LanguageConstants.Int}\" but the provided index was of type \"{wrongType}\".");
 
-            public ErrorDiagnostic ModulePathIsEmpty() => new(
+            public ErrorDiagnostic FilePathIsEmpty() => new(
                 TextSpan,
                 "BCP050",
-                "The specified module path is empty.");
+                "The specified path is empty.");
 
-            public ErrorDiagnostic ModulePathBeginsWithForwardSlash() => new(
+            public ErrorDiagnostic FilePathBeginsWithForwardSlash() => new(
                 TextSpan,
                 "BCP051",
-                "The specified module path begins with \"/\". Module files must be referenced using relative paths.");
+                "The specified path begins with \"/\". Files must be referenced using relative paths.");
 
             public Diagnostic UnknownProperty(bool warnInsteadOfError, TypeSymbol type, string badProperty) => new(
                 TextSpan,
@@ -403,7 +417,7 @@ namespace Bicep.Core.Diagnostics
             public ErrorDiagnostic FunctionOnlyValidInParameterDefaults(string functionName) => new(
                 TextSpan,
                 "BCP065",
-                $"Function \"{functionName}\" is not valid at this location. It can only be used in parameter default declarations.");
+                $"Function \"{functionName}\" is not valid at this location. It can only be used as a parameter default value.");
 
             public ErrorDiagnostic FunctionOnlyValidInResourceBody(string functionName) => new(
                 TextSpan,
@@ -512,6 +526,7 @@ namespace Bicep.Core.Diagnostics
                 "BCP082",
                 $"The name \"{name}\" does not exist in the current context. Did you mean \"{suggestedName}\"?",
                 null,
+                null,
                 new CodeFix($"Change \"{name}\" to \"{suggestedName}\"", true, CodeManipulator.Replace(TextSpan, suggestedName)));
 
             public FixableDiagnostic UnknownPropertyWithSuggestion(bool warnInsteadOfError, TypeSymbol type, string badProperty, string suggestedProperty) => new(
@@ -520,6 +535,7 @@ namespace Bicep.Core.Diagnostics
                 "BCP083",
                 $"The type \"{type}\" does not contain property \"{badProperty}\". Did you mean \"{suggestedProperty}\"?",
                 null,
+                null,
                 new CodeFix($"Change \"{badProperty}\" to \"{suggestedProperty}\"", true, CodeManipulator.Replace(TextSpan, suggestedProperty)));
 
             public ErrorDiagnostic SymbolicNameCannotUseReservedNamespaceName(string name, IEnumerable<string> namespaces) => new(
@@ -527,15 +543,15 @@ namespace Bicep.Core.Diagnostics
                 "BCP084",
                 $"The symbolic name \"{name}\" is reserved. Please use a different symbolic name. Reserved namespaces are {ToQuotedString(namespaces.OrderBy(ns => ns))}.");
 
-            public ErrorDiagnostic ModulePathContainsForbiddenCharacters(IEnumerable<char> forbiddenChars) => new(
+            public ErrorDiagnostic FilePathContainsForbiddenCharacters(IEnumerable<char> forbiddenChars) => new(
                 TextSpan,
                 "BCP085",
-                $"The specified module path contains one ore more invalid path characters. The following are not permitted: {ToQuotedString(forbiddenChars.OrderBy(x => x).Select(x => x.ToString()))}.");
+                $"The specified file path contains one ore more invalid path characters. The following are not permitted: {ToQuotedString(forbiddenChars.OrderBy(x => x).Select(x => x.ToString()))}.");
 
-            public ErrorDiagnostic ModulePathHasForbiddenTerminator(IEnumerable<char> forbiddenPathTerminatorChars) => new(
+            public ErrorDiagnostic FilePathHasForbiddenTerminator(IEnumerable<char> forbiddenPathTerminatorChars) => new(
                 TextSpan,
                 "BCP086",
-                $"The specified module path ends with an invalid character. The following are not permitted: {ToQuotedString(forbiddenPathTerminatorChars.OrderBy(x => x).Select(x => x.ToString()))}.");
+                $"The specified file path ends with an invalid character. The following are not permitted: {ToQuotedString(forbiddenPathTerminatorChars.OrderBy(x => x).Select(x => x.ToString()))}.");
 
             public ErrorDiagnostic ComplexLiteralsNotAllowed() => new(
                 TextSpan,
@@ -548,6 +564,7 @@ namespace Bicep.Core.Diagnostics
                 "BCP088",
                 $"The property \"{property}\" expected a value of type \"{expectedType}\" but the provided value is of type \"{actualStringLiteral}\". Did you mean \"{suggestedStringLiteral}\"?",
                 null,
+                null,
                 new CodeFix($"Change \"{actualStringLiteral}\" to \"{suggestedStringLiteral}\"", true, CodeManipulator.Replace(TextSpan, suggestedStringLiteral)));
 
             public FixableDiagnostic DisallowedPropertyWithSuggestion(bool warnInsteadOfError, string property, TypeSymbol type, string suggestedProperty) => new(
@@ -555,6 +572,7 @@ namespace Bicep.Core.Diagnostics
                 warnInsteadOfError ? DiagnosticLevel.Warning : DiagnosticLevel.Error,
                 "BCP089",
                 $"The property \"{property}\" is not allowed on objects of type \"{type}\". Did you mean \"{suggestedProperty}\"?",
+                null,
                 null,
                 new CodeFix($"Change \"{property}\" to \"{suggestedProperty}\"", true, CodeManipulator.Replace(TextSpan, suggestedProperty)));
 
@@ -568,15 +586,15 @@ namespace Bicep.Core.Diagnostics
                 "BCP091",
                 $"An error occurred reading file. {failureMessage}");
 
-            public ErrorDiagnostic ModulePathInterpolationUnsupported() => new(
+            public ErrorDiagnostic FilePathInterpolationUnsupported() => new(
                 TextSpan,
                 "BCP092",
-                "String interpolation is not supported in module paths.");
+                "String interpolation is not supported in file paths.");
 
-            public ErrorDiagnostic ModulePathCouldNotBeResolved(string modulePath, string parentPath) => new(
+            public ErrorDiagnostic FilePathCouldNotBeResolved(string filePath, string parentPath) => new(
                 TextSpan,
                 "BCP093",
-                $"Module path \"{modulePath}\" could not be resolved relative to \"{parentPath}\".");
+                $"File path \"{filePath}\" could not be resolved relative to \"{parentPath}\".");
 
             public ErrorDiagnostic CyclicModuleSelfReference() => new(
                 TextSpan,
@@ -598,10 +616,10 @@ namespace Bicep.Core.Diagnostics
                 "BCP097",
                 "Expected a module path string. This should be a relative path to another bicep file, e.g. 'myModule.bicep' or '../parent/myModule.bicep'");
 
-            public ErrorDiagnostic ModulePathContainsBackSlash() => new(
+            public ErrorDiagnostic FilePathContainsBackSlash() => new(
                 TextSpan,
                 "BCP098",
-                "The specified module path contains a \"\\\" character. Use \"/\" instead as the directory separator character.");
+                "The specified file path contains a \"\\\" character. Use \"/\" instead as the directory separator character.");
 
             public ErrorDiagnostic AllowedMustContainItems() => new(
                 TextSpan,
@@ -653,6 +671,7 @@ namespace Bicep.Core.Diagnostics
                 "BCP108",
                 $"The function \"{name}\" does not exist in namespace \"{namespaceType.Name}\". Did you mean \"{suggestedName}\"?",
                 null,
+                null,
                 new CodeFix($"Change \"{name}\" to \"{suggestedName}\"", true, CodeManipulator.Replace(TextSpan, suggestedName)));
 
             public ErrorDiagnostic FunctionDoesNotExistOnObject(TypeSymbol type, string name) => new(
@@ -665,12 +684,13 @@ namespace Bicep.Core.Diagnostics
                 "BCP110",
                 $"The type \"{type}\" does not contain function \"{name}\". Did you mean \"{suggestedName}\"?",
                 null,
+                null,
                 new CodeFix($"Change \"{name}\" to \"{suggestedName}\"", true, CodeManipulator.Replace(TextSpan, suggestedName)));
 
-            public ErrorDiagnostic ModulePathContainsControlChars() => new(
+            public ErrorDiagnostic FilePathContainsControlChars() => new(
                 TextSpan,
                 "BCP111",
-                $"The specified module path contains invalid control code characters.");
+                $"The specified file path contains invalid control code characters.");
 
             public ErrorDiagnostic TargetScopeMultipleDeclarations() => new(
                 TextSpan,
@@ -722,14 +742,15 @@ namespace Bicep.Core.Diagnostics
                 "BCP119",
                 $"Unsupported scope for extension resource deployment. Expected a resource reference.");
 
-            public Diagnostic RuntimePropertyNotAllowedInProperty(string property, IEnumerable<string> usableProperties, string accessedSymbol, IEnumerable<string>? variableDependencyChain)
+            public Diagnostic RuntimeValueNotAllowedInProperty(string propertyName, string? objectTypeName, string? accessedSymbolName, IEnumerable<string>? accessiblePropertyNames, IEnumerable<string>? variableDependencyChain)
             {
                 var variableDependencyChainClause = BuildVariableDependencyChainClause(variableDependencyChain);
+                var accessiblePropertiesClause = BuildAccessiblePropertiesClause(accessedSymbolName, accessiblePropertyNames);
 
                 return new ErrorDiagnostic(
                     TextSpan,
                     "BCP120",
-                    $"The property \"{property}\" must be evaluable at the start of the deployment, and cannot depend on any values that have not yet been calculated. {variableDependencyChainClause}Accessible properties of {accessedSymbol} are {ToQuotedString(usableProperties.OrderBy(s => s))}.");
+                    $"This expression is being used in an assignment to the \"{propertyName}\" property of the \"{objectTypeName}\" type, which requires a value that can be calculated at the start of the deployment.{variableDependencyChainClause}{accessiblePropertiesClause}");
             }
 
             public ErrorDiagnostic ResourceMultipleDeclarations(IEnumerable<string> resourceNames) => new(
@@ -781,11 +802,6 @@ namespace Bicep.Core.Diagnostics
                 TextSpan,
                 "BCP130",
                 "Decorators are not allowed here.");
-
-            public ErrorDiagnostic CannotUseParameterDecoratorsAndModifiersTogether() => new(
-                TextSpan,
-                "BCP131",
-                "Parameter modifiers and decorators cannot be used together. Please use decorators only.");
 
             public ErrorDiagnostic ExpectedDeclarationAfterDecorator() => new(
                 TextSpan,
@@ -935,13 +951,6 @@ namespace Bicep.Core.Diagnostics
                 "BCP160",
                 $"A nested resource cannot appear inside of a resource with a for-expression.");
 
-            public Diagnostic ParameterModifiersDeprecated() => new(
-                TextSpan,
-                DiagnosticLevel.Info,
-                "BCP161",
-                "Parameter modifiers are deprecated and will be removed in a future release. Use decorators instead (see https://aka.ms/BicepSpecParams for examples).",
-                DiagnosticLabel.Deprecated);
-
             public ErrorDiagnostic ExpectedLoopItemIdentifierOrVariableBlockStart() => new(
                 TextSpan,
                 "BCP162",
@@ -977,10 +986,10 @@ namespace Bicep.Core.Diagnostics
                 "BCP168",
                 $"Length must not be a negative value.");
 
-            public ErrorDiagnostic TopLevelChildResourceNameMissingQualifiers(int expectedSlashCount) => new(
+            public ErrorDiagnostic TopLevelChildResourceNameIncorrectQualifierCount(int expectedSlashCount) => new(
                 TextSpan,
                 "BCP169",
-                $"Expected resource name to contain {expectedSlashCount} \"/\" characters. The number of name segments must match the number of segments in the resource type.");
+                $"Expected resource name to contain {expectedSlashCount} \"/\" character(s). The number of name segments must match the number of segments in the resource type.");
 
             public ErrorDiagnostic ChildResourceNameContainsQualifiers() => new(
                 TextSpan,
@@ -1006,43 +1015,34 @@ namespace Bicep.Core.Diagnostics
                 TextSpan,
                 DiagnosticLevel.Warning,
                 "BCP174",
-                $"Type validation is not available for resource types declared containing a \"/providers/\" segment. Please instead use the \"scope\" property. See https://aka.ms/BicepScopes for more information.");
-
-            public ErrorDiagnostic VariableLoopsRuntimeDependencyNotAllowed(IEnumerable<string> variableDependencyChain)
-            {
-                var variableDependencyChainClause = variableDependencyChain.Any()
-                    ? $" Variable dependency chain: \"{string.Join("\" -> \"", variableDependencyChain)}\"."
-                    : string.Empty;
-
-                return new(
-                    TextSpan,
-                    "BCP175",
-                    $"The variable for-expression body or array expression must be evaluable at the start of the deployment and cannot depend on any values that have not yet been calculated.{variableDependencyChainClause}");
-            }
+                $"Type validation is not available for resource types declared containing a \"/providers/\" segment. Please instead use the \"scope\" property.",
+                new Uri("https://aka.ms/BicepScopes"));
 
             public ErrorDiagnostic AnyTypeIsNotAllowed() => new(
                 TextSpan,
                 "BCP176",
                 $"Values of the \"any\" type are not allowed here.");
 
-            public ErrorDiagnostic RuntimePropertyNotAllowedInIfConditionExpression(IEnumerable<string> usableProperties, string accessedSymbol, IEnumerable<string>? variableDependencyChain)
+            public ErrorDiagnostic RuntimeValueNotAllowedInIfConditionExpression(string? accessedSymbolName, IEnumerable<string>? accessiblePropertyNames, IEnumerable<string>? variableDependencyChain)
             {
                 var variableDependencyChainClause = BuildVariableDependencyChainClause(variableDependencyChain);
+                var accessiblePropertiesClause = BuildAccessiblePropertiesClause(accessedSymbolName, accessiblePropertyNames);
 
                 return new ErrorDiagnostic(
                     TextSpan,
                     "BCP177",
-                    $"The if-condition expression must be evaluable at the start of the deployment, and cannot depend on any values that have not yet been calculated. {variableDependencyChainClause}Accessible properties of {accessedSymbol} are {ToQuotedString(usableProperties.OrderBy(s => s))}.");
+                    $"This expression is being used in the if-condition expression, which requires a value that can be calculated at the start of the deployment.{variableDependencyChainClause}{accessiblePropertiesClause}");
             }
 
-            public ErrorDiagnostic RuntimePropertyNotAllowedInForExpression(IEnumerable<string> usableProperties, string accessedSymbol, IEnumerable<string>? variableDependencyChain)
+            public ErrorDiagnostic RuntimeValueNotAllowedInForExpression(string? accessedSymbolName, IEnumerable<string>? accessiblePropertyNames, IEnumerable<string>? variableDependencyChain)
             {
                 var variableDependencyChainClause = BuildVariableDependencyChainClause(variableDependencyChain);
+                var accessiblePropertiesClause = BuildAccessiblePropertiesClause(accessedSymbolName, accessiblePropertyNames);
 
                 return new ErrorDiagnostic(
                     TextSpan,
                     "BCP178",
-                    $"The for-expression must be evaluable at the start of the deployment, and cannot depend on any values that have not yet been calculated. {variableDependencyChainClause}Accessible properties of {accessedSymbol} are {ToQuotedString(usableProperties.OrderBy(s => s))}.");
+                    $"This expression is being used in the for-expression, which requires a value that can be calculated at the start of the deployment.{variableDependencyChainClause}{accessiblePropertiesClause}");
             }
 
             public Diagnostic ForExpressionContainsLoopInvariants(string itemVariableName, string? indexVariableName, IEnumerable<string> expectedVariantProperties) => new(
@@ -1058,20 +1058,130 @@ namespace Bicep.Core.Diagnostics
                 "BCP180",
                 $"Function \"{functionName}\" is not valid at this location. It can only be used when directly assigning to a module parameter with a secure decorator.");
 
-            public ErrorDiagnostic RuntimePropertyNotAllowedInRunTimeFunctionArguments(string functionName, IEnumerable<string> usableProperties, string accessedSymbol, IEnumerable<string>? variableDependencyChain)
+            public ErrorDiagnostic RuntimeValueNotAllowedInRunTimeFunctionArguments(string functionName, string? accessedSymbolName, IEnumerable<string>? accessiblePropertyNames, IEnumerable<string>? variableDependencyChain)
             {
                 var variableDependencyChainClause = BuildVariableDependencyChainClause(variableDependencyChain);
+                var accessiblePropertiesClause = BuildAccessiblePropertiesClause(accessedSymbolName, accessiblePropertyNames);
 
                 return new ErrorDiagnostic(
                     TextSpan,
                     "BCP181",
-                    $"The arguments of function \"{functionName}\" must be evaluable at the start of the deployment, and cannot depend on any values that have not yet been calculated. {variableDependencyChainClause}Accessible properties of {accessedSymbol} are {ToQuotedString(usableProperties.OrderBy(s => s))}.");
+                    $"This expression is being used in an argument of the function \"{functionName}\", which requires a value that can be calculated at the start of the deployment.{variableDependencyChainClause}{accessiblePropertiesClause}");
             }
 
-            private static string BuildVariableDependencyChainClause(IEnumerable<string>? variableDependencyChain) => variableDependencyChain != null
-                ? $"You are referencing a variable which cannot be calculated in time (\"{string.Join("\" -> \"", variableDependencyChain)}\"). "
-                : string.Empty;
+            public ErrorDiagnostic RuntimeValueNotAllowedInVariableForBody(string variableName, string? accessedSymbolName, IEnumerable<string>? accessiblePropertyNames, IEnumerable<string>? variableDependencyChain)
+            {
+                var variableDependencyChainClause = BuildVariableDependencyChainClause(variableDependencyChain);
+                var accessiblePropertiesClause = BuildAccessiblePropertiesClause(accessedSymbolName, accessiblePropertyNames);
 
+                return new ErrorDiagnostic(
+                    TextSpan,
+                    "BCP182",
+                    $"This expression is being used in the for-body of the variable \"{variableName}\", which requires values that can be calculated at the start of the deployment.{variableDependencyChainClause}{accessiblePropertiesClause}");
+            }
+
+            public ErrorDiagnostic ModuleParametersPropertyRequiresObjectLiteral() => new(
+                TextSpan,
+                "BCP183",
+                $"The value of the module \"{LanguageConstants.ModuleParamsPropertyName}\" property must be an object literal.");
+
+            public ErrorDiagnostic FileExceedsMaximumSize(string filePath, long maxSize, string unit) => new(
+               TextSpan,
+               "BCP184",
+               $"File '{filePath}' exceeded maximum size of {maxSize} {unit}.");
+
+            public Diagnostic FileEncodingMismatch(string detectedEncoding) => new(
+               TextSpan,
+               DiagnosticLevel.Info,
+               "BCP185",
+               $"Encoding mismatch. File was loaded with '{detectedEncoding}' encoding.");
+
+            public ErrorDiagnostic UnparseableJsonType() => new(
+               TextSpan,
+               "BCP186",
+               $"Unable to parse literal JSON value. Please ensure that it is well-formed.");
+
+            public Diagnostic FallbackPropertyUsed(string property) => new(
+                TextSpan,
+                DiagnosticLevel.Warning,
+                "BCP187",
+                $"The property \"{property}\" does not exist in the resource definition, although it might still be valid.{TypeInaccuracyClause}", TypeInaccuracyLink);
+
+            public ErrorDiagnostic ReferencedArmTemplateHasErrors() => new(
+                TextSpan,
+                "BCP188",
+                $"The referenced ARM template has errors. Please see https://aka.ms/arm-template for information on how to diagnose and fix the template.");
+
+            public ErrorDiagnostic UnknownModuleReferenceScheme(string badScheme, ImmutableArray<string> allowedSchemes)
+            {
+                string FormatSchemes() => ToQuotedString(allowedSchemes.Where(scheme => !string.Equals(scheme, ModuleReferenceSchemes.Local)));
+
+                return new(
+                    TextSpan,
+                    "BCP189",
+                    (allowedSchemes.Contains(ModuleReferenceSchemes.Local, StringComparer.Ordinal), allowedSchemes.Any(scheme => !string.Equals(scheme, ModuleReferenceSchemes.Local, StringComparison.Ordinal))) switch
+                    {
+                        (false, false) => "Module references are not supported in this context.",
+                        (false, true) => $"The specified module reference scheme \"{badScheme}\" is not recognized. Specify a module reference using one of the following schemes: {FormatSchemes()}",
+                        (true, false) => $"The specified module reference scheme \"{badScheme}\" is not recognized. Specify a path to a local module file.",
+                        (true, true) => $"The specified module reference scheme \"{badScheme}\" is not recognized. Specify a path to a local module file or a module reference using one of the following schemes: {FormatSchemes()}",
+                    });
+            }
+
+            // TODO: This error is context sensitive:
+            // - In CLI, it's permanent and only likely to occur with bicep build --no-restore.
+            // - In VS code, it's transient until the background restore finishes.
+            //
+            // Should it be split into two separate errors instead?
+            public ErrorDiagnostic ModuleRequiresRestore(string moduleRef) => new(
+                TextSpan,
+                "BCP190",
+                $"The module with reference \"{moduleRef}\" has not been restored.");
+
+            public ErrorDiagnostic ModuleRestoreFailed(string moduleRef) => new(
+                TextSpan,
+                "BCP191",
+                $"Unable to restore the module with reference \"{moduleRef}\".");
+
+            public ErrorDiagnostic ModuleRestoreFailedWithMessage(string moduleRef, string message) => new(
+                TextSpan,
+                "BCP192",
+                $"Unable to restore the module with reference \"{moduleRef}\": {message}");
+
+            public ErrorDiagnostic InvalidOciArtifactReference(string badRef) => new(
+                TextSpan,
+                "BCP193",
+                $"The specified OCI artifact reference \"{badRef}\" is not valid. Specify a reference in the format of \"{ModuleReferenceSchemes.Oci}:<artifact uri>:<tag>\".");
+
+            public ErrorDiagnostic InvalidTemplateSpecReference(string invalidReference) => new(
+                TextSpan,
+                "BCP194",
+                $"The specified template spec reference \"{invalidReference}\" is not valid. Specify a reference in the format of \"{ModuleReferenceSchemes.TemplateSpecs}:<resourceGroupName>/<templateSpecName>:<tag>\" or \"{ModuleReferenceSchemes.TemplateSpecs}:<subscriptionId>/<resourceGroupName>/<templateSpecName>:<tag>\".");
+
+            public ErrorDiagnostic InvalidOciArtifactReferenceInvalidPathSegment(string badRef, string badSegment) => new(
+                TextSpan,
+                "BCP195",
+                $"The specified OCI artifact reference \"{badRef}\" is not valid. The module path segment \"{badSegment}\" is not valid. Each module name path segment must be a lowercase alphanumeric string optionally separated by a \".\", \"_\" , or \"-\".");
+
+            public ErrorDiagnostic InvalidOciArtifactReferenceMissingTag(string badRef) => new(
+                TextSpan,
+                "BCP196",
+                $"The specified OCI artifact reference \"{badRef}\" is not valid. The module tag is missing.");
+
+            public ErrorDiagnostic InvalidOciArtifactReferenceTagTooLong(string badRef, string badTag, int maxLength) => new(
+                TextSpan,
+                "BCP197",
+                $"The specified OCI artifact reference \"{badRef}\" is not valid. The tag \"{badTag}\" exceeds the maximum length of {maxLength} characters.");
+
+            public ErrorDiagnostic InvalidOciArtifactReferenceInvalidTag(string badRef, string badTag) => new(
+                TextSpan,
+                "BCP198",
+                $"The specified OCI artifact reference \"{badRef}\" is not valid. The tag \"{badTag}\" is not valid. Valid characters are alphanumeric, \".\", \"_\", or \"-\" but the tag cannot begin with \".\", \"_\", or \"-\".");
+
+            public ErrorDiagnostic InvalidOciArtifactReferenceRepositoryTooLong(string badRef, string badRepository, int maxLength) => new(
+                TextSpan,
+                "BCP199",
+                $"The specified OCI artifact reference \"{badRef}\" is not valid. Module path \"{badRepository}\" exceeds the maximum length of {maxLength} characters.");
         }
 
         public static DiagnosticBuilderInternal ForPosition(TextSpan span)

@@ -35,7 +35,7 @@ namespace Bicep.Core.Emit
         {
             var visitor = new FunctionPlacementValidatorVisitor(semanticModel, diagnosticWriter);
             // visiting writes diagnostics in some cases
-            visitor.Visit(semanticModel.SyntaxTree.ProgramSyntax);
+            visitor.Visit(semanticModel.SourceFile.ProgramSyntax);
         }
 
         protected override void VisitInternal(SyntaxBase node)
@@ -46,6 +46,10 @@ namespace Bicep.Core.Emit
 
         public override void VisitModuleDeclarationSyntax(ModuleDeclarationSyntax syntax)
         {
+            if (semanticModel.GetTypeInfo(syntax).IsError())
+            {
+                return; //suppressing checking this module. it couldn't be read therefore diagnostics emitted might be misleading
+            }
             using var _ = elementsRecorder.Scope(VisitedElement.Module);
             base.VisitModuleDeclarationSyntax(syntax);
         }

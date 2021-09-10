@@ -2,10 +2,8 @@
 // Licensed under the MIT License.
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Bicep.Core.Diagnostics;
-using Bicep.Core.Syntax;
-using Bicep.Core.UnitTests.Utils;
+using Bicep.Core.Workspaces;
 using FluentAssertions;
 using FluentAssertions.Execution;
 using FluentAssertions.Formatting;
@@ -30,12 +28,12 @@ namespace Bicep.Core.UnitTests.Assertions
                 return value is Diagnostic;
             }
 
-            public string Format(object value, FormattingContext context, FormatChild formatChild)
+            public void Format(object value, FormattedObjectGraph formattedGraph, FormattingContext context, FormatChild formatChild)
             {
                 var prefix = context.UseLineBreaks ? Environment.NewLine : string.Empty;
                 var diagnostic = (Diagnostic)value;
 
-                return $"{prefix}\"[{diagnostic.Code} ({diagnostic.Level})] {diagnostic.Message}\"";
+                formattedGraph.AddFragment($"{prefix}\"[{diagnostic.Code} ({diagnostic.Level})] {diagnostic.Message}\"");
             }
         }
 
@@ -51,9 +49,9 @@ namespace Bicep.Core.UnitTests.Assertions
 
         protected override string Identifier => "Diagnostic";
 
-        public static void DoWithDiagnosticAnnotations(SyntaxTree syntaxTree, IEnumerable<IDiagnostic> diagnostics, Action<IEnumerable<IDiagnostic>> action)
+        public static void DoWithDiagnosticAnnotations(BicepFile bicepFile, IEnumerable<IDiagnostic> diagnostics, Action<IEnumerable<IDiagnostic>> action)
         {
-            using (new AssertionScope().WithVisualDiagnostics(syntaxTree, diagnostics))
+            using (new AssertionScope().WithVisualDiagnostics(bicepFile, diagnostics))
             {
                 action(diagnostics);
             }

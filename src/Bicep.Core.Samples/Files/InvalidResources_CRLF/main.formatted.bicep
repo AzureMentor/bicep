@@ -692,7 +692,7 @@ resource incorrectPropertiesKey2 'Microsoft.Resources/deploymentScripts@2020-10-
         // #completionTest(0,2,4,6,8) -> environmentVariableProperties
         
       }
-      // #completionTest(0,1,2,3,4,5,6) -> objectPlusSymbols
+      // #completionTest(0,1,2,3,4,5,6) -> objectPlusSymbolsWithRequiredProperties
       
     ]
   }
@@ -1110,10 +1110,9 @@ resource propertyLoopsCannotNest2 'Microsoft.Storage/storageAccounts@2019-06-01'
   }
   kind: 'StorageV2'
   properties: {
-    // #completionTest(17) -> symbolsPlusAccount
     networkAcls: {
       virtualNetworkRules: [for rule in []: {
-        // #completionTest(12,15,31) -> symbolsPlusRule
+        // #completionTest(15,31) -> symbolsPlusRule
         id: '${account.name}-${account.location}'
         state: [for state in []: {
           // #completionTest(38) -> empty #completionTest(16) -> symbolsPlusAccountRuleState
@@ -1394,3 +1393,122 @@ resource comp7 'Microsoft.Resources/templateSpecs@20'
 
 // #completionTest(60,61) -> virtualNetworksResourceTypes
 resource comp8 'Microsoft.Network/virtualNetworks@2020-06-01'
+
+// issue #3000
+resource issue3000LogicApp1 'Microsoft.Logic/workflows@2019-05-01' = {
+  name: 'issue3000LogicApp1'
+  location: resourceGroup().location
+  properties: {
+    state: 'Enabled'
+    definition: ''
+  }
+  identity: {
+    type: 'SystemAssigned'
+  }
+  extendedLocation: {}
+  sku: {}
+  kind: 'V1'
+  managedBy: 'string'
+  mangedByExtended: [
+    'str1'
+    'str2'
+  ]
+  zones: [
+    'str1'
+    'str2'
+  ]
+  plan: {}
+  eTag: ''
+  scale: {}
+}
+
+resource issue3000LogicApp2 'Microsoft.Logic/workflows@2019-05-01' = {
+  name: 'issue3000LogicApp2'
+  location: resourceGroup().location
+  properties: {
+    state: 'Enabled'
+    definition: ''
+  }
+  identity: 'SystemAssigned'
+  extendedLocation: 'eastus'
+  sku: 'Basic'
+  kind: {
+    name: 'V1'
+  }
+  managedBy: {}
+  mangedByExtended: [
+    {}
+    {}
+  ]
+  zones: [
+    {}
+    {}
+  ]
+  plan: ''
+  eTag: {}
+  scale: [
+    {}
+  ]
+}
+
+resource issue3000stg 'Microsoft.Storage/storageAccounts@2021-04-01' = {
+  name: 'issue3000stg'
+  kind: 'StorageV2'
+  location: 'West US'
+  sku: {
+    name: 'Premium_LRS'
+  }
+  madeUpProperty: {}
+  managedByExtended: []
+}
+
+var issue3000stgMadeUpProperty = issue3000stg.madeUpProperty
+var issue3000stgManagedBy = issue3000stg.managedBy
+var issue3000stgManagedByExtended = issue3000stg.managedByExtended
+
+param dataCollectionRule object
+param tags object
+
+var defaultLogAnalyticsWorkspace = {
+  subscriptionId: subscription().subscriptionId
+}
+
+resource logAnalyticsWorkspaces 'Microsoft.OperationalInsights/workspaces@2020-10-01' existing = [for logAnalyticsWorkspace in dataCollectionRule.destinations.logAnalyticsWorkspaces: {
+  name: logAnalyticsWorkspace.name
+  scope: resourceGroup(union(defaultLogAnalyticsWorkspace, logAnalyticsWorkspace).subscriptionId, logAnalyticsWorkspace.resourceGroup)
+}]
+
+resource dataCollectionRuleRes 'Microsoft.Insights/dataCollectionRules@2021-04-01' = {
+  name: dataCollectionRule.name
+  location: dataCollectionRule.location
+  tags: tags
+  kind: dataCollectionRule.kind
+  properties: {
+    description: dataCollectionRule.description
+    destinations: union(empty(dataCollectionRule.destinations.azureMonitorMetrics.name) ? {} : {
+      azureMonitorMetrics: {
+        name: dataCollectionRule.destinations.azureMonitorMetrics.name
+      }
+    }, {
+      logAnalytics: [for (logAnalyticsWorkspace, i) in dataCollectionRule.destinations.logAnalyticsWorkspaces: {
+        name: logAnalyticsWorkspace.destinationName
+        workspaceResourceId: logAnalyticsWorkspaces[i].id
+      }]
+    })
+    dataSources: dataCollectionRule.dataSources
+    dataFlows: dataCollectionRule.dataFlows
+  }
+}
+
+resource dataCollectionRuleRes2 'Microsoft.Insights/dataCollectionRules@2021-04-01' = {
+  name: dataCollectionRule.name
+  location: dataCollectionRule.location
+  tags: tags
+  kind: dataCollectionRule.kind
+  properties: {
+    description: dataCollectionRule.description
+    destinations: empty([]) ? [for x in []: {}] : [for x in []: {}]
+    dataSources: dataCollectionRule.dataSources
+    dataFlows: dataCollectionRule.dataFlows
+  }
+}

@@ -27,12 +27,12 @@ namespace Bicep.Core.UnitTests.Diagnostics
         }
 
         [DataTestMethod]
-        [DataRow(EnvironmentUrlHardcodedRule.Code)]
-        [DataRow(InterpolateNotConcatRule.Code)]
-        [DataRow(ParametersMustBeUsedRule.Code)]
+        [DataRow(NoHardcodedEnvironmentUrlsRule.Code)]
+        [DataRow(PreferInterpolationRule.Code)]
+        [DataRow(NoUnusedParametersRule.Code)]
         [DataRow(SecureParameterDefaultRule.Code)]
         [DataRow(SimplifyInterpolationRule.Code)]
-        [DataRow(UnusedVariableRule.Code)]
+        [DataRow(NoUnusedVariablesRule.Code)]
         public void BuiltInRulesExist(string ruleCode)
         {
             var linter = new LinterAnalyzer();
@@ -70,16 +70,18 @@ namespace Bicep.Core.UnitTests.Diagnostics
 
         public class LinterThrowsTestRule : LinterRuleBase
         {
-            public LinterThrowsTestRule() : base("ThrowsRule", "Throws an exception when used", "http:\\none", DiagnosticLevel.Warning) { }
+            public LinterThrowsTestRule() : base("ThrowsRule", "Throws an exception when used", null, DiagnosticLevel.Warning) { }
 
-            public override IEnumerable<IBicepAnalyzerDiagnostic> AnalyzeInternal(SemanticModel model)
+            public override IEnumerable<IDiagnostic> AnalyzeInternal(SemanticModel model)
             {
                 // Have a yield return to force this method to return an iterator like the real rules
                 yield return new AnalyzerDiagnostic(this.AnalyzerName,
                                                     new TextSpan(0, 0),
                                                     DiagnosticLevel.Warning,
                                                     "fakeRule",
-                                                    "Fake Rule");
+                                                    "Fake Rule",
+                                                    null,
+                                                    null);
                 // Now throw an exception
                 throw new System.NotImplementedException();
             }
@@ -92,7 +94,7 @@ namespace Bicep.Core.UnitTests.Diagnostics
 @secure()
 param param1 string = 'val'";
             var compilationResult = CompilationHelper.Compile(text);
-            var semanticModel = compilationResult.Compilation.GetSemanticModel(compilationResult.SyntaxTree);
+            var semanticModel = compilationResult.Compilation.GetSemanticModel(compilationResult.BicepFile);
 
             var throwRule = new LinterThrowsTestRule();
             var diagnostics = throwRule.Analyze(semanticModel);

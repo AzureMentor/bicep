@@ -3180,8 +3180,8 @@ resource incorrectPropertiesKey2 'Microsoft.Resources/deploymentScripts@2020-10-
       }
 //@[6:7) RightBrace |}|
 //@[7:9) NewLine |\r\n|
-      // #completionTest(0,1,2,3,4,5,6) -> objectPlusSymbols
-//@[60:62) NewLine |\r\n|
+      // #completionTest(0,1,2,3,4,5,6) -> objectPlusSymbolsWithRequiredProperties
+//@[82:84) NewLine |\r\n|
       
 //@[6:8) NewLine |\r\n|
     ]
@@ -5534,8 +5534,6 @@ resource propertyLoopsCannotNest2 'Microsoft.Storage/storageAccounts@2019-06-01'
 //@[12:13) Colon |:|
 //@[14:15) LeftBrace |{|
 //@[15:17) NewLine |\r\n|
-    // #completionTest(17) -> symbolsPlusAccount
-//@[48:50) NewLine |\r\n|
     networkAcls:  {
 //@[4:15) Identifier |networkAcls|
 //@[15:16) Colon |:|
@@ -5553,8 +5551,8 @@ resource propertyLoopsCannotNest2 'Microsoft.Storage/storageAccounts@2019-06-01'
 //@[42:43) Colon |:|
 //@[44:45) LeftBrace |{|
 //@[45:47) NewLine |\r\n|
-        // #completionTest(12,15,31) -> symbolsPlusRule
-//@[55:57) NewLine |\r\n|
+        // #completionTest(15,31) -> symbolsPlusRule
+//@[52:54) NewLine |\r\n|
         id: '${account.name}-${account.location}'
 //@[8:10) Identifier |id|
 //@[10:11) Colon |:|
@@ -6958,6 +6956,671 @@ resource comp8 'Microsoft.Network/virtualNetworks@2020-06-01'
 //@[0:8) Identifier |resource|
 //@[9:14) Identifier |comp8|
 //@[15:61) StringComplete |'Microsoft.Network/virtualNetworks@2020-06-01'|
-//@[61:63) NewLine |\r\n|
+//@[61:67) NewLine |\r\n\r\n\r\n|
+
+
+// issue #3000
+//@[14:16) NewLine |\r\n|
+resource issue3000LogicApp1 'Microsoft.Logic/workflows@2019-05-01' = {
+//@[0:8) Identifier |resource|
+//@[9:27) Identifier |issue3000LogicApp1|
+//@[28:66) StringComplete |'Microsoft.Logic/workflows@2019-05-01'|
+//@[67:68) Assignment |=|
+//@[69:70) LeftBrace |{|
+//@[70:72) NewLine |\r\n|
+  name: 'issue3000LogicApp1'
+//@[2:6) Identifier |name|
+//@[6:7) Colon |:|
+//@[8:28) StringComplete |'issue3000LogicApp1'|
+//@[28:30) NewLine |\r\n|
+  location: resourceGroup().location
+//@[2:10) Identifier |location|
+//@[10:11) Colon |:|
+//@[12:25) Identifier |resourceGroup|
+//@[25:26) LeftParen |(|
+//@[26:27) RightParen |)|
+//@[27:28) Dot |.|
+//@[28:36) Identifier |location|
+//@[36:38) NewLine |\r\n|
+  properties: {
+//@[2:12) Identifier |properties|
+//@[12:13) Colon |:|
+//@[14:15) LeftBrace |{|
+//@[15:17) NewLine |\r\n|
+    state: 'Enabled'
+//@[4:9) Identifier |state|
+//@[9:10) Colon |:|
+//@[11:20) StringComplete |'Enabled'|
+//@[20:22) NewLine |\r\n|
+    definition: ''
+//@[4:14) Identifier |definition|
+//@[14:15) Colon |:|
+//@[16:18) StringComplete |''|
+//@[18:20) NewLine |\r\n|
+  }
+//@[2:3) RightBrace |}|
+//@[3:5) NewLine |\r\n|
+  identity: {
+//@[2:10) Identifier |identity|
+//@[10:11) Colon |:|
+//@[12:13) LeftBrace |{|
+//@[13:15) NewLine |\r\n|
+    type: 'SystemAssigned'
+//@[4:8) Identifier |type|
+//@[8:9) Colon |:|
+//@[10:26) StringComplete |'SystemAssigned'|
+//@[26:28) NewLine |\r\n|
+  }
+//@[2:3) RightBrace |}|
+//@[3:5) NewLine |\r\n|
+  extendedLocation: {}
+//@[2:18) Identifier |extendedLocation|
+//@[18:19) Colon |:|
+//@[20:21) LeftBrace |{|
+//@[21:22) RightBrace |}|
+//@[22:24) NewLine |\r\n|
+  sku: {}
+//@[2:5) Identifier |sku|
+//@[5:6) Colon |:|
+//@[7:8) LeftBrace |{|
+//@[8:9) RightBrace |}|
+//@[9:11) NewLine |\r\n|
+  kind: 'V1'
+//@[2:6) Identifier |kind|
+//@[6:7) Colon |:|
+//@[8:12) StringComplete |'V1'|
+//@[12:14) NewLine |\r\n|
+  managedBy: 'string'
+//@[2:11) Identifier |managedBy|
+//@[11:12) Colon |:|
+//@[13:21) StringComplete |'string'|
+//@[21:23) NewLine |\r\n|
+  mangedByExtended: [
+//@[2:18) Identifier |mangedByExtended|
+//@[18:19) Colon |:|
+//@[20:21) LeftSquare |[|
+//@[21:23) NewLine |\r\n|
+   'str1'
+//@[3:9) StringComplete |'str1'|
+//@[9:11) NewLine |\r\n|
+   'str2'
+//@[3:9) StringComplete |'str2'|
+//@[9:11) NewLine |\r\n|
+  ]
+//@[2:3) RightSquare |]|
+//@[3:5) NewLine |\r\n|
+  zones: [
+//@[2:7) Identifier |zones|
+//@[7:8) Colon |:|
+//@[9:10) LeftSquare |[|
+//@[10:12) NewLine |\r\n|
+   'str1'
+//@[3:9) StringComplete |'str1'|
+//@[9:11) NewLine |\r\n|
+   'str2'
+//@[3:9) StringComplete |'str2'|
+//@[9:11) NewLine |\r\n|
+  ]
+//@[2:3) RightSquare |]|
+//@[3:5) NewLine |\r\n|
+  plan: {}
+//@[2:6) Identifier |plan|
+//@[6:7) Colon |:|
+//@[8:9) LeftBrace |{|
+//@[9:10) RightBrace |}|
+//@[10:12) NewLine |\r\n|
+  eTag: ''
+//@[2:6) Identifier |eTag|
+//@[6:7) Colon |:|
+//@[8:10) StringComplete |''|
+//@[10:12) NewLine |\r\n|
+  scale: {}  
+//@[2:7) Identifier |scale|
+//@[7:8) Colon |:|
+//@[9:10) LeftBrace |{|
+//@[10:11) RightBrace |}|
+//@[13:15) NewLine |\r\n|
+}
+//@[0:1) RightBrace |}|
+//@[1:5) NewLine |\r\n\r\n|
+
+resource issue3000LogicApp2 'Microsoft.Logic/workflows@2019-05-01' = {
+//@[0:8) Identifier |resource|
+//@[9:27) Identifier |issue3000LogicApp2|
+//@[28:66) StringComplete |'Microsoft.Logic/workflows@2019-05-01'|
+//@[67:68) Assignment |=|
+//@[69:70) LeftBrace |{|
+//@[70:72) NewLine |\r\n|
+  name: 'issue3000LogicApp2'
+//@[2:6) Identifier |name|
+//@[6:7) Colon |:|
+//@[8:28) StringComplete |'issue3000LogicApp2'|
+//@[28:30) NewLine |\r\n|
+  location: resourceGroup().location
+//@[2:10) Identifier |location|
+//@[10:11) Colon |:|
+//@[12:25) Identifier |resourceGroup|
+//@[25:26) LeftParen |(|
+//@[26:27) RightParen |)|
+//@[27:28) Dot |.|
+//@[28:36) Identifier |location|
+//@[36:38) NewLine |\r\n|
+  properties: {
+//@[2:12) Identifier |properties|
+//@[12:13) Colon |:|
+//@[14:15) LeftBrace |{|
+//@[15:17) NewLine |\r\n|
+    state: 'Enabled'
+//@[4:9) Identifier |state|
+//@[9:10) Colon |:|
+//@[11:20) StringComplete |'Enabled'|
+//@[20:22) NewLine |\r\n|
+    definition: ''
+//@[4:14) Identifier |definition|
+//@[14:15) Colon |:|
+//@[16:18) StringComplete |''|
+//@[18:20) NewLine |\r\n|
+  }
+//@[2:3) RightBrace |}|
+//@[3:5) NewLine |\r\n|
+  identity: 'SystemAssigned'
+//@[2:10) Identifier |identity|
+//@[10:11) Colon |:|
+//@[12:28) StringComplete |'SystemAssigned'|
+//@[28:30) NewLine |\r\n|
+  extendedLocation: 'eastus'
+//@[2:18) Identifier |extendedLocation|
+//@[18:19) Colon |:|
+//@[20:28) StringComplete |'eastus'|
+//@[28:30) NewLine |\r\n|
+  sku: 'Basic'
+//@[2:5) Identifier |sku|
+//@[5:6) Colon |:|
+//@[7:14) StringComplete |'Basic'|
+//@[14:16) NewLine |\r\n|
+  kind: {
+//@[2:6) Identifier |kind|
+//@[6:7) Colon |:|
+//@[8:9) LeftBrace |{|
+//@[9:11) NewLine |\r\n|
+    name: 'V1'
+//@[4:8) Identifier |name|
+//@[8:9) Colon |:|
+//@[10:14) StringComplete |'V1'|
+//@[14:16) NewLine |\r\n|
+  }
+//@[2:3) RightBrace |}|
+//@[3:5) NewLine |\r\n|
+  managedBy: {}
+//@[2:11) Identifier |managedBy|
+//@[11:12) Colon |:|
+//@[13:14) LeftBrace |{|
+//@[14:15) RightBrace |}|
+//@[15:17) NewLine |\r\n|
+  mangedByExtended: [
+//@[2:18) Identifier |mangedByExtended|
+//@[18:19) Colon |:|
+//@[20:21) LeftSquare |[|
+//@[21:23) NewLine |\r\n|
+   {}
+//@[3:4) LeftBrace |{|
+//@[4:5) RightBrace |}|
+//@[5:7) NewLine |\r\n|
+   {}
+//@[3:4) LeftBrace |{|
+//@[4:5) RightBrace |}|
+//@[5:7) NewLine |\r\n|
+  ]
+//@[2:3) RightSquare |]|
+//@[3:5) NewLine |\r\n|
+  zones: [
+//@[2:7) Identifier |zones|
+//@[7:8) Colon |:|
+//@[9:10) LeftSquare |[|
+//@[10:12) NewLine |\r\n|
+   {}
+//@[3:4) LeftBrace |{|
+//@[4:5) RightBrace |}|
+//@[5:7) NewLine |\r\n|
+   {}
+//@[3:4) LeftBrace |{|
+//@[4:5) RightBrace |}|
+//@[5:7) NewLine |\r\n|
+  ]
+//@[2:3) RightSquare |]|
+//@[3:5) NewLine |\r\n|
+  plan: ''
+//@[2:6) Identifier |plan|
+//@[6:7) Colon |:|
+//@[8:10) StringComplete |''|
+//@[10:12) NewLine |\r\n|
+  eTag: {}
+//@[2:6) Identifier |eTag|
+//@[6:7) Colon |:|
+//@[8:9) LeftBrace |{|
+//@[9:10) RightBrace |}|
+//@[10:12) NewLine |\r\n|
+  scale: [
+//@[2:7) Identifier |scale|
+//@[7:8) Colon |:|
+//@[9:10) LeftSquare |[|
+//@[10:12) NewLine |\r\n|
+  {}
+//@[2:3) LeftBrace |{|
+//@[3:4) RightBrace |}|
+//@[4:6) NewLine |\r\n|
+  ]  
+//@[2:3) RightSquare |]|
+//@[5:7) NewLine |\r\n|
+}
+//@[0:1) RightBrace |}|
+//@[1:5) NewLine |\r\n\r\n|
+
+resource issue3000stg 'Microsoft.Storage/storageAccounts@2021-04-01' = {
+//@[0:8) Identifier |resource|
+//@[9:21) Identifier |issue3000stg|
+//@[22:68) StringComplete |'Microsoft.Storage/storageAccounts@2021-04-01'|
+//@[69:70) Assignment |=|
+//@[71:72) LeftBrace |{|
+//@[72:74) NewLine |\r\n|
+  name: 'issue3000stg'
+//@[2:6) Identifier |name|
+//@[6:7) Colon |:|
+//@[8:22) StringComplete |'issue3000stg'|
+//@[22:24) NewLine |\r\n|
+  kind: 'StorageV2'
+//@[2:6) Identifier |kind|
+//@[6:7) Colon |:|
+//@[8:19) StringComplete |'StorageV2'|
+//@[19:21) NewLine |\r\n|
+  location: 'West US'
+//@[2:10) Identifier |location|
+//@[10:11) Colon |:|
+//@[12:21) StringComplete |'West US'|
+//@[21:23) NewLine |\r\n|
+  sku: {
+//@[2:5) Identifier |sku|
+//@[5:6) Colon |:|
+//@[7:8) LeftBrace |{|
+//@[8:10) NewLine |\r\n|
+    name: 'Premium_LRS'    
+//@[4:8) Identifier |name|
+//@[8:9) Colon |:|
+//@[10:23) StringComplete |'Premium_LRS'|
+//@[27:29) NewLine |\r\n|
+  }
+//@[2:3) RightBrace |}|
+//@[3:5) NewLine |\r\n|
+  madeUpProperty: {}
+//@[2:16) Identifier |madeUpProperty|
+//@[16:17) Colon |:|
+//@[18:19) LeftBrace |{|
+//@[19:20) RightBrace |}|
+//@[20:22) NewLine |\r\n|
+  managedByExtended: []
+//@[2:19) Identifier |managedByExtended|
+//@[19:20) Colon |:|
+//@[21:22) LeftSquare |[|
+//@[22:23) RightSquare |]|
+//@[23:25) NewLine |\r\n|
+}
+//@[0:1) RightBrace |}|
+//@[1:5) NewLine |\r\n\r\n|
+
+var issue3000stgMadeUpProperty = issue3000stg.madeUpProperty
+//@[0:3) Identifier |var|
+//@[4:30) Identifier |issue3000stgMadeUpProperty|
+//@[31:32) Assignment |=|
+//@[33:45) Identifier |issue3000stg|
+//@[45:46) Dot |.|
+//@[46:60) Identifier |madeUpProperty|
+//@[60:62) NewLine |\r\n|
+var issue3000stgManagedBy = issue3000stg.managedBy
+//@[0:3) Identifier |var|
+//@[4:25) Identifier |issue3000stgManagedBy|
+//@[26:27) Assignment |=|
+//@[28:40) Identifier |issue3000stg|
+//@[40:41) Dot |.|
+//@[41:50) Identifier |managedBy|
+//@[50:52) NewLine |\r\n|
+var issue3000stgManagedByExtended = issue3000stg.managedByExtended
+//@[0:3) Identifier |var|
+//@[4:33) Identifier |issue3000stgManagedByExtended|
+//@[34:35) Assignment |=|
+//@[36:48) Identifier |issue3000stg|
+//@[48:49) Dot |.|
+//@[49:66) Identifier |managedByExtended|
+//@[66:70) NewLine |\r\n\r\n|
+
+param dataCollectionRule object
+//@[0:5) Identifier |param|
+//@[6:24) Identifier |dataCollectionRule|
+//@[25:31) Identifier |object|
+//@[31:33) NewLine |\r\n|
+param tags object
+//@[0:5) Identifier |param|
+//@[6:10) Identifier |tags|
+//@[11:17) Identifier |object|
+//@[17:21) NewLine |\r\n\r\n|
+
+var defaultLogAnalyticsWorkspace = {
+//@[0:3) Identifier |var|
+//@[4:32) Identifier |defaultLogAnalyticsWorkspace|
+//@[33:34) Assignment |=|
+//@[35:36) LeftBrace |{|
+//@[36:38) NewLine |\r\n|
+  subscriptionId: subscription().subscriptionId
+//@[2:16) Identifier |subscriptionId|
+//@[16:17) Colon |:|
+//@[18:30) Identifier |subscription|
+//@[30:31) LeftParen |(|
+//@[31:32) RightParen |)|
+//@[32:33) Dot |.|
+//@[33:47) Identifier |subscriptionId|
+//@[47:49) NewLine |\r\n|
+}
+//@[0:1) RightBrace |}|
+//@[1:5) NewLine |\r\n\r\n|
+
+resource logAnalyticsWorkspaces 'Microsoft.OperationalInsights/workspaces@2020-10-01' existing = [for logAnalyticsWorkspace in dataCollectionRule.destinations.logAnalyticsWorkspaces: {
+//@[0:8) Identifier |resource|
+//@[9:31) Identifier |logAnalyticsWorkspaces|
+//@[32:85) StringComplete |'Microsoft.OperationalInsights/workspaces@2020-10-01'|
+//@[86:94) Identifier |existing|
+//@[95:96) Assignment |=|
+//@[97:98) LeftSquare |[|
+//@[98:101) Identifier |for|
+//@[102:123) Identifier |logAnalyticsWorkspace|
+//@[124:126) Identifier |in|
+//@[127:145) Identifier |dataCollectionRule|
+//@[145:146) Dot |.|
+//@[146:158) Identifier |destinations|
+//@[158:159) Dot |.|
+//@[159:181) Identifier |logAnalyticsWorkspaces|
+//@[181:182) Colon |:|
+//@[183:184) LeftBrace |{|
+//@[184:186) NewLine |\r\n|
+  name: logAnalyticsWorkspace.name
+//@[2:6) Identifier |name|
+//@[6:7) Colon |:|
+//@[8:29) Identifier |logAnalyticsWorkspace|
+//@[29:30) Dot |.|
+//@[30:34) Identifier |name|
+//@[34:36) NewLine |\r\n|
+  scope: resourceGroup( union( defaultLogAnalyticsWorkspace, logAnalyticsWorkspace ).subscriptionId, logAnalyticsWorkspace.resourceGroup )
+//@[2:7) Identifier |scope|
+//@[7:8) Colon |:|
+//@[9:22) Identifier |resourceGroup|
+//@[22:23) LeftParen |(|
+//@[24:29) Identifier |union|
+//@[29:30) LeftParen |(|
+//@[31:59) Identifier |defaultLogAnalyticsWorkspace|
+//@[59:60) Comma |,|
+//@[61:82) Identifier |logAnalyticsWorkspace|
+//@[83:84) RightParen |)|
+//@[84:85) Dot |.|
+//@[85:99) Identifier |subscriptionId|
+//@[99:100) Comma |,|
+//@[101:122) Identifier |logAnalyticsWorkspace|
+//@[122:123) Dot |.|
+//@[123:136) Identifier |resourceGroup|
+//@[137:138) RightParen |)|
+//@[138:140) NewLine |\r\n|
+}]
+//@[0:1) RightBrace |}|
+//@[1:2) RightSquare |]|
+//@[2:6) NewLine |\r\n\r\n|
+
+resource dataCollectionRuleRes 'Microsoft.Insights/dataCollectionRules@2021-04-01' = {
+//@[0:8) Identifier |resource|
+//@[9:30) Identifier |dataCollectionRuleRes|
+//@[31:82) StringComplete |'Microsoft.Insights/dataCollectionRules@2021-04-01'|
+//@[83:84) Assignment |=|
+//@[85:86) LeftBrace |{|
+//@[86:88) NewLine |\r\n|
+  name: dataCollectionRule.name
+//@[2:6) Identifier |name|
+//@[6:7) Colon |:|
+//@[8:26) Identifier |dataCollectionRule|
+//@[26:27) Dot |.|
+//@[27:31) Identifier |name|
+//@[31:33) NewLine |\r\n|
+  location: dataCollectionRule.location
+//@[2:10) Identifier |location|
+//@[10:11) Colon |:|
+//@[12:30) Identifier |dataCollectionRule|
+//@[30:31) Dot |.|
+//@[31:39) Identifier |location|
+//@[39:41) NewLine |\r\n|
+  tags: tags
+//@[2:6) Identifier |tags|
+//@[6:7) Colon |:|
+//@[8:12) Identifier |tags|
+//@[12:14) NewLine |\r\n|
+  kind: dataCollectionRule.kind
+//@[2:6) Identifier |kind|
+//@[6:7) Colon |:|
+//@[8:26) Identifier |dataCollectionRule|
+//@[26:27) Dot |.|
+//@[27:31) Identifier |kind|
+//@[31:33) NewLine |\r\n|
+  properties: {
+//@[2:12) Identifier |properties|
+//@[12:13) Colon |:|
+//@[14:15) LeftBrace |{|
+//@[15:17) NewLine |\r\n|
+    description: dataCollectionRule.description
+//@[4:15) Identifier |description|
+//@[15:16) Colon |:|
+//@[17:35) Identifier |dataCollectionRule|
+//@[35:36) Dot |.|
+//@[36:47) Identifier |description|
+//@[47:49) NewLine |\r\n|
+    destinations: union(empty(dataCollectionRule.destinations.azureMonitorMetrics.name) ? {} : {
+//@[4:16) Identifier |destinations|
+//@[16:17) Colon |:|
+//@[18:23) Identifier |union|
+//@[23:24) LeftParen |(|
+//@[24:29) Identifier |empty|
+//@[29:30) LeftParen |(|
+//@[30:48) Identifier |dataCollectionRule|
+//@[48:49) Dot |.|
+//@[49:61) Identifier |destinations|
+//@[61:62) Dot |.|
+//@[62:81) Identifier |azureMonitorMetrics|
+//@[81:82) Dot |.|
+//@[82:86) Identifier |name|
+//@[86:87) RightParen |)|
+//@[88:89) Question |?|
+//@[90:91) LeftBrace |{|
+//@[91:92) RightBrace |}|
+//@[93:94) Colon |:|
+//@[95:96) LeftBrace |{|
+//@[96:98) NewLine |\r\n|
+      azureMonitorMetrics: {
+//@[6:25) Identifier |azureMonitorMetrics|
+//@[25:26) Colon |:|
+//@[27:28) LeftBrace |{|
+//@[28:30) NewLine |\r\n|
+        name: dataCollectionRule.destinations.azureMonitorMetrics.name
+//@[8:12) Identifier |name|
+//@[12:13) Colon |:|
+//@[14:32) Identifier |dataCollectionRule|
+//@[32:33) Dot |.|
+//@[33:45) Identifier |destinations|
+//@[45:46) Dot |.|
+//@[46:65) Identifier |azureMonitorMetrics|
+//@[65:66) Dot |.|
+//@[66:70) Identifier |name|
+//@[70:72) NewLine |\r\n|
+      }
+//@[6:7) RightBrace |}|
+//@[7:9) NewLine |\r\n|
+    },{
+//@[4:5) RightBrace |}|
+//@[5:6) Comma |,|
+//@[6:7) LeftBrace |{|
+//@[7:9) NewLine |\r\n|
+      logAnalytics: [for (logAnalyticsWorkspace, i) in dataCollectionRule.destinations.logAnalyticsWorkspaces: {
+//@[6:18) Identifier |logAnalytics|
+//@[18:19) Colon |:|
+//@[20:21) LeftSquare |[|
+//@[21:24) Identifier |for|
+//@[25:26) LeftParen |(|
+//@[26:47) Identifier |logAnalyticsWorkspace|
+//@[47:48) Comma |,|
+//@[49:50) Identifier |i|
+//@[50:51) RightParen |)|
+//@[52:54) Identifier |in|
+//@[55:73) Identifier |dataCollectionRule|
+//@[73:74) Dot |.|
+//@[74:86) Identifier |destinations|
+//@[86:87) Dot |.|
+//@[87:109) Identifier |logAnalyticsWorkspaces|
+//@[109:110) Colon |:|
+//@[111:112) LeftBrace |{|
+//@[112:114) NewLine |\r\n|
+        name: logAnalyticsWorkspace.destinationName
+//@[8:12) Identifier |name|
+//@[12:13) Colon |:|
+//@[14:35) Identifier |logAnalyticsWorkspace|
+//@[35:36) Dot |.|
+//@[36:51) Identifier |destinationName|
+//@[51:53) NewLine |\r\n|
+        workspaceResourceId: logAnalyticsWorkspaces[i].id
+//@[8:27) Identifier |workspaceResourceId|
+//@[27:28) Colon |:|
+//@[29:51) Identifier |logAnalyticsWorkspaces|
+//@[51:52) LeftSquare |[|
+//@[52:53) Identifier |i|
+//@[53:54) RightSquare |]|
+//@[54:55) Dot |.|
+//@[55:57) Identifier |id|
+//@[57:59) NewLine |\r\n|
+      }]
+//@[6:7) RightBrace |}|
+//@[7:8) RightSquare |]|
+//@[8:10) NewLine |\r\n|
+    })
+//@[4:5) RightBrace |}|
+//@[5:6) RightParen |)|
+//@[6:8) NewLine |\r\n|
+    dataSources: dataCollectionRule.dataSources
+//@[4:15) Identifier |dataSources|
+//@[15:16) Colon |:|
+//@[17:35) Identifier |dataCollectionRule|
+//@[35:36) Dot |.|
+//@[36:47) Identifier |dataSources|
+//@[47:49) NewLine |\r\n|
+    dataFlows: dataCollectionRule.dataFlows
+//@[4:13) Identifier |dataFlows|
+//@[13:14) Colon |:|
+//@[15:33) Identifier |dataCollectionRule|
+//@[33:34) Dot |.|
+//@[34:43) Identifier |dataFlows|
+//@[43:45) NewLine |\r\n|
+  }
+//@[2:3) RightBrace |}|
+//@[3:5) NewLine |\r\n|
+}
+//@[0:1) RightBrace |}|
+//@[1:5) NewLine |\r\n\r\n|
+
+resource dataCollectionRuleRes2 'Microsoft.Insights/dataCollectionRules@2021-04-01' = {
+//@[0:8) Identifier |resource|
+//@[9:31) Identifier |dataCollectionRuleRes2|
+//@[32:83) StringComplete |'Microsoft.Insights/dataCollectionRules@2021-04-01'|
+//@[84:85) Assignment |=|
+//@[86:87) LeftBrace |{|
+//@[87:89) NewLine |\r\n|
+  name: dataCollectionRule.name
+//@[2:6) Identifier |name|
+//@[6:7) Colon |:|
+//@[8:26) Identifier |dataCollectionRule|
+//@[26:27) Dot |.|
+//@[27:31) Identifier |name|
+//@[31:33) NewLine |\r\n|
+  location: dataCollectionRule.location
+//@[2:10) Identifier |location|
+//@[10:11) Colon |:|
+//@[12:30) Identifier |dataCollectionRule|
+//@[30:31) Dot |.|
+//@[31:39) Identifier |location|
+//@[39:41) NewLine |\r\n|
+  tags: tags
+//@[2:6) Identifier |tags|
+//@[6:7) Colon |:|
+//@[8:12) Identifier |tags|
+//@[12:14) NewLine |\r\n|
+  kind: dataCollectionRule.kind
+//@[2:6) Identifier |kind|
+//@[6:7) Colon |:|
+//@[8:26) Identifier |dataCollectionRule|
+//@[26:27) Dot |.|
+//@[27:31) Identifier |kind|
+//@[31:33) NewLine |\r\n|
+  properties: {
+//@[2:12) Identifier |properties|
+//@[12:13) Colon |:|
+//@[14:15) LeftBrace |{|
+//@[15:17) NewLine |\r\n|
+    description: dataCollectionRule.description
+//@[4:15) Identifier |description|
+//@[15:16) Colon |:|
+//@[17:35) Identifier |dataCollectionRule|
+//@[35:36) Dot |.|
+//@[36:47) Identifier |description|
+//@[47:49) NewLine |\r\n|
+    destinations: empty([]) ? [for x in []: {}] : [for x in []: {}]
+//@[4:16) Identifier |destinations|
+//@[16:17) Colon |:|
+//@[18:23) Identifier |empty|
+//@[23:24) LeftParen |(|
+//@[24:25) LeftSquare |[|
+//@[25:26) RightSquare |]|
+//@[26:27) RightParen |)|
+//@[28:29) Question |?|
+//@[30:31) LeftSquare |[|
+//@[31:34) Identifier |for|
+//@[35:36) Identifier |x|
+//@[37:39) Identifier |in|
+//@[40:41) LeftSquare |[|
+//@[41:42) RightSquare |]|
+//@[42:43) Colon |:|
+//@[44:45) LeftBrace |{|
+//@[45:46) RightBrace |}|
+//@[46:47) RightSquare |]|
+//@[48:49) Colon |:|
+//@[50:51) LeftSquare |[|
+//@[51:54) Identifier |for|
+//@[55:56) Identifier |x|
+//@[57:59) Identifier |in|
+//@[60:61) LeftSquare |[|
+//@[61:62) RightSquare |]|
+//@[62:63) Colon |:|
+//@[64:65) LeftBrace |{|
+//@[65:66) RightBrace |}|
+//@[66:67) RightSquare |]|
+//@[67:69) NewLine |\r\n|
+    dataSources: dataCollectionRule.dataSources
+//@[4:15) Identifier |dataSources|
+//@[15:16) Colon |:|
+//@[17:35) Identifier |dataCollectionRule|
+//@[35:36) Dot |.|
+//@[36:47) Identifier |dataSources|
+//@[47:49) NewLine |\r\n|
+    dataFlows: dataCollectionRule.dataFlows
+//@[4:13) Identifier |dataFlows|
+//@[13:14) Colon |:|
+//@[15:33) Identifier |dataCollectionRule|
+//@[33:34) Dot |.|
+//@[34:43) Identifier |dataFlows|
+//@[43:45) NewLine |\r\n|
+  }
+//@[2:3) RightBrace |}|
+//@[3:5) NewLine |\r\n|
+}
+//@[0:1) RightBrace |}|
+//@[1:3) NewLine |\r\n|
 
 //@[0:0) EndOfFile ||

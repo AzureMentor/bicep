@@ -11,6 +11,7 @@ using Bicep.Core.Navigation;
 using Bicep.Core.Parsing;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
+using Bicep.Core.Workspaces;
 using Bicep.LanguageServer.Extensions;
 using Range = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 
@@ -78,8 +79,8 @@ namespace Bicep.LanguageServer.Completions
 
         public static BicepCompletionContext Create(Compilation compilation, int offset)
         {
-            var syntaxTree = compilation.SyntaxTreeGrouping.EntryPoint;
-            var matchingNodes = SyntaxMatcher.FindNodesMatchingOffset(syntaxTree.ProgramSyntax, offset);
+            var bicepFile = compilation.SourceFileGrouping.EntryPoint;
+            var matchingNodes = SyntaxMatcher.FindNodesMatchingOffset(bicepFile.ProgramSyntax, offset);
             if (!matchingNodes.Any())
             {
                 // this indicates a bug
@@ -87,9 +88,9 @@ namespace Bicep.LanguageServer.Completions
             }
 
             // the check at the beginning guarantees we have at least 1 node
-            var replacementRange = GetReplacementRange(syntaxTree, matchingNodes[^1], offset);
+            var replacementRange = GetReplacementRange(bicepFile, matchingNodes[^1], offset);
 
-            var triviaMatchingOffset = FindTriviaMatchingOffset(syntaxTree.ProgramSyntax, offset);
+            var triviaMatchingOffset = FindTriviaMatchingOffset(bicepFile.ProgramSyntax, offset);
             switch (triviaMatchingOffset?.Type)
             {
                 case SyntaxTriviaType.SingleLineComment when offset > triviaMatchingOffset.Span.Position:
@@ -251,7 +252,7 @@ namespace Bicep.LanguageServer.Completions
                 var node = matchingNodes[^2];
 
                 switch (node)
-                {
+            {
                     case ProgramSyntax programSyntax:
                         // the token at current position is inside a program node
                         // we're in a declaration if one of the following conditions is met:
@@ -267,11 +268,12 @@ namespace Bicep.LanguageServer.Completions
                         return token.Type == TokenType.Identifier && matchingNodes[^3] is ProgramSyntax;
 
                     case ITopLevelNamedDeclarationSyntax declaration:
-                        // we are in a fully or partially parsed declaration
+                        // we are in a partially parsed declaration which only contains a keyword
                         // whether we are in a declaration context depends on whether our offset is within the keyword token
                         // (by using exclusive span containment, the cursor position at the end of a keyword token
                         // result counts as being outside of the declaration context)
-                        return declaration.Keyword.Span.Contains(offset);
+                        return declaration.Name.IdentifierName.Equals(LanguageConstants.MissingName, LanguageConstants.IdentifierComparison) &&
+                            declaration.Keyword.Span.Contains(offset);
                 }
             }
 
@@ -398,11 +400,11 @@ namespace Bicep.LanguageServer.Completions
                 if (
                     // the cursor position may be in the trivia following the colon that follows the property name
                     // if that's the case, the offset should match the end of the property span exactly
-                    SyntaxMatcher.IsTailMatch<ObjectPropertySyntax>(matchingNodes, property => property.Colon is not SkippedTriviaSyntax && offset >= property.Colon.GetEndPosition()) ||
+                    SyntaxMatcher.IsTailMatch<ObjectPropertySyntax>(matchingNodes, property => property.Colon is not SkippedTriviaSyntax && offset >= property.Colon.GetEndPosition() && property.Value is SkippedTriviaSyntax) ||
                     // the cursor position is after the colon that follows the property name
                     SyntaxMatcher.IsTailMatch<ObjectPropertySyntax, Token>(matchingNodes, (_, token) => token.Type == TokenType.Colon && offset>= token.GetEndPosition()) ||
-                    // the cursor is inside a string value of the property
-                    SyntaxMatcher.IsTailMatch<ObjectPropertySyntax, StringSyntax, Token>(matchingNodes, (property, stringSyntax, token) => ReferenceEquals(property.Value, stringSyntax)) ||
+                    // the cursor is inside a string value of the property that is not interpolated
+                    SyntaxMatcher.IsTailMatch<ObjectPropertySyntax, StringSyntax, Token>(matchingNodes, (property, stringSyntax, token) => ReferenceEquals(property.Value, stringSyntax) && !stringSyntax.Expressions.Any()) ||
                     // the cursor could is a partial or full identifier
                     // which will present as either a keyword or identifier token
                     SyntaxMatcher.IsTailMatch<ObjectPropertySyntax, VariableAccessSyntax, IdentifierSyntax, Token>(matchingNodes, (property, variableAccess, identifier, token) => ReferenceEquals(property.Value, variableAccess)))
@@ -701,18 +703,18 @@ namespace Bicep.LanguageServer.Completions
         
         static bool IsOffsetImmediatlyAfterNode(int offset, SyntaxBase node) => node.Span.Position + node.Span.Length == offset;
 
-        private static Range GetReplacementRange(SyntaxTree syntaxTree, SyntaxBase innermostMatchingNode, int offset)
+        private static Range GetReplacementRange(BicepFile bicepFile, SyntaxBase innermostMatchingNode, int offset)
         {
             if (innermostMatchingNode is Token token && ReplaceableTokens.Contains(token.Type))
             {
                 // the token is replaceable - replace it
-                return token.Span.ToRange(syntaxTree.LineStarts);
+                return token.Span.ToRange(bicepFile.LineStarts);
             }
 
             // the innermost matching node is either a non-token or it's not replaceable
             // (non-replaceable tokens include colons, newlines, parens, etc.)
             // produce an insertion edit
-            return new TextSpan(offset, 0).ToRange(syntaxTree.LineStarts);
+            return new TextSpan(offset, 0).ToRange(bicepFile.LineStarts);
         }
 
         private static bool CanInsertChildNodeAtOffset(ProgramSyntax programSyntax, int offset)

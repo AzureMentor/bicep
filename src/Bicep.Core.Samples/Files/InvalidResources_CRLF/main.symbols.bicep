@@ -861,7 +861,7 @@ var mock = incorrectPropertiesKey.p
 //@[4:8) Variable mock. Type: error. Declaration start char: 0, length: 35
 
 resource incorrectPropertiesKey2 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
-//@[9:32) Resource incorrectPropertiesKey2. Type: Microsoft.Resources/deploymentScripts@2020-10-01. Declaration start char: 0, length: 774
+//@[9:32) Resource incorrectPropertiesKey2. Type: Microsoft.Resources/deploymentScripts@2020-10-01. Declaration start char: 0, length: 796
   kind: 'AzureCLI'
   name: 'test'
   location: ''
@@ -885,7 +885,7 @@ resource incorrectPropertiesKey2 'Microsoft.Resources/deploymentScripts@2020-10-
         // #completionTest(0,2,4,6,8) -> environmentVariableProperties
         
       }
-      // #completionTest(0,1,2,3,4,5,6) -> objectPlusSymbols
+      // #completionTest(0,1,2,3,4,5,6) -> objectPlusSymbolsWithRequiredProperties
       
     ]
   }
@@ -1495,7 +1495,7 @@ resource propertyLoopsCannotNest2 'Microsoft.Storage/storageAccounts@2019-06-01'
 // property loops cannot be nested (even more nesting)
 resource propertyLoopsCannotNest2 'Microsoft.Storage/storageAccounts@2019-06-01' = [for account in storageAccounts: {
 //@[88:95) Local account. Type: any. Declaration start char: 88, length: 7
-//@[9:33) Resource propertyLoopsCannotNest2. Type: Microsoft.Storage/storageAccounts@2019-06-01[]. Declaration start char: 0, length: 687
+//@[9:33) Resource propertyLoopsCannotNest2. Type: Microsoft.Storage/storageAccounts@2019-06-01[]. Declaration start char: 0, length: 634
   name: account.name
   location: account.location
   sku: {
@@ -1503,11 +1503,10 @@ resource propertyLoopsCannotNest2 'Microsoft.Storage/storageAccounts@2019-06-01'
   }
   kind: 'StorageV2'
   properties: {
-    // #completionTest(17) -> symbolsPlusAccount
     networkAcls:  {
       virtualNetworkRules: [for rule in []: {
 //@[32:36) Local rule. Type: any. Declaration start char: 32, length: 4
-        // #completionTest(12,15,31) -> symbolsPlusRule
+        // #completionTest(15,31) -> symbolsPlusRule
         id: '${account.name}-${account.location}'
         state: [for state in []: {
 //@[20:25) Local state. Type: any. Declaration start char: 20, length: 5
@@ -1866,4 +1865,141 @@ resource comp7 'Microsoft.Resources/templateSpecs@20'
 // #completionTest(60,61) -> virtualNetworksResourceTypes
 resource comp8 'Microsoft.Network/virtualNetworks@2020-06-01'
 //@[9:14) Resource comp8. Type: Microsoft.Network/virtualNetworks@2020-06-01. Declaration start char: 0, length: 61
+
+
+// issue #3000
+resource issue3000LogicApp1 'Microsoft.Logic/workflows@2019-05-01' = {
+//@[9:27) Resource issue3000LogicApp1. Type: Microsoft.Logic/workflows@2019-05-01. Declaration start char: 0, length: 453
+  name: 'issue3000LogicApp1'
+  location: resourceGroup().location
+  properties: {
+    state: 'Enabled'
+    definition: ''
+  }
+  identity: {
+    type: 'SystemAssigned'
+  }
+  extendedLocation: {}
+  sku: {}
+  kind: 'V1'
+  managedBy: 'string'
+  mangedByExtended: [
+   'str1'
+   'str2'
+  ]
+  zones: [
+   'str1'
+   'str2'
+  ]
+  plan: {}
+  eTag: ''
+  scale: {}  
+}
+
+resource issue3000LogicApp2 'Microsoft.Logic/workflows@2019-05-01' = {
+//@[9:27) Resource issue3000LogicApp2. Type: Microsoft.Logic/workflows@2019-05-01. Declaration start char: 0, length: 452
+  name: 'issue3000LogicApp2'
+  location: resourceGroup().location
+  properties: {
+    state: 'Enabled'
+    definition: ''
+  }
+  identity: 'SystemAssigned'
+  extendedLocation: 'eastus'
+  sku: 'Basic'
+  kind: {
+    name: 'V1'
+  }
+  managedBy: {}
+  mangedByExtended: [
+   {}
+   {}
+  ]
+  zones: [
+   {}
+   {}
+  ]
+  plan: ''
+  eTag: {}
+  scale: [
+  {}
+  ]  
+}
+
+resource issue3000stg 'Microsoft.Storage/storageAccounts@2021-04-01' = {
+//@[9:21) Resource issue3000stg. Type: Microsoft.Storage/storageAccounts@2021-04-01. Declaration start char: 0, length: 234
+  name: 'issue3000stg'
+  kind: 'StorageV2'
+  location: 'West US'
+  sku: {
+    name: 'Premium_LRS'    
+  }
+  madeUpProperty: {}
+  managedByExtended: []
+}
+
+var issue3000stgMadeUpProperty = issue3000stg.madeUpProperty
+//@[4:30) Variable issue3000stgMadeUpProperty. Type: error. Declaration start char: 0, length: 60
+var issue3000stgManagedBy = issue3000stg.managedBy
+//@[4:25) Variable issue3000stgManagedBy. Type: string. Declaration start char: 0, length: 50
+var issue3000stgManagedByExtended = issue3000stg.managedByExtended
+//@[4:33) Variable issue3000stgManagedByExtended. Type: (never)[]. Declaration start char: 0, length: 66
+
+param dataCollectionRule object
+//@[6:24) Parameter dataCollectionRule. Type: object. Declaration start char: 0, length: 31
+param tags object
+//@[6:10) Parameter tags. Type: object. Declaration start char: 0, length: 17
+
+var defaultLogAnalyticsWorkspace = {
+//@[4:32) Variable defaultLogAnalyticsWorkspace. Type: object. Declaration start char: 0, length: 88
+  subscriptionId: subscription().subscriptionId
+}
+
+resource logAnalyticsWorkspaces 'Microsoft.OperationalInsights/workspaces@2020-10-01' existing = [for logAnalyticsWorkspace in dataCollectionRule.destinations.logAnalyticsWorkspaces: {
+//@[102:123) Local logAnalyticsWorkspace. Type: any. Declaration start char: 102, length: 21
+//@[9:31) Resource logAnalyticsWorkspaces. Type: Microsoft.OperationalInsights/workspaces@2020-10-01[]. Declaration start char: 0, length: 364
+  name: logAnalyticsWorkspace.name
+  scope: resourceGroup( union( defaultLogAnalyticsWorkspace, logAnalyticsWorkspace ).subscriptionId, logAnalyticsWorkspace.resourceGroup )
+}]
+
+resource dataCollectionRuleRes 'Microsoft.Insights/dataCollectionRules@2021-04-01' = {
+//@[9:30) Resource dataCollectionRuleRes. Type: Microsoft.Insights/dataCollectionRules@2021-04-01. Declaration start char: 0, length: 837
+  name: dataCollectionRule.name
+  location: dataCollectionRule.location
+  tags: tags
+  kind: dataCollectionRule.kind
+  properties: {
+    description: dataCollectionRule.description
+    destinations: union(empty(dataCollectionRule.destinations.azureMonitorMetrics.name) ? {} : {
+      azureMonitorMetrics: {
+        name: dataCollectionRule.destinations.azureMonitorMetrics.name
+      }
+    },{
+      logAnalytics: [for (logAnalyticsWorkspace, i) in dataCollectionRule.destinations.logAnalyticsWorkspaces: {
+//@[26:47) Local logAnalyticsWorkspace. Type: any. Declaration start char: 26, length: 21
+//@[49:50) Local i. Type: int. Declaration start char: 49, length: 1
+        name: logAnalyticsWorkspace.destinationName
+        workspaceResourceId: logAnalyticsWorkspaces[i].id
+      }]
+    })
+    dataSources: dataCollectionRule.dataSources
+    dataFlows: dataCollectionRule.dataFlows
+  }
+}
+
+resource dataCollectionRuleRes2 'Microsoft.Insights/dataCollectionRules@2021-04-01' = {
+//@[9:31) Resource dataCollectionRuleRes2. Type: Microsoft.Insights/dataCollectionRules@2021-04-01. Declaration start char: 0, length: 445
+  name: dataCollectionRule.name
+  location: dataCollectionRule.location
+  tags: tags
+  kind: dataCollectionRule.kind
+  properties: {
+    description: dataCollectionRule.description
+    destinations: empty([]) ? [for x in []: {}] : [for x in []: {}]
+//@[35:36) Local x. Type: any. Declaration start char: 35, length: 1
+//@[55:56) Local x. Type: any. Declaration start char: 55, length: 1
+    dataSources: dataCollectionRule.dataSources
+    dataFlows: dataCollectionRule.dataFlows
+  }
+}
 

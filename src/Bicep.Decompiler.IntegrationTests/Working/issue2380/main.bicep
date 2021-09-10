@@ -12,15 +12,15 @@ param subscriptionAlias string
 @description('Display name for the subscription')
 param subscriptionDisplayName string
 
+@description('Workload type for the subscription')
 @allowed([
   'Production'
   'DevTest'
 ])
-@description('Workload type for the subscription')
 param subscriptionWorkload string = 'Production'
 
 resource subscriptionAlias_resource 'Microsoft.Subscription/aliases@2020-09-01' = {
-//@[82:333) [BCP135 (Error)] Scope "managementGroup" is not valid for this resource type. Permitted scopes: "tenant". |{\n  name: subscriptionAlias\n  properties: {\n    workload: subscriptionWorkload\n    displayName: subscriptionDisplayName\n    billingScope: tenantResourceId('Microsoft.Billing/billingAccounts/enrollmentAccounts', billingAccount, enrollmentAccount)\n  }\n}|
+//@[82:333) [BCP135 (Error)] Scope "managementGroup" is not valid for this resource type. Permitted scopes: "tenant". (CodeDescription: none) |{\n  name: subscriptionAlias\n  properties: {\n    workload: subscriptionWorkload\n    displayName: subscriptionDisplayName\n    billingScope: tenantResourceId('Microsoft.Billing/billingAccounts/enrollmentAccounts', billingAccount, enrollmentAccount)\n  }\n}|
   name: subscriptionAlias
   properties: {
     workload: subscriptionWorkload

@@ -1,2 +1,12 @@
-var test = 1
-//@[4:8) [no-unused-vars (Warning)] Variable is declared but never used.\nSee https://aka.ms/bicep/linter/no-unused-vars |test|
+// $0 = 1
+// $1 = ttl
+
+var ttl = 1// Insert snippet here
+
+resource dnsRecord 'Microsoft.Network/dnsZones/A@2018-05-01' = {
+  name: 'zone/A'
+  properties: {
+    TTL: ttl
+  }
+}
+

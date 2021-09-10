@@ -7,6 +7,7 @@ using System.Xml.Linq;
 using Bicep.Core.Analyzers.Linter.Rules;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Emit;
+using Bicep.Core.FileSystem;
 using Bicep.Core.Semantics;
 using Bicep.Core.TypeSystem;
 using Bicep.Core.UnitTests;
@@ -16,6 +17,7 @@ using Bicep.Core.UnitTests.Utils;
 using FluentAssertions;
 using FluentAssertions.Execution;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
 using Newtonsoft.Json.Linq;
 using static System.Formats.Asn1.AsnWriter;
 
@@ -51,7 +53,7 @@ resource parent 'My.RP/parentType@2020-01-01' = {
 }
 ";
 
-            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SyntaxTreeGroupingFactory.CreateFromText(program));
+            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateFromText(program, BicepTestConstants.FileResolver));
             var model = compilation.GetEntrypointSemanticModel();
 
             model.GetAllDiagnostics().Should().BeEmpty();
@@ -63,7 +65,7 @@ resource parent 'My.RP/parentType@2020-01-01' = {
                 new { name = "sibling", type = "My.RP/parentType/childType@2020-01-02", },
             };
 
-            model.Root.GetAllResourceDeclarations()
+            model.AllResources.Select(x => x.Symbol)
               .Select(s => new { name = s.Name, type = (s.Type as ResourceType)?.TypeReference.FormatName(), })
               .OrderBy(n => n.name)
               .Should().BeEquivalentTo(expected);
@@ -89,7 +91,7 @@ resource parent 'My.RP/parentType@2020-01-01' = {
 }
 ";
 
-            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SyntaxTreeGroupingFactory.CreateFromText(program));
+            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateFromText(program, BicepTestConstants.FileResolver));
             var model = compilation.GetEntrypointSemanticModel();
 
             // The property "resource" is not allowed ...
@@ -102,7 +104,7 @@ resource parent 'My.RP/parentType@2020-01-01' = {
                 new { name = "parent", type = "My.RP/parentType@2020-01-01", },
             };
 
-            model.Root.GetAllResourceDeclarations()
+            model.AllResources.Select(x => x.Symbol)
               .Select(s => new { name = s.Name, type = (s.Type as ResourceType)?.TypeReference.FormatName(), })
               .OrderBy(n => n.name)
               .Should().BeEquivalentTo(expected);
@@ -147,28 +149,28 @@ output fromChild string = parent::child.properties.style
 output fromGrandchild string = parent::child::grandchild.properties.style
 ";
 
-            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SyntaxTreeGroupingFactory.CreateFromText(program));
+            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateFromText(program, BicepTestConstants.FileResolver));
             var model = compilation.GetEntrypointSemanticModel();
 
             model.GetAllDiagnostics().Should().BeEmpty();
 
-            var parent = model.Root.GetAllResourceDeclarations().Single(r => r.Name == "parent");
+            var parent = model.AllResources.Select(x => x.Symbol).Single(r => r.Name == "parent");
             var references = model.FindReferences(parent);
             references.Should().HaveCount(6);
 
-            var child = model.Root.GetAllResourceDeclarations().Single(r => r.Name == "child");
+            var child = model.AllResources.Select(x => x.Symbol).Single(r => r.Name == "child");
             references = model.FindReferences(child);
             references.Should().HaveCount(6);
 
-            var grandchild = model.Root.GetAllResourceDeclarations().Single(r => r.Name == "grandchild");
+            var grandchild = model.AllResources.Select(x => x.Symbol).Single(r => r.Name == "grandchild");
             references = model.FindReferences(grandchild);
             references.Should().HaveCount(4);
 
-            var sibling = model.Root.GetAllResourceDeclarations().Single(r => r.Name == "sibling");
+            var sibling = model.AllResources.Select(x => x.Symbol).Single(r => r.Name == "sibling");
             references = model.FindReferences(sibling);
             references.Should().HaveCount(1);
 
-            var emitter = new TemplateEmitter(compilation.GetEntrypointSemanticModel(), BicepTestConstants.DevAssemblyFileVersion);
+            var emitter = new TemplateEmitter(compilation.GetEntrypointSemanticModel(), EmitterSettingsHelper.DefaultTestSettings);
             using var outputStream = new MemoryStream();
             emitter.Emit(outputStream);
 
@@ -207,7 +209,7 @@ output fromChildInvalid string = parent::child2.properties.style
 output fromGrandchildInvalid string = parent::child::cousin.properties.temperature
 ";
 
-            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SyntaxTreeGroupingFactory.CreateFromText(program));
+            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateFromText(program, BicepTestConstants.FileResolver));
             var model = compilation.GetEntrypointSemanticModel();
 
             model.GetAllDiagnostics().Should().HaveDiagnostics(new[]{
@@ -242,7 +244,7 @@ resource other 'My.RP/parentType@2020-01-01' = {
 }
 ";
 
-            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SyntaxTreeGroupingFactory.CreateFromText(program));
+            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateFromText(program, BicepTestConstants.FileResolver));
             var diagnostics = compilation.GetEntrypointSemanticModel().GetAllDiagnostics();
             diagnostics.Should().HaveDiagnostics(new[] {
                 ("BCP057", DiagnosticLevel.Error, "The name \"child\" does not exist in the current context."),
@@ -267,7 +269,7 @@ resource parent 'My.RP/parentType@2020-01-01' = {
 }
 ";
 
-            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SyntaxTreeGroupingFactory.CreateFromText(program));
+            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateFromText(program, BicepTestConstants.FileResolver));
             var diagnostics = compilation.GetEntrypointSemanticModel().GetAllDiagnostics();
             diagnostics.Should().HaveDiagnostics(new[] {
                 ("BCP156", DiagnosticLevel.Error, "The resource type segment \"My.RP/parentType/childType@2020-01-01\" is invalid. Nested resources must specify a single type segment, and optionally can specify an api version using the format \"<type>@<apiVersion>\"."),
@@ -292,7 +294,7 @@ resource parent 'My.RP/parentType@invalid-version' = {
 }
 ";
 
-            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SyntaxTreeGroupingFactory.CreateFromText(program));
+            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateFromText(program, BicepTestConstants.FileResolver));
             var diagnostics = compilation.GetEntrypointSemanticModel().GetAllDiagnostics();
             diagnostics.Should().HaveDiagnostics(new[] {
                 ("BCP029", DiagnosticLevel.Error, "The resource type is not valid. Specify a valid resource type of format \"<provider>/<types>@<apiVersion>\"."),
@@ -324,7 +326,7 @@ resource parent 'My.RP/parentType@2020-01-01' = {
 }
 ";
 
-            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SyntaxTreeGroupingFactory.CreateFromText(program));
+            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateFromText(program, BicepTestConstants.FileResolver));
             var diagnostics = compilation.GetEntrypointSemanticModel().GetAllDiagnostics();
             diagnostics.Should().HaveDiagnostics(new[] {
                 ("BCP156", DiagnosticLevel.Error, "The resource type segment \"My.RP/parentType/childType@2020-01-01\" is invalid. Nested resources must specify a single type segment, and optionally can specify an api version using the format \"<type>@<apiVersion>\"."),
@@ -351,7 +353,7 @@ resource parent 'My.RP/parentType@2020-01-01' = {
 }
 ";
 
-            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SyntaxTreeGroupingFactory.CreateFromText(program));
+            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateFromText(program, BicepTestConstants.FileResolver));
             compilation.GetEntrypointSemanticModel().GetAllDiagnostics().Should().HaveDiagnostics(new[] {
                 ("BCP080", DiagnosticLevel.Error, "The expression is involved in a cycle (\"child\" -> \"parent\")."),
             });
@@ -382,7 +384,7 @@ resource parent 'My.RP/parentType@2020-01-01' = {
 }
 ";
 
-            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SyntaxTreeGroupingFactory.CreateFromText(program));
+            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateFromText(program, BicepTestConstants.FileResolver));
             compilation.GetEntrypointSemanticModel().GetAllDiagnostics().Should().HaveDiagnostics(new[] {
                 ("BCP057", DiagnosticLevel.Error, "The name \"grandchild\" does not exist in the current context."),
             });
@@ -411,17 +413,17 @@ resource parent 'My.RP/parentType@2020-01-01' = {
 }
 ";
 
-            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SyntaxTreeGroupingFactory.CreateFromText(program));
+            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateFromText(program, BicepTestConstants.FileResolver));
             var model = compilation.GetEntrypointSemanticModel();
             model.GetAllDiagnostics().Should().BeEmpty();
 
-            var parent = model.Root.GetAllResourceDeclarations().Single(r => r.Name == "parent");
+            var parent = model.ResourceMetadata.TryLookup(model.AllResources.Select(x => x.Symbol).Single(r => r.Name == "parent").DeclaringSyntax)!;
             model.ResourceAncestors.GetAncestors(parent).Should().BeEmpty();
 
-            var child = model.Root.GetAllResourceDeclarations().Single(r => r.Name == "child");
+            var child = model.ResourceMetadata.TryLookup(model.AllResources.Select(x => x.Symbol).Single(r => r.Name == "child").DeclaringSyntax)!;
             model.ResourceAncestors.GetAncestors(child).Select(x => x.Resource).Should().Equal(new[] { parent, });
 
-            var grandchild = model.Root.GetAllResourceDeclarations().Single(r => r.Name == "grandchild");
+            var grandchild = model.ResourceMetadata.TryLookup(model.AllResources.Select(x => x.Symbol).Single(r => r.Name == "grandchild").DeclaringSyntax)!;
             model.ResourceAncestors.GetAncestors(grandchild).Select(x => x.Resource).Should().Equal(new[] { parent, child, }); // order matters
         }
 
@@ -460,23 +462,23 @@ resource parent 'My.RP/parentType@2020-01-01' = {
 }
 ";
 
-            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SyntaxTreeGroupingFactory.CreateFromText(program));
+            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateFromText(program, BicepTestConstants.FileResolver));
             var model = compilation.GetEntrypointSemanticModel();
             model.GetAllDiagnostics().Should().BeEmpty();
 
-            var parent = model.Root.GetAllResourceDeclarations().Single(r => r.Name == "parent");
+            var parent = model.ResourceMetadata.TryLookup(model.AllResources.Select(x => x.Symbol).Single(r => r.Name == "parent").DeclaringSyntax)!;
             model.ResourceAncestors.GetAncestors(parent).Should().BeEmpty();
 
-            var child = model.Root.GetAllResourceDeclarations().Single(r => r.Name == "child");
+            var child = model.ResourceMetadata.TryLookup(model.AllResources.Select(x => x.Symbol).Single(r => r.Name == "child").DeclaringSyntax)!;
             model.ResourceAncestors.GetAncestors(child).Select(x => x.Resource).Should().Equal(new[] { parent, });
 
-            var childGrandChild = (ResourceSymbol)model.GetSymbolInfo(child.DeclaringResource.GetBody().Resources.Single())!;
+            var childGrandChild = model.ResourceMetadata.TryLookup(child.Symbol.DeclaringResource.GetBody().Resources.Single())!;
             model.ResourceAncestors.GetAncestors(childGrandChild).Select(x => x.Resource).Should().Equal(new[] { parent, child, });
 
-            var sibling = model.Root.GetAllResourceDeclarations().Single(r => r.Name == "sibling");
+            var sibling = model.ResourceMetadata.TryLookup(model.AllResources.Select(x => x.Symbol).Single(r => r.Name == "sibling").DeclaringSyntax)!;
             model.ResourceAncestors.GetAncestors(child).Select(x => x.Resource).Should().Equal(new[] { parent, });
 
-            var siblingGrandChild = (ResourceSymbol)model.GetSymbolInfo(sibling.DeclaringResource.GetBody().Resources.Single())!;
+            var siblingGrandChild = model.ResourceMetadata.TryLookup(sibling.Symbol.DeclaringResource.GetBody().Resources.Single())!;
             model.ResourceAncestors.GetAncestors(siblingGrandChild).Select(x => x.Resource).Should().Equal(new[] { parent, sibling, });
         }
 
@@ -564,7 +566,7 @@ resource parent 'My.RP/parentType@2020-01-01' = {
 output hmmmm string = parent::child.properties
 ";
 
-            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SyntaxTreeGroupingFactory.CreateFromText(program));
+            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateFromText(program, BicepTestConstants.FileResolver));
             var model = compilation.GetEntrypointSemanticModel();
 
             var output = model.Root.OutputDeclarations.Single();
@@ -582,7 +584,7 @@ resource broken 'Microsoft.Network/virtualNetworks@2020-06-01' =
 output foo string = broken::fake
 ";
 
-            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SyntaxTreeGroupingFactory.CreateFromText(program));
+            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateFromText(program, BicepTestConstants.FileResolver));
             var model = compilation.GetEntrypointSemanticModel();
             model.GetAllDiagnostics().Should().HaveDiagnostics(new[] {
                 ("BCP118", DiagnosticLevel.Error, "Expected the \"{\" character, the \"[\" character, or the \"if\" keyword at this location."),

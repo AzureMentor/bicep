@@ -31,8 +31,10 @@ There are a set of core rules that are enabled by default, set to `Warning` leve
 
 The linter is being designed to be extensible so new rules can be added by either the Bicep team or the community. In the 0.5 milestone, we will be focusing more on extensibility, making it as easy as possible to contribute new rules and/or analyzers.
 
-If you have an idea for a new rule, please [submit a feature request](https://github.com/Azure/bicep/issues/new?assignees=&labels=enhancement,linting-rule&template=feature_request.md&title=).
+If you have an idea for a new rule, please [submit a feature request](https://github.com/Azure/bicep/issues/new?assignees=&labels=enhancement,linting-rule-idea&template=feature_request.md&title=).
 
-## ARM template test toolkit (arm-ttk)
+## ARM Template Tool Kit (arm-ttk)
 
-We've ported over most of the rules from the [ARM template test toolkit (arm-ttk)](https://docs.microsoft.com/azure/azure-resource-manager/templates/test-toolkit) that make sense for Bicep (more to come). We recommend using the Bicep linter when working with Bicep, and arm-ttk when working with ARM templates. It is not advised to run arm-ttk on Bicep generated templates. Bicep output is not intended to pass the arm-ttk rules even if it passes the Bicep rules.
+We've ported over most of the rules from the [ARM template test toolkit (arm-ttk)](https://docs.microsoft.com/azure/azure-resource-manager/templates/test-toolkit) into the bicep linter and are working on porting the rest.  Until the unification is complete you can run the arm-ttk on the JSON file generated from the ```bicep build``` command.  Actions for [bicep build](https://github.com/search?q=bicep&type=marketplace) or [running the arm-ttk](https://github.com/search?q=arm-ttk&type=marketplace) in a github workflow can be found in the marketplace.
+
+If you run into any issues using the arm-ttk on bicep generated files, file an issue in the [arm-ttk repo](https://github.com/Azure/arm-ttk/issues).

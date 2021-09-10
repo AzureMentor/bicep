@@ -1,3 +1,8 @@
+// $1 = keyVault
+// $2 = 'name'
+// $3 = 'tenantId'
+// $4 = 'objectId'
+
 resource keyVault 'Microsoft.KeyVault/vaults@2019-09-01' = {
   name: 'name'
   location: resourceGroup().location
@@ -17,7 +22,6 @@ resource keyVault 'Microsoft.KeyVault/vaults@2019-09-01' = {
           secrets: [
             'list'
             'get'
-            'get'
           ]
         }
       }
@@ -28,4 +32,5 @@ resource keyVault 'Microsoft.KeyVault/vaults@2019-09-01' = {
     }
   }
 }
+// Insert snippet here
 

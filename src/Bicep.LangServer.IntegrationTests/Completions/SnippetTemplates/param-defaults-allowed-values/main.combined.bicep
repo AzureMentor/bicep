@@ -1,5 +1,17 @@
+// $1 = ttl
+// $2 = int
+// $3 = 1
+// $4 = 2
+
 @allowed([
   1
 ])
-param testParam int = 2
-//@[6:15) [no-unused-params (Warning)] Parameter is declared but never used.\nSee https://aka.ms/bicep/linter/no-unused-params |testParam|
+param ttl int = 2// Insert snippet here
+
+resource dnsRecord 'Microsoft.Network/dnsZones/A@2018-05-01' = {
+  name: 'zone/A'
+  properties: {
+    TTL: ttl
+  }
+}
+

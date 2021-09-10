@@ -1,10 +1,12 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using Azure.Deployments.Core.Extensions;
 using Bicep.Core.Diagnostics;
+using Bicep.Core.Semantics.Metadata;
 using Bicep.Core.Syntax;
 
 namespace Bicep.Core.Semantics
@@ -21,11 +23,13 @@ namespace Bicep.Core.Semantics
             IEnumerable<VariableSymbol> variableDeclarations,
             IEnumerable<ResourceSymbol> resourceDeclarations,
             IEnumerable<ModuleSymbol> moduleDeclarations,
-            IEnumerable<OutputSymbol> outputDeclarations)
+            IEnumerable<OutputSymbol> outputDeclarations,
+            Uri fileUri)
             : base(name)
         {
             this.Syntax = syntax;
             this.ImportedNamespaces = importedNamespaces;
+            FileUri = fileUri;
             this.LocalScopes = outermostScopes.ToImmutableArray();
 
             this.ParameterDeclarations = parameterDeclarations.ToImmutableArray();
@@ -62,7 +66,9 @@ namespace Bicep.Core.Semantics
         public ImmutableArray<ModuleSymbol> ModuleDeclarations { get; }
 
         public ImmutableArray<OutputSymbol> OutputDeclarations { get; }
-        
+
+        public Uri FileUri { get; }
+
         /// <summary>
         /// Returns all the top-level declaration symbols.
         /// </summary>
@@ -76,8 +82,6 @@ namespace Bicep.Core.Semantics
         public override IEnumerable<ErrorDiagnostic> GetDiagnostics() => DuplicateIdentifierValidatorVisitor.GetDiagnostics(this);
 
         public IEnumerable<DeclaredSymbol> GetDeclarationsByName(string name) => this.declarationsByName[name];
-
-        public IEnumerable<ResourceSymbol> GetAllResourceDeclarations() => ResourceSymbolVisitor.GetAllResources(this);
 
         private sealed class DuplicateIdentifierValidatorVisitor : SymbolVisitor
         {

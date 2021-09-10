@@ -2,7 +2,7 @@
     "version": "2.0.0",
     "configurations": [
         {
-            "name": "Bicep VSCode Extension",
+            "name": "VSCode Extension",
             "type": "extensionHost",
             "request": "launch",
             "runtimeExecutable": "${execPath}",
@@ -11,15 +11,32 @@
                 "--extensionDevelopmentPath=${workspaceRoot}/src/vscode-bicep"
             ],
             "env": {
-                "BICEP_LANGUAGE_SERVER_PATH": "${workspaceRoot}/src/Bicep.LangServer/bin/Debug/net5.0/Bicep.LangServer.dll"
+                "BICEP_TRACING_ENABLED": "true"
             },
             "stopOnEntry": false,
             "sourceMaps": true,
             "outFiles": ["${workspaceRoot}/out/src/**/*.js"],
-            "preLaunchTask": "vscodeext-build"
+            "preLaunchTask": "Build VSIX"
         },
         {
-            "name": "Bicep Playground",
+            "name": "CLI",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "Build CLI",
+            "program": "${workspaceFolder}/src/Bicep.Cli/bin/Debug/net5.0/Bicep.dll",
+            "args": [
+                "build",
+                "${file}"
+            ],
+            "env": {
+                "BICEP_TRACING_ENABLED": "true"
+            },
+            "cwd": "${workspaceFolder}/src/Bicep.Cli",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": "Playground",
             "type": "node",
             "request": "launch",
             "program": "${workspaceFolder}/src/playground/node_modules/webpack/bin/webpack.js",
@@ -27,21 +44,7 @@
             "cwd": "${workspaceFolder}/src/playground",
             "autoAttachChildProcesses": true,
             "stopOnEntry": false,
-            "preLaunchTask": "playground-build-wasm"
-        },
-        {
-            "name": "Bicep CLI",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "build-cli",
-            "program": "${workspaceFolder}/src/Bicep.Cli/bin/Debug/net5.0/Bicep.dll",
-            "args": [
-                "build",
-                "${file}"
-            ],
-            "cwd": "${workspaceFolder}/src/Bicep.Cli",
-            "console": "internalConsole",
-            "stopAtEntry": false
+            "preLaunchTask": "Build WASM for Playground"
         },
         {
             "name": "Textmate Tests",

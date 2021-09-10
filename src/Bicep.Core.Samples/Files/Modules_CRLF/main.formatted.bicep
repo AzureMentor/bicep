@@ -1,5 +1,7 @@
+@sys.description('this is deployTimeSuffix param')
 param deployTimeSuffix string = newGuid()
 
+@sys.description('this module a')
 module modATest './modulea.bicep' = {
   name: 'modATest'
   params: {
@@ -16,6 +18,7 @@ module modATest './modulea.bicep' = {
   }
 }
 
+@sys.description('this module b')
 module modB './child/moduleb.bicep' = {
   name: 'modB'
   params: {
@@ -23,8 +26,23 @@ module modB './child/moduleb.bicep' = {
   }
 }
 
+@sys.description('this is just module b with a condition')
 module modBWithCondition './child/moduleb.bicep' = if (1 + 1 == 2) {
   name: 'modBWithCondition'
+  params: {
+    location: 'East US'
+  }
+}
+
+module modC './child/modulec.json' = {
+  name: 'modC'
+  params: {
+    location: 'West US'
+  }
+}
+
+module modCWithCondition './child/modulec.json' = if (2 - 1 == 1) {
+  name: 'modCWithCondition'
   params: {
     location: 'East US'
   }
@@ -54,6 +72,7 @@ resource resWithDependencies 'Mock.Rp/mockResource@2020-01-01' = {
   properties: {
     modADep: modATest.outputs.stringOutputA
     modBDep: modB.outputs.myResourceId
+    modCDep: modC.outputs.myResourceId
   }
 }
 
@@ -107,6 +126,8 @@ output modCalculatedNameOutput object = moduleWithCalculatedName.outputs.outputO
 /*
   valid loop cases
 */
+
+@sys.description('this is myModules')
 var myModules = [
   {
     name: 'one'
@@ -280,5 +301,42 @@ module secureModule2 'child/secureParams.bicep' = {
     secureStringParam2: scopedKv.getSecret('mySecret', 'secretVersion')
   }
 }
+
+//looped module with looped existing resource (Issue #2862)
+var vaults = [
+  {
+    vaultName: 'test-1-kv'
+    vaultRG: 'test-1-rg'
+    vaultSub: 'abcd-efgh'
+  }
+  {
+    vaultName: 'test-2-kv'
+    vaultRG: 'test-2-rg'
+    vaultSub: 'ijkl-1adg1'
+  }
+]
+var secrets = [
+  {
+    name: 'secret01'
+    version: 'versionA'
+  }
+  {
+    name: 'secret02'
+    version: 'versionB'
+  }
+]
+
+resource loopedKv 'Microsoft.KeyVault/vaults@2019-09-01' existing = [for vault in vaults: {
+  name: vault.vaultName
+  scope: resourceGroup(vault.vaultSub, vault.vaultRG)
+}]
+
+module secureModuleLooped 'child/secureParams.bicep' = [for (secret, i) in secrets: {
+  name: 'secureModuleLooped-${i}'
+  params: {
+    secureStringParam1: loopedKv[i].getSecret(secret.name)
+    secureStringParam2: loopedKv[i].getSecret(secret.name, secret.version)
+  }
+}]
 
 // END: Key Vault Secret Reference

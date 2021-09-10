@@ -1,3 +1,14 @@
+// $1 = virtualNetworkGateway
+// $2 = 'name'
+// $3 = 'name'
+// $4 = 'subnet.id'
+// $5 = 'publicIPAdresses.id'
+// $6 = Basic
+// $7 = Basic
+// $8 = Vpn
+// $9 = PolicyBased
+// $10 = true
+
 resource virtualNetworkGateway 'Microsoft.Network/virtualNetworkGateways@2020-11-01' = {
   name: 'name'
   location: resourceGroup().location
@@ -8,10 +19,10 @@ resource virtualNetworkGateway 'Microsoft.Network/virtualNetworkGateways@2020-11
         properties: {
           privateIPAllocationMethod: 'Dynamic'
           subnet: {
-            id: resourceId('Microsoft.Network/virtualNetworks/subnets', 'virtualNetwork', 'subnet')
+            id: 'subnet.id'
           }
           publicIPAddress: {
-            id: resourceId('Microsoft.Network/publicIPAddresses', 'publicIPAddress')
+            id: 'publicIPAdresses.id'
           }
         }
       }
@@ -25,4 +36,5 @@ resource virtualNetworkGateway 'Microsoft.Network/virtualNetworkGateways@2020-11
     enableBgp: true
   }
 }
+// Insert snippet here
 

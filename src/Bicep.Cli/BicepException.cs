@@ -1,5 +1,6 @@
-﻿// Copyright (c) Microsoft Corporation.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+
 using System;
 
 namespace Bicep.Cli
@@ -9,6 +10,10 @@ namespace Bicep.Cli
     /// </summary>
     public class BicepException : Exception
     {
+        public BicepException(string message) : base(message)
+        {
+        }
+
         public BicepException(string message, Exception? inner) : base(message, inner)
         {
         }

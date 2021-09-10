@@ -8,11 +8,11 @@ param adminUsername string
 @secure()
 param adminPassword string
 
+@description('Storage Account type for the VM and VM diagnostic storage')
 @allowed([
   'Standard_LRS'
   'Premium_LRS'
 ])
-@description('Storage Account type for the VM and VM diagnostic storage')
 param storageAccountType string = 'Standard_LRS'
 
 @description('Location for all resources.')
@@ -41,7 +41,7 @@ resource virtualMachineName 'Microsoft.Compute/virtualMachines@2019-12-01' = {
       adminPassword: adminPassword
       windowsConfiguration: {
         provisionVMAgent: 'true'
-//@[26:32) [BCP036 (Warning)] The property "provisionVMAgent" expected a value of type "bool | null" but the provided value is of type "'true'". |'true'|
+//@[26:32) [BCP036 (Warning)] The property "provisionVMAgent" expected a value of type "bool | null" but the provided value is of type "'true'". (CodeDescription: none) |'true'|
       }
     }
     hardwareProfile: {
