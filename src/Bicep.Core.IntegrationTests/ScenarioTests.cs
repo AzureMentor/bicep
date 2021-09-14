@@ -2110,7 +2110,7 @@ resource cname 'Microsoft.Network/dnsZones/CNAME@2018-05-01' = {
                 ("BCP036", DiagnosticLevel.Error, "The property \"name\" expected a value of type \"string\" but the provided value is of type \"null\"."),
                 ("BCP036", DiagnosticLevel.Error, "The property \"scope\" expected a value of type \"resource | tenant\" but the provided value is of type \"null\"."),
                 ("BCP036", DiagnosticLevel.Error, "The property \"name\" expected a value of type \"string\" but the provided value is of type \"null\"."),
-                ("BCP036", DiagnosticLevel.Error, "The property \"parent\" expected a value of type \"resource\" but the provided value is of type \"null\"."),
+                ("BCP036", DiagnosticLevel.Error, "The property \"parent\" expected a value of type \"Microsoft.Network/dnsZones\" but the provided value is of type \"null\"."),
             });
         }
 
@@ -2440,6 +2440,50 @@ resource eventSubscription 'Microsoft.EventGrid/systemTopics/eventSubscriptions@
         }
 
         [TestMethod]
+        // https://github.com/Azure/bicep/issues/2990
+        public void Test_Issue2990()
+        {
+            var result = CompilationHelper.Compile(@"
+targetScope = 'managementGroup'
+
+param managementGroupName string
+param subscriptionId string
+
+resource myManagementGroup 'Microsoft.Management/managementGroups@2021-04-01' existing = {
+  scope: tenant()
+  name: managementGroupName
+}
+
+resource subscriptionAssociation 'Microsoft.Management/managementGroups/subscriptions@2021-04-01' = {
+  parent: myManagementGroup
+  name: subscriptionId
+}
+");
+
+            result.Should().NotHaveAnyDiagnostics();
+        }
+
+        [TestMethod]
+        // https://github.com/Azure/bicep/issues/4007
+        public void Test_Issue4007()
+        {
+            var result = CompilationHelper.Compile(@"
+targetScope = 'subscription'
+
+var map = {
+    '1': 'hello'
+}
+
+output one string = map['1']
+");
+
+            result.Template.Should().HaveValueAtPath("$.outputs.one.value", "[variables('map')['1']]");
+
+            var evaluated = TemplateEvaluator.Evaluate(result.Template);
+            evaluated.Should().HaveValueAtPath("$.outputs.one.value", "hello");
+        }
+
+        [TestMethod]
         // https://github.com/Azure/bicep/issues/4156
         public void Test_Issue4156()
         {
@@ -2479,6 +2523,54 @@ output deployedTopics array = [for (topicName, i) in topics: {
                 ["accessKey1"] = "[listKeys(resourceId('Microsoft.EventGrid/topics', 'myExistingEventGridTopic'), '2021-06-01-preview').key1]",
                 ["accessKey2"] = "[listKeys(resourceId('Microsoft.EventGrid/topics', format('{0}-ZZZ', variables('topics')[copyIndex()])), '2021-06-01-preview').key1]"
             });
+        }
+
+        [TestMethod]
+        // https://github.com/Azure/bicep/issues/4212
+        public void Test_Issue4212()
+        {
+            var result = CompilationHelper.Compile(
+                ("main.bicep", @"
+module mod 'mod.bicep' = {
+  name: 'mod'
+}
+
+resource res 'Microsoft.Network/virtualNetworks/subnets@2020-11-01' existing = {
+  name: 'abc/def'
+  parent: mod
+}
+
+resource res2 'Microsoft.Network/virtualNetworks/subnets@2020-11-01' existing = {
+  name: 'res2'
+  parent: tenant()
+}
+
+output test string = res.id
+"),
+                ("mod.bicep", ""));
+
+            result.Should().HaveDiagnostics(new[]
+            {
+                ("BCP036", DiagnosticLevel.Error, "The property \"parent\" expected a value of type \"Microsoft.Network/virtualNetworks\" but the provided value is of type \"module\"."),
+                ("BCP036", DiagnosticLevel.Error, "The property \"parent\" expected a value of type \"Microsoft.Network/virtualNetworks\" but the provided value is of type \"tenant\"."),
+            });
+        }
+
+        /// <summary>
+        /// https://github.com/Azure/bicep/issues/2703
+        /// </summary>
+        [TestMethod]
+        public void Test_Issue2703()
+        {
+            var result = CompilationHelper.Compile(@"
+resource test 'Microsoft.Resources/deploymentScripts@2020-10-01' existing = {
+  name: 'test'
+}
+
+output expTime string = test.properties.status.expirationTime
+");
+
+            result.Should().NotHaveAnyDiagnostics();
         }
     }
 }
