@@ -5,10 +5,14 @@ namespace Bicep.Core.Features
 {
     public interface IFeatureProvider
     {
-        public string CacheRootDirectory { get; }
+        string AssemblyVersion { get; }
 
-        public bool RegistryEnabled { get; }
+        string CacheRootDirectory { get; }
+
+        bool RegistryEnabled { get; }
 
         bool SymbolicNameCodegenEnabled { get; }
+
+        bool ImportsEnabled { get; }
     }
 }

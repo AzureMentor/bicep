@@ -6,6 +6,7 @@ using System.Linq;
 using Bicep.Core.Resources;
 using Bicep.Core.Semantics;
 using System.Collections.Immutable;
+using System.Collections.Concurrent;
 using Bicep.Core.Emit;
 using System.Text.RegularExpressions;
 
@@ -14,12 +15,6 @@ namespace Bicep.Core.TypeSystem.Az
 
     public class AzResourceTypeProvider : IResourceTypeProvider
     {
-        public static IResourceTypeProvider CreateWithAzTypes()
-            => CreateWithLoader(new AzResourceTypeLoader(), true);
-
-        public static IResourceTypeProvider CreateWithLoader(IResourceTypeLoader resourceTypeLoader, bool warnOnMissingType)
-            => new AzResourceTypeProvider(resourceTypeLoader, warnOnMissingType);
-
         private class ResourceTypeCache
         {
             private class KeyComparer : IEqualityComparer<(ResourceTypeGenerationFlags flags, ResourceTypeReference type)>
@@ -36,19 +31,14 @@ namespace Bicep.Core.TypeSystem.Az
                         ResourceTypeReferenceComparer.Instance.GetHashCode(x.type);
             }
 
-            private readonly IDictionary<(ResourceTypeGenerationFlags flags, ResourceTypeReference type), ResourceType> cache
-                = new Dictionary<(ResourceTypeGenerationFlags flags, ResourceTypeReference type), ResourceType>(KeyComparer.Instance);
+            private readonly ConcurrentDictionary<(ResourceTypeGenerationFlags flags, ResourceTypeReference type), ResourceTypeComponents> cache
+                = new ConcurrentDictionary<(ResourceTypeGenerationFlags flags, ResourceTypeReference type), ResourceTypeComponents>(KeyComparer.Instance);
 
-            public ResourceType GetOrAdd(ResourceTypeGenerationFlags flags, ResourceTypeReference typeReference, Func<ResourceType> buildFunc)
+            public ResourceTypeComponents GetOrAdd(ResourceTypeGenerationFlags flags, ResourceTypeReference typeReference, Func<ResourceTypeComponents> buildFunc)
             {
                 var cacheKey = (flags, typeReference);
-                if (!cache.TryGetValue(cacheKey, out var value))
-                {
-                    value = buildFunc();
-                    cache[cacheKey] = value;
-                }
 
-                return value;
+                return cache.GetOrAdd(cacheKey, cacheKey => buildFunc());
             }
         }
 
@@ -56,10 +46,10 @@ namespace Bicep.Core.TypeSystem.Az
         public const string ResourceTypeResourceGroup = "Microsoft.Resources/resourceGroups";
         public const string ResourceTypeManagementGroup = "Microsoft.Management/managementGroups";
 
-        private readonly IResourceTypeLoader resourceTypeLoader;
+        private readonly IAzResourceTypeLoader resourceTypeLoader;
         private readonly ImmutableHashSet<ResourceTypeReference> availableResourceTypes;
-        private readonly ResourceTypeCache loadedTypeCache;
-        private readonly bool warnOnMissingType;
+        private readonly ResourceTypeCache definedTypeCache;
+        private readonly ResourceTypeCache generatedTypeCache;
 
         private static readonly ImmutableHashSet<string> WritableExistingResourceProperties = new[]
         {
@@ -68,12 +58,12 @@ namespace Bicep.Core.TypeSystem.Az
             LanguageConstants.ResourceParentPropertyName,
         }.ToImmutableHashSet();
 
-        private AzResourceTypeProvider(IResourceTypeLoader resourceTypeLoader, bool warnOnMissingType)
+        public AzResourceTypeProvider(IAzResourceTypeLoader resourceTypeLoader)
         {
             this.resourceTypeLoader = resourceTypeLoader;
             this.availableResourceTypes = resourceTypeLoader.GetAvailableTypes().ToImmutableHashSet(ResourceTypeReferenceComparer.Instance);
-            this.loadedTypeCache = new ResourceTypeCache();
-            this.warnOnMissingType = warnOnMissingType;
+            this.definedTypeCache = new ResourceTypeCache();
+            this.generatedTypeCache = new ResourceTypeCache();
         }
 
         private static ObjectType CreateGenericResourceBody(ResourceTypeReference typeReference, Func<string, bool> propertyFilter)
@@ -83,20 +73,7 @@ namespace Bicep.Core.TypeSystem.Az
             return new ObjectType(typeReference.FormatName(), TypeSymbolValidationFlags.Default, properties, null);
         }
 
-        private ResourceType GenerateResourceType(ResourceTypeReference typeReference)
-        {
-            if (availableResourceTypes.Contains(typeReference))
-            {
-                return this.resourceTypeLoader.LoadType(typeReference);
-            }
-
-            return new ResourceType(
-                typeReference,
-                ResourceScope.Tenant | ResourceScope.ManagementGroup | ResourceScope.Subscription | ResourceScope.ResourceGroup | ResourceScope.Resource,
-                CreateGenericResourceBody(typeReference, p => true));
-        }
-
-        private static ResourceType SetBicepResourceProperties(ResourceType resourceType, ResourceTypeGenerationFlags flags)
+        private static ResourceTypeComponents SetBicepResourceProperties(ResourceTypeComponents resourceType, ResourceTypeGenerationFlags flags)
         {
             var bodyType = resourceType.Body.Type;
 
@@ -116,7 +93,7 @@ namespace Bicep.Core.TypeSystem.Az
                             bodyObjectType.Properties.SetItem(LanguageConstants.ResourceNamePropertyName, new TypeProperty(nameProperty.Name, LanguageConstants.String, nameProperty.Flags)).Values,
                             bodyObjectType.AdditionalPropertiesType,
                             bodyObjectType.AdditionalPropertiesFlags,
-                            bodyObjectType.MethodResolver);
+                            bodyObjectType.MethodResolver.CopyToObject);
 
                         bodyType = SetBicepResourceProperties(bodyObjectType, resourceType.ValidParentScopes, resourceType.TypeReference, flags);
                         break;
@@ -161,10 +138,10 @@ namespace Bicep.Core.TypeSystem.Az
                 default:
                     // we exhaustively test deserialization of every resource type during CI, and this happens in a deterministic fashion,
                     // so this exception should never occur in the released product
-                    throw new ArgumentException($"Resource {resourceType.Name} has unexpected body type {bodyType.GetType()}");
+                    throw new ArgumentException($"Resource {resourceType.TypeReference.FormatName()} has unexpected body type {bodyType.GetType()}");
             }
 
-            return new ResourceType(resourceType.TypeReference, resourceType.ValidParentScopes, bodyType);
+            return new ResourceTypeComponents(resourceType.TypeReference, resourceType.ValidParentScopes, bodyType);
         }
 
         private static ObjectType SetBicepResourceProperties(ObjectType objectType, ResourceScope validParentScopes, ResourceTypeReference typeReference, ResourceTypeGenerationFlags flags)
@@ -303,19 +280,42 @@ namespace Bicep.Core.TypeSystem.Az
         private static TypePropertyFlags ConvertToReadOnly(TypePropertyFlags typePropertyFlags)
             => (typePropertyFlags | TypePropertyFlags.ReadOnly) & ~TypePropertyFlags.Required;
 
-        public ResourceType GetType(ResourceTypeReference typeReference, ResourceTypeGenerationFlags flags)
+        public ResourceType? TryGetDefinedType(NamespaceType declaringNamespace, ResourceTypeReference typeReference, ResourceTypeGenerationFlags flags)
         {
-            // It's important to cache this result because GenerateResourceType is an expensive operation
-            return loadedTypeCache.GetOrAdd(flags, typeReference, () =>
+            if (!HasDefinedType(typeReference))
             {
-                var resourceType = GenerateResourceType(typeReference);
+                return null;
+            }
+
+            // It's important to cache this result because generating the resource type is an expensive operation
+            var resourceType =  definedTypeCache.GetOrAdd(flags, typeReference, () =>
+            {
+                var resourceType = this.resourceTypeLoader.LoadType(typeReference);
 
                 return SetBicepResourceProperties(resourceType, flags);
             });
+
+            return new(declaringNamespace, resourceType.TypeReference, resourceType.ValidParentScopes, resourceType.Body);
         }
 
-        public bool HasType(ResourceTypeReference typeReference)
-            => availableResourceTypes.Contains(typeReference) || !warnOnMissingType;
+        public ResourceType? TryGenerateDefaultType(NamespaceType declaringNamespace, ResourceTypeReference typeReference, ResourceTypeGenerationFlags flags)
+        {
+            // It's important to cache this result because generating the resource type is an expensive operation
+            var resourceType = generatedTypeCache.GetOrAdd(flags, typeReference, () =>
+            {
+                var resourceType = new ResourceTypeComponents(
+                    typeReference,
+                    ResourceScope.Tenant | ResourceScope.ManagementGroup | ResourceScope.Subscription | ResourceScope.ResourceGroup | ResourceScope.Resource,
+                    CreateGenericResourceBody(typeReference, p => true));
+
+                return SetBicepResourceProperties(resourceType, flags);
+            });
+
+            return new(declaringNamespace, resourceType.TypeReference, resourceType.ValidParentScopes, resourceType.Body);
+        }
+
+        public bool HasDefinedType(ResourceTypeReference typeReference)
+            => availableResourceTypes.Contains(typeReference);
 
         public IEnumerable<ResourceTypeReference> GetAvailableTypes()
             => availableResourceTypes;

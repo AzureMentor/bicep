@@ -1,24 +1,31 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using Azure.Core;
-using Azure.Identity;
 using Azure.ResourceManager;
+using Bicep.Core.Configuration;
+using Bicep.Core.Registry.Auth;
+using Bicep.Core.Tracing;
 
 namespace Bicep.Core.Registry
 {
     public class TemplateSpecRepositoryFactory : ITemplateSpecRepositoryFactory
     {
-        public ITemplateSpecRepository CreateRepository(Uri? endpointUri, string subscriptionId, TokenCredential? tokenCredential = null)
+        private readonly ITokenCredentialFactory credentialFactory;
+
+        public TemplateSpecRepositoryFactory(ITokenCredentialFactory credentialFactory)
         {
-            tokenCredential ??= new DefaultAzureCredential();
+            this.credentialFactory = credentialFactory;
+        }
 
+        public ITemplateSpecRepository CreateRepository(RootConfiguration configuration, string subscriptionId)
+        {
             var options = new ArmClientOptions();
-            options.Diagnostics.ApplicationId = $"{LanguageConstants.LanguageId}/{ThisAssembly.AssemblyFileVersion}";
+            options.Diagnostics.ApplySharedResourceManagerSettings();
             options.ApiVersions.SetApiVersion("templateSpecs", "2021-05-01");
+            options.Scope = configuration.Cloud.AuthenticationScope;
 
-            var armClient = new ArmClient(subscriptionId, endpointUri, tokenCredential, options);
+            var credential = this.credentialFactory.CreateChain(configuration.Cloud.CredentialPrecedence, configuration.Cloud.ActiveDirectoryAuthorityUri);
+            var armClient = new ArmClient(subscriptionId, configuration.Cloud.ResourceManagerEndpointUri, credential, options);
 
             return new TemplateSpecRepository(armClient);
         }

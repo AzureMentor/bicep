@@ -13,6 +13,7 @@ using Azure.Deployments.Core.Definitions.Schema;
 using Bicep.Core.Extensions;
 using Bicep.Core.Parsing;
 using Bicep.Core.Semantics;
+using Bicep.Core.Semantics.Namespaces;
 using Bicep.Core.Syntax;
 using Bicep.Core.TypeSystem;
 using Bicep.Core.TypeSystem.Az;
@@ -147,6 +148,8 @@ namespace Bicep.Core.Emit
 
             this.EmitVariablesIfPresent(jsonWriter, emitter);
 
+            this.EmitImports(jsonWriter, emitter);
+
             this.EmitResources(jsonWriter, emitter);
 
             this.EmitOutputsIfPresent(jsonWriter, emitter);
@@ -183,18 +186,22 @@ namespace Bicep.Core.Emit
             {
                 var symbol = this.context.SemanticModel.GetSymbolInfo(decoratorSyntax.Expression);
 
-                if (symbol is FunctionSymbol decoratorSymbol && DecoratorsToEmitAsResourceProperties.Contains(decoratorSymbol.Name))
+                if (symbol is FunctionSymbol decoratorSymbol &&
+                    decoratorSymbol.DeclaringObject is NamespaceType namespaceType &&
+                    DecoratorsToEmitAsResourceProperties.Contains(decoratorSymbol.Name))
                 {
                     var argumentTypes = decoratorSyntax.Arguments
                         .Select(argument => this.context.SemanticModel.TypeManager.GetTypeInfo(argument))
                         .ToArray();
 
                     // There should be exact one matching decorator since there's no errors.
-                    Decorator decorator = this.context.SemanticModel.Root.ImportedNamespaces
-                        .SelectMany(ns => ns.Value.Type.DecoratorResolver.GetMatches(decoratorSymbol, argumentTypes))
-                        .Single();
+                    var decorator = namespaceType.DecoratorResolver.GetMatches(decoratorSymbol, argumentTypes).Single();
 
-                    result = decorator.Evaluate(decoratorSyntax, targetType, result);
+                    var evaluated = decorator.Evaluate(decoratorSyntax, targetType, result);
+                    if (evaluated is not null)
+                    {
+                        result = evaluated;
+                    }
                 }
             }
 
@@ -278,6 +285,37 @@ namespace Bicep.Core.Emit
             jsonWriter.WriteEndObject();
         }
 
+        private void EmitImports(JsonTextWriter jsonWriter, ExpressionEmitter emitter)
+        {
+            if (!context.SemanticModel.Root.ImportDeclarations.Any())
+            {
+                return;
+            }
+
+            jsonWriter.WritePropertyName("imports");
+            jsonWriter.WriteStartObject();
+
+            foreach (var import in this.context.SemanticModel.Root.ImportDeclarations)
+            {
+                var namespaceType = context.SemanticModel.GetTypeInfo(import.DeclaringSyntax) as NamespaceType  
+                    ?? throw new ArgumentException("Imported namespace does not have namespace type");
+
+                jsonWriter.WritePropertyName(import.DeclaringImport.AliasName.IdentifierName);
+                jsonWriter.WriteStartObject();
+
+                emitter.EmitProperty("provider", namespaceType.Settings.ArmTemplateProviderName);
+                emitter.EmitProperty("version", namespaceType.Settings.ArmTemplateProviderVersion);
+                if (import.DeclaringImport.Config is {} config)
+                {
+                    emitter.EmitProperty("config", config);
+                }
+
+                jsonWriter.WriteEndObject();
+            }
+
+            jsonWriter.WriteEndObject();
+        }
+
         private void EmitResources(JsonTextWriter jsonWriter, ExpressionEmitter emitter)
         {
             jsonWriter.WritePropertyName("resources");
@@ -327,7 +365,13 @@ namespace Bicep.Core.Emit
 
         private long? GetBatchSize(StatementSyntax statement)
         {
-            if (statement.TryGetDecoratorSyntax(LanguageConstants.BatchSizePropertyName, "sys")?.Arguments is { } arguments
+            var decorator = SemanticModelHelper.TryGetDecoratorInNamespace(
+                context.SemanticModel,
+                statement,
+                SystemNamespaceType.BuiltInName,
+                LanguageConstants.BatchSizePropertyName);
+
+            if (decorator?.Arguments is { } arguments
                 && arguments.Count() == 1
                 && arguments.ToList()[0].Expression is IntegerLiteralSyntax integerLiteral)
             {
@@ -527,7 +571,7 @@ namespace Bicep.Core.Emit
             emitter.EmitObjectProperties((ObjectSyntax)body, ModulePropertiesToOmit);
 
             var scopeData = context.ModuleScopeData[moduleSymbol];
-            ScopeHelper.EmitModuleScopeProperties(context.SemanticModel.TargetScope, scopeData, emitter);
+            ScopeHelper.EmitModuleScopeProperties(context.SemanticModel.TargetScope, scopeData, emitter, body);
 
             if (scopeData.RequestedScope != ResourceScope.ResourceGroup)
             {

@@ -7,7 +7,7 @@ using System.Linq;
 using Bicep.Core.Configuration;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Extensions;
-using Bicep.Core.TypeSystem;
+using Bicep.Core.Semantics.Namespaces;
 using Bicep.Core.Workspaces;
 
 namespace Bicep.Core.Semantics
@@ -16,13 +16,13 @@ namespace Bicep.Core.Semantics
     {
         private readonly ImmutableDictionary<ISourceFile, Lazy<ISemanticModel>> lazySemanticModelLookup;
 
-        public Compilation(IResourceTypeProvider resourceTypeProvider, SourceFileGrouping sourceFileGrouping, ConfigHelper? configHelper, ImmutableDictionary<ISourceFile, ISemanticModel>? modelLookup = null)
+        public Compilation(INamespaceProvider namespaceProvider, SourceFileGrouping sourceFileGrouping, RootConfiguration configuration, ImmutableDictionary<ISourceFile, ISemanticModel>? modelLookup = null)
         {
             this.SourceFileGrouping = sourceFileGrouping;
-            this.ResourceTypeProvider = resourceTypeProvider;
+            this.NamespaceProvider = namespaceProvider;
+            this.Configuration = configuration;
 
             var fileResolver = SourceFileGrouping.FileResolver;
-            ConfigHelper = configHelper ?? new ConfigHelper(null, fileResolver);
 
             this.lazySemanticModelLookup = sourceFileGrouping.SourceFiles.ToImmutableDictionary(
                 sourceFile => sourceFile,
@@ -30,18 +30,18 @@ namespace Bicep.Core.Semantics
                     new(existingModel) :
                     new Lazy<ISemanticModel>(() => sourceFile switch
                     {
-                        BicepFile bicepFile => new SemanticModel(this, bicepFile, fileResolver, ConfigHelper),
+                        BicepFile bicepFile => new SemanticModel(this, bicepFile, fileResolver, configuration),
                         ArmTemplateFile armTemplateFile => new ArmTemplateSemanticModel(armTemplateFile),
                         TemplateSpecFile templateSpecFile => new TemplateSpecSemanticModel(templateSpecFile),
                         _ => throw new ArgumentOutOfRangeException(nameof(sourceFile)),
                     }));
         }
 
-        public ConfigHelper ConfigHelper { get; }
+        public RootConfiguration Configuration { get; }
 
         public SourceFileGrouping SourceFileGrouping { get; }
 
-        public IResourceTypeProvider ResourceTypeProvider { get; }
+        public INamespaceProvider NamespaceProvider { get; }
 
         public SemanticModel GetEntrypointSemanticModel()
             => GetSemanticModel(SourceFileGrouping.EntryPoint);
@@ -55,7 +55,7 @@ namespace Bicep.Core.Semantics
         public ISemanticModel GetSemanticModel(ISourceFile sourceFile)
             => this.lazySemanticModelLookup[sourceFile].Value;
 
-        public IReadOnlyDictionary<BicepFile, IEnumerable<IDiagnostic>> GetAllDiagnosticsByBicepFile(ConfigHelper? overrideConfig = default)
+        public IReadOnlyDictionary<BicepFile, IEnumerable<IDiagnostic>> GetAllDiagnosticsByBicepFile()
             => SourceFileGrouping.SourceFiles.OfType<BicepFile>().ToDictionary(
                 bicepFile => bicepFile,
                 bicepFile => this.GetSemanticModel(bicepFile).GetAllDiagnostics());

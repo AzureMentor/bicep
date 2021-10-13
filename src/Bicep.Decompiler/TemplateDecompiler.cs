@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using Bicep.Core.Configuration;
 using Bicep.Core.Decompiler.Rewriters;
 using Bicep.Core.Extensions;
 using Bicep.Core.FileSystem;
@@ -13,23 +14,25 @@ using Bicep.Core.PrettyPrint.Options;
 using Bicep.Core.Registry;
 using Bicep.Core.Rewriters;
 using Bicep.Core.Semantics;
+using Bicep.Core.Semantics.Namespaces;
 using Bicep.Core.Syntax;
-using Bicep.Core.TypeSystem;
 using Bicep.Core.Workspaces;
 
 namespace Bicep.Decompiler
 {
     public class TemplateDecompiler
     {
-        private readonly IResourceTypeProvider resourceTypeProvider;
+        private readonly INamespaceProvider namespaceProvider;
         private readonly IFileResolver fileResolver;
         private readonly IModuleRegistryProvider registryProvider;
+        private readonly IConfigurationManager configurationManager;
 
-        public TemplateDecompiler(IResourceTypeProvider resourceTypeProvider, IFileResolver fileResolver, IModuleRegistryProvider registryProvider)
+        public TemplateDecompiler(INamespaceProvider namespaceProvider, IFileResolver fileResolver, IModuleRegistryProvider registryProvider, IConfigurationManager configurationManager)
         {
-            this.resourceTypeProvider = resourceTypeProvider;
+            this.namespaceProvider = namespaceProvider;
             this.fileResolver = fileResolver;
             this.registryProvider = registryProvider;
+            this.configurationManager = configurationManager;
         }
 
         public (Uri entrypointUri, ImmutableDictionary<Uri, string> filesToSave) DecompileFileWithModules(Uri entryJsonUri, Uri entryBicepUri)
@@ -117,8 +120,9 @@ namespace Bicep.Decompiler
         {
             var hasChanges = false;
             var dispatcher = new ModuleDispatcher(this.registryProvider);
-            var sourceFileGrouping = SourceFileGroupingBuilder.Build(fileResolver, dispatcher, workspace, entryUri);
-            var compilation = new Compilation(resourceTypeProvider, sourceFileGrouping, null);
+            var configuration = configurationManager.GetBuiltInConfiguration(disableAnalyzers: true);
+            var sourceFileGrouping = SourceFileGroupingBuilder.Build(fileResolver, dispatcher, workspace, entryUri, configuration);
+            var compilation = new Compilation(namespaceProvider, sourceFileGrouping, configuration);
 
             foreach (var (fileUri, sourceFile) in workspace.GetActiveSourceFilesByUri())
             {
@@ -135,8 +139,8 @@ namespace Bicep.Decompiler
                     var newFile = new BicepFile(fileUri, ImmutableArray<int>.Empty, newProgramSyntax);
                     workspace.UpsertSourceFile(newFile);
 
-                    sourceFileGrouping = SourceFileGroupingBuilder.Build(fileResolver, dispatcher, workspace, entryUri);
-                    compilation = new Compilation(resourceTypeProvider, sourceFileGrouping, null);
+                    sourceFileGrouping = SourceFileGroupingBuilder.Build(fileResolver, dispatcher, workspace, entryUri, configuration);
+                    compilation = new Compilation(namespaceProvider, sourceFileGrouping, configuration);
                 }
             }
 

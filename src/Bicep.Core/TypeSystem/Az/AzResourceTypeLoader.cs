@@ -8,7 +8,7 @@ using Bicep.Core.Resources;
 
 namespace Bicep.Core.TypeSystem.Az
 {
-    public class AzResourceTypeLoader : IResourceTypeLoader
+    public class AzResourceTypeLoader : IAzResourceTypeLoader
     {
         private readonly ITypeLoader typeLoader;
         private readonly AzResourceTypeFactory resourceTypeFactory;
@@ -27,7 +27,7 @@ namespace Bicep.Core.TypeSystem.Az
         public IEnumerable<ResourceTypeReference> GetAvailableTypes()
             => availableTypes.Keys;
 
-        public ResourceType LoadType(ResourceTypeReference reference)
+        public ResourceTypeComponents LoadType(ResourceTypeReference reference)
         {
             var typeLocation = availableTypes[reference];
 

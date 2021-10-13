@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 using System;
 using System.Linq;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Bicep.Core.Resources;
 
@@ -9,30 +10,23 @@ namespace Bicep.Core.TypeSystem.Az
 {
     public class AzResourceTypeFactory
     {
-        private readonly Dictionary<Azure.Bicep.Types.Concrete.TypeBase, TypeSymbol> typeCache;
+        private readonly ConcurrentDictionary<Azure.Bicep.Types.Concrete.TypeBase, TypeSymbol> typeCache;
 
         public AzResourceTypeFactory()
         {
-            typeCache = new Dictionary<Azure.Bicep.Types.Concrete.TypeBase, TypeSymbol>();
+            typeCache = new();
         }
 
-        public ResourceType GetResourceType(Azure.Bicep.Types.Concrete.ResourceType resourceType)
+        public ResourceTypeComponents GetResourceType(Azure.Bicep.Types.Concrete.ResourceType resourceType)
         {
-            var output = GetTypeSymbol(resourceType, false) as ResourceType;
+            var resourceTypeReference = ResourceTypeReference.Parse(resourceType.Name);
+            var bodyType = GetTypeSymbol(resourceType.Body.Type, true);
 
-            return output ?? throw new ArgumentException("Unable to deserialize resource type", nameof(resourceType));
+            return new ResourceTypeComponents(resourceTypeReference, ToResourceScope(resourceType.ScopeType), bodyType);
         }
 
         private TypeSymbol GetTypeSymbol(Azure.Bicep.Types.Concrete.TypeBase serializedType, bool isResourceBodyType)
-        {
-            if (!typeCache.TryGetValue(serializedType, out var typeSymbol))
-            {
-                typeSymbol = ToTypeSymbol(serializedType, isResourceBodyType);
-                typeCache[serializedType] = typeSymbol;
-            }
-
-            return typeSymbol;
-        }
+            => typeCache.GetOrAdd(serializedType, serializedType => ToTypeSymbol(serializedType, isResourceBodyType));
 
         private ITypeReference GetTypeReference(Azure.Bicep.Types.Concrete.ITypeReference input)
             => new DeferredTypeReference(() => GetTypeSymbol(input.Type, false));
@@ -98,15 +92,9 @@ namespace Bicep.Core.TypeSystem.Az
                 {
                     return new TypedArrayType(GetTypeReference(arrayType.ItemType), GetValidationFlags(isResourceBodyType));
                 }
-                case Azure.Bicep.Types.Concrete.ResourceType resourceType:
-                {
-                    var resourceTypeReference = ResourceTypeReference.Parse(resourceType.Name);
-                    var bodyType = GetTypeSymbol(resourceType.Body.Type, true);
-                    return new ResourceType(resourceTypeReference, ToResourceScope(resourceType.ScopeType), bodyType);
-                }
                 case Azure.Bicep.Types.Concrete.UnionType unionType:
                 {
-                    return UnionType.Create(unionType.Elements.Select(x => GetTypeReference(x)));
+                    return TypeHelper.CreateTypeUnion(unionType.Elements.Select(x => GetTypeReference(x)));
                 }
                 case Azure.Bicep.Types.Concrete.StringLiteralType stringLiteralType:
                     return new StringLiteralType(stringLiteralType.Value);

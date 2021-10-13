@@ -214,7 +214,7 @@ namespace Bicep.Core.TypeSystem
                     {
                         var narrowedBody = NarrowType(config, expression, targetResourceType.Body.Type);
 
-                        return new ResourceType(targetResourceType.TypeReference, targetResourceType.ValidParentScopes, narrowedBody);
+                        return new ResourceType(targetResourceType.DeclaringNamespace, targetResourceType.TypeReference, targetResourceType.ValidParentScopes, narrowedBody);
                     }
                 case ModuleType targetModuleType:
                     {
@@ -288,7 +288,7 @@ namespace Bicep.Core.TypeSystem
             {
                 // we need to narrow each union member so diagnostics get collected correctly
                 // until we get union type simplification logic, this could generate duplicate diagnostics
-                return UnionType.Create(targetUnionType.Members
+                return TypeHelper.CreateTypeUnion(targetUnionType.Members
                     .Where(x => AreTypesAssignable(expressionType, x.Type))
                     .Select(x => NarrowType(config, expression, x.Type)));
             }
@@ -321,7 +321,7 @@ namespace Bicep.Core.TypeSystem
                 arrayProperties.Add(narrowedType);
             }
 
-            return new TypedArrayType(UnionType.Create(arrayProperties), targetType.ValidationFlags);
+            return new TypedArrayType(TypeHelper.CreateTypeUnion(arrayProperties), targetType.ValidationFlags);
         }
 
         private TypeSymbol NarrowVariableAccessType(TypeValidatorConfig config, VariableAccessSyntax variableAccess, TypeSymbol targetType)
@@ -432,14 +432,14 @@ namespace Bicep.Core.TypeSystem
             static (TypeSymbol type, bool typeWasPreserved) AddImplicitNull(TypeSymbol propertyType, TypePropertyFlags propertyFlags)
             {
                 bool preserveType = propertyFlags.HasFlag(TypePropertyFlags.Required) || !propertyFlags.HasFlag(TypePropertyFlags.AllowImplicitNull);
-                return (preserveType ? propertyType : UnionType.Create(propertyType, LanguageConstants.Null), preserveType);
+                return (preserveType ? propertyType : TypeHelper.CreateTypeUnion(propertyType, LanguageConstants.Null), preserveType);
             }
 
             static TypeSymbol RemoveImplicitNull(TypeSymbol type, bool typeWasPreserved)
             {
                 return typeWasPreserved || type is not UnionType unionType
                     ? type
-                    : UnionType.Create(unionType.Members.Where(m => m != LanguageConstants.Null));
+                    : TypeHelper.CreateTypeUnion(unionType.Members.Where(m => m != LanguageConstants.Null));
             }
 
             // TODO: Short-circuit on any object to avoid unnecessary processing?
@@ -464,7 +464,7 @@ namespace Bicep.Core.TypeSystem
 
                 diagnosticWriter.Write(
                     config.OriginSyntax ?? positionable,
-                    x => x.MissingRequiredProperties(ShouldWarn(targetType), TryGetSourceDeclaration(config), missingRequiredProperties, blockName));
+                    x => x.MissingRequiredProperties(ShouldWarn(targetType), TryGetSourceDeclaration(config), expression, missingRequiredProperties, blockName));
             }
 
             var narrowedProperties = new List<TypeProperty>();
@@ -606,7 +606,7 @@ namespace Bicep.Core.TypeSystem
                 }
             }
 
-            return new ObjectType(targetType.Name, targetType.ValidationFlags, narrowedProperties, targetType.AdditionalPropertiesType, targetType.AdditionalPropertiesFlags, targetType.MethodResolver);
+            return new ObjectType(targetType.Name, targetType.ValidationFlags, narrowedProperties, targetType.AdditionalPropertiesType, targetType.AdditionalPropertiesFlags, targetType.MethodResolver.CopyToObject);
         }
 
         private (IPositionable positionable, string blockName) GetMissingPropertyContext(SyntaxBase expression)
@@ -618,6 +618,9 @@ namespace Bicep.Core.TypeSystem
             {
                 // for properties, put it on the property name in the parent object
                 ObjectPropertySyntax objectPropertyParent => (objectPropertyParent.Key, "object"),
+
+                // for import declarations, mark the entire configuration object
+                ImportDeclarationSyntax importParent => (expression, "object"),
 
                 // for declaration bodies, put it on the declaration identifier
                 ITopLevelNamedDeclarationSyntax declarationParent => (declarationParent.Name, declarationParent.Keyword.Text),

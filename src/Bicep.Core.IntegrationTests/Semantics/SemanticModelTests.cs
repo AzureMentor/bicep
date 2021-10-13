@@ -55,7 +55,7 @@ namespace Bicep.Core.IntegrationTests.Semantics
         [TestMethod]
         public void EndOfFileFollowingSpaceAfterParameterKeyWordShouldNotThrow()
         {
-            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateFromText("parameter ", BicepTestConstants.FileResolver), null);
+            var compilation = new Compilation(TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateFromText("parameter ", BicepTestConstants.FileResolver), BicepTestConstants.BuiltInConfiguration);
             compilation.GetEntrypointSemanticModel().GetParseDiagnostics();
         }
 
@@ -117,7 +117,8 @@ namespace Bicep.Core.IntegrationTests.Semantics
                         s is ModuleSymbol ||
                         s is OutputSymbol ||
                         s is FunctionSymbol ||
-                        s is NamespaceSymbol ||
+                        s is ImportedNamespaceSymbol ||
+                        s is BuiltInNamespaceSymbol ||
                         s is LocalVariableSymbol);
                 }
                 else
@@ -131,7 +132,8 @@ namespace Bicep.Core.IntegrationTests.Semantics
                         s is ModuleSymbol ||
                         s is OutputSymbol ||
                         s is FunctionSymbol ||
-                        s is NamespaceSymbol ||
+                        s is ImportedNamespaceSymbol ||
+                        s is BuiltInNamespaceSymbol ||
                         s is LocalVariableSymbol);
                 }
 

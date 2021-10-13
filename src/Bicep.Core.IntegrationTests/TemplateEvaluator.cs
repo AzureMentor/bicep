@@ -150,8 +150,6 @@ namespace Bicep.Core.IntegrationTests
 
         private static JToken EvaluateTemplate(JToken? templateJtoken, EvaluationConfiguration config)
         {
-            DeploymentsInterop.Initialize();
-
             templateJtoken = templateJtoken ?? throw new ArgumentNullException(nameof(templateJtoken));
 
             var deploymentScope = TemplateHelper.GetDeploymentScope(templateJtoken["$schema"]!.ToString());
@@ -171,6 +169,18 @@ namespace Bicep.Core.IntegrationTests
                     ["id"] = $"/subscriptions/{config.SubscriptionId}/resourceGroups/{config.ResourceGroup}",
                     ["location"] = config.RgLocation,
                 };
+            };
+            if (deploymentScope == TemplateDeploymentScope.ManagementGroup)
+            {
+                metadata["managementGroup"] = new JObject {
+                    ["id"] = $"/providers/Microsoft.Management/managementGroups/{config.ManagementGroup}",
+                    ["name"] = config.ManagementGroup,
+                    ["type"] = "Microsoft.Management/managementGroups",
+                };
+            };
+            // tenant() function is available at all scopes
+            metadata["tenant"] = new JObject {
+                ["tenantId"] = config.TenantId,
             };
 
             try
