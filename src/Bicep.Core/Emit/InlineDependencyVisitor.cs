@@ -198,18 +198,6 @@ namespace Bicep.Core.Emit
                 return;
             }
 
-            var variableAccessSyntax = syntax.BaseExpression switch
-            {
-                VariableAccessSyntax variableAccess => variableAccess,
-                ArrayAccessSyntax { BaseExpression: VariableAccessSyntax variableAccess } => variableAccess,
-                _ => null
-            };
-
-            if (variableAccessSyntax is null)
-            {
-                return;
-            }
-
             if (shouldInlineCache[currentDeclaration] == Decision.Inline)
             {
                 // we've already made a decision to inline
@@ -226,6 +214,7 @@ namespace Bicep.Core.Emit
 
                 if (propertyType.Flags.HasFlag(TypePropertyFlags.DeployTimeConstant))
                 {
+                    // TODO: Do we need to special case resource properties here?
                     if (resourceSymbol is not null &&
                         !AzResourceTypeProvider.ReadWriteDeployTimeConstantPropertyNames.Contains(propertyName, LanguageConstants.IdentifierComparer))
                     {
@@ -241,7 +230,7 @@ namespace Bicep.Core.Emit
                 return false;
             }
 
-            switch (model.GetSymbolInfo(variableAccessSyntax))
+            switch (this.TryResolveSymbol(syntax.BaseExpression))
             {
                 // Note - there's a limitation here that we're using the 'declared' type and not the 'assigned' type.
                 // This means that we may encounter a DiscriminatedObjectType. For now we should accept this limitation,
@@ -255,6 +244,12 @@ namespace Bicep.Core.Emit
                     return;
             }
         }
+
+        private Symbol? TryResolveSymbol(SyntaxBase syntax) => syntax switch
+        {
+            ArrayAccessSyntax { BaseExpression: var baseSyntax } => TryResolveSymbol(baseSyntax),
+            _ => this.model.GetSymbolInfo(syntax)
+        };
 
         private void VisitFunctionCallSyntaxBaseInternal(FunctionCallSyntaxBase syntax)
         {

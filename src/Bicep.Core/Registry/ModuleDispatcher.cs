@@ -92,7 +92,7 @@ namespace Bicep.Core.Registry
         public RegistryCapabilities GetRegistryCapabilities(ModuleReference moduleReference)
         {
             var registry = this.GetRegistry(moduleReference);
-            return registry.Capabilities;
+            return registry.GetCapabilities(moduleReference);
         }
 
         public ModuleRestoreStatus GetModuleRestoreStatus(ModuleReference moduleReference, RootConfiguration configuration, out DiagnosticBuilder.ErrorBuilderDelegate? failureBuilder)
@@ -224,7 +224,7 @@ namespace Bicep.Core.Registry
                 this.moduleReference = moduleReference;
             }
 
-            public override bool Equals(object obj) =>
+            public override bool Equals(object? obj) =>
                 obj is RestoreFailureKey other &&
                 this.configuration.Equals(other.configuration) &&
                 this.moduleReference.Equals(other.moduleReference);

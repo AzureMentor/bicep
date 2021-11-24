@@ -30,7 +30,7 @@ namespace Bicep.Core.Emit
     {
         public const string GeneratorMetadataPath = "metadata._generator";
         public const string NestedDeploymentResourceType = AzResourceTypeProvider.ResourceTypeDeployments;
-        
+
         // IMPORTANT: Do not update this API version until the new one is confirmed to be deployed and available in ALL the clouds.
         public const string NestedDeploymentResourceApiVersion = "2020-06-01";
 
@@ -48,7 +48,6 @@ namespace Bicep.Core.Emit
             LanguageConstants.ResourceScopePropertyName,
             LanguageConstants.ResourceParentPropertyName,
             LanguageConstants.ResourceDependsOnPropertyName,
-            AzResourceTypeProvider.ResourceNamePropertyName,
         }.ToImmutableHashSet();
 
         private static readonly ImmutableHashSet<string> ModulePropertiesToOmit = new[] {
@@ -137,14 +136,10 @@ namespace Bicep.Core.Emit
             }
 
             emitter.EmitProperty("contentVersion", "1.0.0.0");
-            
+
             this.EmitMetadata(jsonWriter, emitter);
 
             this.EmitParametersIfPresent(jsonWriter, emitter);
-
-            jsonWriter.WritePropertyName("functions");
-            jsonWriter.WriteStartArray();
-            jsonWriter.WriteEndArray();
 
             this.EmitVariablesIfPresent(jsonWriter, emitter);
 
@@ -256,14 +251,14 @@ namespace Bicep.Core.Emit
             IEnumerable<VariableSymbol> GetNonInlinedVariables(bool valueIsLoop) =>
                 variableLookup[valueIsLoop].Where(symbol => !this.context.VariablesToInline.Contains(symbol));
 
-            if(GetNonInlinedVariables(valueIsLoop: true).Any())
+            if (GetNonInlinedVariables(valueIsLoop: true).Any())
             {
                 // we have variables whose values are loops
                 emitter.EmitProperty("copy", () =>
                 {
                     jsonWriter.WriteStartArray();
 
-                    foreach(var variableSymbol in GetNonInlinedVariables(valueIsLoop: true))
+                    foreach (var variableSymbol in GetNonInlinedVariables(valueIsLoop: true))
                     {
                         // enforced by the lookup predicate above
                         var @for = (ForSyntax)variableSymbol.Value;
@@ -297,7 +292,7 @@ namespace Bicep.Core.Emit
 
             foreach (var import in this.context.SemanticModel.Root.ImportDeclarations)
             {
-                var namespaceType = context.SemanticModel.GetTypeInfo(import.DeclaringSyntax) as NamespaceType  
+                var namespaceType = context.SemanticModel.GetTypeInfo(import.DeclaringSyntax) as NamespaceType
                     ?? throw new ArgumentException("Imported namespace does not have namespace type");
 
                 jsonWriter.WritePropertyName(import.DeclaringImport.AliasName.IdentifierName);
@@ -305,7 +300,7 @@ namespace Bicep.Core.Emit
 
                 emitter.EmitProperty("provider", namespaceType.Settings.ArmTemplateProviderName);
                 emitter.EmitProperty("version", namespaceType.Settings.ArmTemplateProviderVersion);
-                if (import.DeclaringImport.Config is {} config)
+                if (import.DeclaringImport.Config is { } config)
                 {
                     emitter.EmitProperty("config", config);
                 }
@@ -463,23 +458,53 @@ namespace Bicep.Core.Emit
                 throw new InvalidOperationException("nested loops are not supported");
             }
 
-            emitter.EmitProperty("type", resource.TypeReference.FormatType());
-            emitter.EmitProperty("apiVersion", resource.TypeReference.ApiVersion);
-            if (context.SemanticModel.EmitLimitationInfo.ResourceScopeData.TryGetValue(resource, out var scopeData))
-            {
-                ScopeHelper.EmitResourceScopeProperties(context.SemanticModel, scopeData, emitter, body);
-            }
-
-            emitter.EmitProperty("name", emitter.GetFullyQualifiedResourceName(resource));
-
             if (context.Settings.EnableSymbolicNames && resource.IsExistingResource)
             {
                 jsonWriter.WritePropertyName("existing");
                 jsonWriter.WriteValue(true);
             }
-            
-            body = AddDecoratorsToBody(resource.Symbol.DeclaringResource, (ObjectSyntax)body, resource.Type);
-            emitter.EmitObjectProperties((ObjectSyntax)body, ResourcePropertiesToOmit);
+
+            var importSymbol = context.SemanticModel.Root.ImportDeclarations.FirstOrDefault(i => resource.Type.DeclaringNamespace.AliasNameEquals(i.Name));
+
+            if (importSymbol is not null)
+            {
+                emitter.EmitProperty("import", importSymbol.Name);
+            }
+
+            if (resource.IsAzResource)
+            {
+                emitter.EmitProperty("type", resource.TypeReference.FormatType());
+                if (resource.TypeReference.ApiVersion is not null)
+                {
+                    emitter.EmitProperty("apiVersion", resource.TypeReference.ApiVersion);
+                }
+            }
+            else
+            {
+                emitter.EmitProperty("type", resource.TypeReference.FormatName());
+            }
+
+            if (context.SemanticModel.EmitLimitationInfo.ResourceScopeData.TryGetValue(resource, out var scopeData))
+            {
+                ScopeHelper.EmitResourceScopeProperties(context.SemanticModel, scopeData, emitter, body);
+            }
+
+            if (resource.IsAzResource)
+            {
+                emitter.EmitProperty(AzResourceTypeProvider.ResourceNamePropertyName, emitter.GetFullyQualifiedResourceName(resource));
+
+                body = AddDecoratorsToBody(resource.Symbol.DeclaringResource, (ObjectSyntax)body, resource.Type);
+                emitter.EmitObjectProperties((ObjectSyntax)body, ResourcePropertiesToOmit.Add(AzResourceTypeProvider.ResourceNamePropertyName));
+            }
+            else
+            {
+                jsonWriter.WritePropertyName("properties");
+                jsonWriter.WriteStartObject();
+
+                emitter.EmitObjectProperties((ObjectSyntax)body, ResourcePropertiesToOmit);
+
+                jsonWriter.WriteEndObject();
+            }
 
             this.EmitDependsOn(jsonWriter, resource.Symbol, emitter, body);
 
@@ -488,8 +513,8 @@ namespace Bicep.Core.Emit
 
         private static void EmitModuleParameters(JsonTextWriter jsonWriter, ModuleSymbol moduleSymbol, ExpressionEmitter emitter)
         {
-            var paramsValue = moduleSymbol.SafeGetBodyPropertyValue(LanguageConstants.ModuleParamsPropertyName);
-            if(paramsValue is not ObjectSyntax paramsObjectSyntax)
+            var paramsValue = moduleSymbol.TryGetBodyPropertyValue(LanguageConstants.ModuleParamsPropertyName);
+            if (paramsValue is not ObjectSyntax paramsObjectSyntax)
             {
                 // 'params' is optional if the module has no required params
                 return;
@@ -547,7 +572,7 @@ namespace Bicep.Core.Emit
                     break;
 
                 case ForSyntax @for:
-                    if(@for.Body is IfConditionSyntax loopFilter)
+                    if (@for.Body is IfConditionSyntax loopFilter)
                     {
                         body = loopFilter.Body;
                         emitter.EmitProperty("condition", loopFilter.ConditionExpression);
@@ -556,7 +581,7 @@ namespace Bicep.Core.Emit
                     {
                         body = @for.Body;
                     }
-                    
+
                     var batchSize = GetBatchSize(moduleSymbol.DeclaringModule);
                     emitter.EmitProperty("copy", () => emitter.EmitCopyObject(moduleSymbol.Name, @for, input: null, batchSize: batchSize));
                     break;
@@ -650,7 +675,7 @@ namespace Bicep.Core.Emit
                         case (true, null):
                             jsonWriter.WriteValue(resourceDependency.Name);
                             break;
-                        case (true, {} indexExpression):
+                        case (true, { } indexExpression):
                             emitter.EmitIndexedSymbolReference(resource, indexExpression, newContext);
                             break;
                     }
@@ -667,14 +692,14 @@ namespace Bicep.Core.Emit
                         case (true, null):
                             jsonWriter.WriteValue(moduleDependency.Name);
                             break;
-                        case (true, {} indexExpression):
+                        case (true, { } indexExpression):
                             emitter.EmitIndexedSymbolReference(moduleDependency, indexExpression, newContext);
                             break;
                     }
                     break;
                 default:
                     throw new InvalidOperationException($"Found dependency '{dependency.Resource.Name}' of unexpected type {dependency.GetType()}");
-            }            
+            }
         }
 
         private void EmitClassicDependsOnEntry(JsonTextWriter jsonWriter, ExpressionEmitter emitter, SyntaxBase newContext, ResourceDependency dependency)
@@ -774,8 +799,8 @@ namespace Bicep.Core.Emit
                 emitter.EmitProperty("value", outputSymbol.Value);
                 // emit any decorators on this output
                 var body = AddDecoratorsToBody(
-                outputSymbol.DeclaringOutput, 
-                SyntaxFactory.CreateObject(Enumerable.Empty<ObjectPropertySyntax>()), 
+                outputSymbol.DeclaringOutput,
+                SyntaxFactory.CreateObject(Enumerable.Empty<ObjectPropertySyntax>()),
                 outputSymbol.Type);
                 foreach (var (property, val) in body.ToNamedPropertyValueDictionary())
                 {
