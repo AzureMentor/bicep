@@ -44,11 +44,12 @@ $@"
     Publishes the .bicep file to the module registry.
 
     Arguments:
-      <file>        The input file
+      <file>        The input file (can be a Bicep file or an ARM template file)
       <ref>         The module reference
 
     Examples:
       bicep publish file.bicep --target br:example.azurecr.io/hello/world:v1
+      bicep publish file.json --target br:example.azurecr.io/hello/world:v1
 
   {exeName} restore <file>
     Restores external modules from the specified Bicep file to the local module cache.
@@ -75,6 +76,7 @@ Usage:
       --outfile <file>  Saves the output as the specified file path.
       --no-summary      Omits the summary at the end of the build.
       --stdout          Prints the output to stdout.
+      --no-restore      Builds the bicep file without restoring external modules.
 
     Examples:
       bicep build file.bicep
@@ -82,6 +84,7 @@ Usage:
       bicep build file.bicep --no-summary
       bicep build file.bicep --outdir dir1
       bicep build file.bicep --outfile file.json
+      bicep build file.bicep --no-restore
 
   {exeName} decompile [options] <file>
     Attempts to decompile a template .json file to .bicep.

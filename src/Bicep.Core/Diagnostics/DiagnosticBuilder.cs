@@ -110,7 +110,7 @@ namespace Bicep.Core.Diagnostics
             public ErrorDiagnostic InvalidInteger() => new(
                 TextSpan,
                 "BCP010",
-                "Expected a valid 32-bit signed integer.");
+                "Expected a valid 64-bit signed integer.");
 
             public ErrorDiagnostic InvalidType() => new(
                 TextSpan,
@@ -244,7 +244,7 @@ namespace Bicep.Core.Diagnostics
                     properties.Select(p => SyntaxFactory.CreateObjectProperty(p, SyntaxFactory.EmptySkippedTrivia))
                 );
 
-                var codeFix = new CodeFix("Add required properties", true, new CodeReplacement(objectSyntax.Span, newSyntax.ToTextPreserveFormatting()));
+                var codeFix = new CodeFix("Add required properties", true, CodeFixKind.QuickFix, new CodeReplacement(objectSyntax.Span, newSyntax.ToTextPreserveFormatting()));
 
                 return new FixableDiagnostic(
                     TextSpan,
@@ -269,7 +269,7 @@ namespace Bicep.Core.Diagnostics
                     $"The property \"{property}\" expected a value of type \"{expectedType}\" but the provided value{sourceDeclarationClause} is of type \"{actualType}\".");
             }
 
-            public Diagnostic DisallowedProperty(bool warnInsteadOfError, Symbol? sourceDeclaration, string property, TypeSymbol type, IEnumerable<string> validUnspecifiedProperties, bool isResourceSyntax)
+            public Diagnostic DisallowedProperty(bool warnInsteadOfError, Symbol? sourceDeclaration, string property, TypeSymbol type, ICollection<string> validUnspecifiedProperties, bool isResourceSyntax)
             {
                 var permissiblePropertiesClause = validUnspecifiedProperties.Any()
                     ? $" Permissible properties include {ToQuotedString(validUnspecifiedProperties)}."
@@ -286,7 +286,7 @@ namespace Bicep.Core.Diagnostics
                     $"The property \"{property}\"{sourceDeclarationClause} is not allowed on objects of type \"{type}\".{permissiblePropertiesClause}{(isResourceSyntax ? TypeInaccuracyClause : string.Empty)}", isResourceSyntax ? TypeInaccuracyLink : null);
             }
 
-            public Diagnostic DisallowedInterpolatedKeyProperty(bool warnInsteadOfError, Symbol? sourceDeclaration, TypeSymbol type, IEnumerable<string> validUnspecifiedProperties)
+            public Diagnostic DisallowedInterpolatedKeyProperty(bool warnInsteadOfError, Symbol? sourceDeclaration, TypeSymbol type, ICollection<string> validUnspecifiedProperties)
             {
                 var permissiblePropertiesClause = validUnspecifiedProperties.Any()
                     ? $" Permissible properties include {ToQuotedString(validUnspecifiedProperties)}."
@@ -496,11 +496,11 @@ namespace Bicep.Core.Diagnostics
                 "BCP072",
                 "This symbol cannot be referenced here. Only other parameters can be referenced in parameter default values.");
 
-            public Diagnostic CannotAssignToReadOnlyProperty(bool warnInsteadOfError, string property) => new(
+            public Diagnostic CannotAssignToReadOnlyProperty(bool warnInsteadOfError, string property, bool showTypeInaccuracy) => new(
                 TextSpan,
                 warnInsteadOfError ? DiagnosticLevel.Warning : DiagnosticLevel.Error,
                 "BCP073",
-                $"The property \"{property}\" is read-only. Expressions cannot be assigned to read-only properties.");
+                $"The property \"{property}\" is read-only. Expressions cannot be assigned to read-only properties.{(showTypeInaccuracy ? TypeInaccuracyClause : string.Empty)}", showTypeInaccuracy ? TypeInaccuracyLink : null);
 
             public ErrorDiagnostic ArraysRequireIntegerIndex(TypeSymbol wrongType) => new(
                 TextSpan,
@@ -551,7 +551,7 @@ namespace Bicep.Core.Diagnostics
                 $"The name \"{name}\" does not exist in the current context. Did you mean \"{suggestedName}\"?",
                 null,
                 null,
-                new CodeFix($"Change \"{name}\" to \"{suggestedName}\"", true, CodeManipulator.Replace(TextSpan, suggestedName)));
+                new CodeFix($"Change \"{name}\" to \"{suggestedName}\"", true, CodeFixKind.QuickFix, CodeManipulator.Replace(TextSpan, suggestedName)));
 
             public FixableDiagnostic UnknownPropertyWithSuggestion(bool warnInsteadOfError, TypeSymbol type, string badProperty, string suggestedProperty) => new(
                 TextSpan,
@@ -560,7 +560,7 @@ namespace Bicep.Core.Diagnostics
                 $"The type \"{type}\" does not contain property \"{badProperty}\". Did you mean \"{suggestedProperty}\"?",
                 null,
                 null,
-                new CodeFix($"Change \"{badProperty}\" to \"{suggestedProperty}\"", true, CodeManipulator.Replace(TextSpan, suggestedProperty)));
+                new CodeFix($"Change \"{badProperty}\" to \"{suggestedProperty}\"", true, CodeFixKind.QuickFix, CodeManipulator.Replace(TextSpan, suggestedProperty)));
 
             public ErrorDiagnostic SymbolicNameCannotUseReservedNamespaceName(string name, IEnumerable<string> namespaces) => new(
                 TextSpan,
@@ -589,7 +589,7 @@ namespace Bicep.Core.Diagnostics
                 $"The property \"{property}\" expected a value of type \"{expectedType}\" but the provided value is of type \"{actualStringLiteral}\". Did you mean \"{suggestedStringLiteral}\"?",
                 null,
                 null,
-                new CodeFix($"Change \"{actualStringLiteral}\" to \"{suggestedStringLiteral}\"", true, CodeManipulator.Replace(TextSpan, suggestedStringLiteral)));
+                new CodeFix($"Change \"{actualStringLiteral}\" to \"{suggestedStringLiteral}\"", true, CodeFixKind.QuickFix, CodeManipulator.Replace(TextSpan, suggestedStringLiteral)));
 
             public FixableDiagnostic DisallowedPropertyWithSuggestion(bool warnInsteadOfError, string property, TypeSymbol type, string suggestedProperty) => new(
                 TextSpan,
@@ -598,7 +598,7 @@ namespace Bicep.Core.Diagnostics
                 $"The property \"{property}\" is not allowed on objects of type \"{type}\". Did you mean \"{suggestedProperty}\"?",
                 null,
                 null,
-                new CodeFix($"Change \"{property}\" to \"{suggestedProperty}\"", true, CodeManipulator.Replace(TextSpan, suggestedProperty)));
+                new CodeFix($"Change \"{property}\" to \"{suggestedProperty}\"", true, CodeFixKind.QuickFix, CodeManipulator.Replace(TextSpan, suggestedProperty)));
 
             public ErrorDiagnostic ModulePathHasNotBeenSpecified() => new(
                 TextSpan,
@@ -653,7 +653,7 @@ namespace Bicep.Core.Diagnostics
             public ErrorDiagnostic IfFunctionNotSupported() => new(
                 TextSpan,
                 "BCP100",
-                "The \"if\" function is not supported. Use the ternary conditional operator instead.");
+                "The function \"if\" is not supported. Use the \"?:\" (ternary conditional) operator instead, e.g. condition ? ValueIfTrue : ValueIfFalse");
 
             public ErrorDiagnostic CreateArrayFunctionNotSupported() => new(
                 TextSpan,
@@ -696,7 +696,7 @@ namespace Bicep.Core.Diagnostics
                 $"The function \"{name}\" does not exist in namespace \"{namespaceType.Name}\". Did you mean \"{suggestedName}\"?",
                 null,
                 null,
-                new CodeFix($"Change \"{name}\" to \"{suggestedName}\"", true, CodeManipulator.Replace(TextSpan, suggestedName)));
+                new CodeFix($"Change \"{name}\" to \"{suggestedName}\"", true, CodeFixKind.QuickFix, CodeManipulator.Replace(TextSpan, suggestedName)));
 
             public ErrorDiagnostic FunctionDoesNotExistOnObject(TypeSymbol type, string name) => new(
                 TextSpan,
@@ -709,7 +709,7 @@ namespace Bicep.Core.Diagnostics
                 $"The type \"{type}\" does not contain function \"{name}\". Did you mean \"{suggestedName}\"?",
                 null,
                 null,
-                new CodeFix($"Change \"{name}\" to \"{suggestedName}\"", true, CodeManipulator.Replace(TextSpan, suggestedName)));
+                new CodeFix($"Change \"{name}\" to \"{suggestedName}\"", true, CodeFixKind.QuickFix, CodeManipulator.Replace(TextSpan, suggestedName)));
 
             public ErrorDiagnostic FilePathContainsControlChars() => new(
                 TextSpan,
@@ -868,7 +868,7 @@ namespace Bicep.Core.Diagnostics
                 TextSpan,
                 DiagnosticLevel.Error,
                 "BCP139",
-                $"The root resource scope must match that of the Bicep file. To deploy a resource to a different root scope, use a module.");
+                $"A resource's scope must match the scope of the Bicep file for it to be deployable. You must use modules to deploy resources to a different scope.");
 
             public ErrorDiagnostic UnterminatedMultilineString() => new(
                 TextSpan,
@@ -988,12 +988,12 @@ namespace Bicep.Core.Diagnostics
             public ErrorDiagnostic ScopeUnsupportedOnChildResource(string parentIdentifier) => new(
                 TextSpan,
                 "BCP164",
-                $"The \"{LanguageConstants.ResourceScopePropertyName}\" property is unsupported for a resource with a parent resource. This resource has \"{parentIdentifier}\" declared as its parent.");
+                $"A child resource's scope is computed based on the scope of its ancestor resource. This means that using the \"{LanguageConstants.ResourceScopePropertyName}\" property on a child resource is unsupported.");
 
             public ErrorDiagnostic ScopeDisallowedForAncestorResource(string ancestorIdentifier) => new(
                 TextSpan,
                 "BCP165",
-                $"Cannot deploy a resource with ancestor under a different scope. Resource \"{ancestorIdentifier}\" has the \"{LanguageConstants.ResourceScopePropertyName}\" property set.");
+                $"A resource's computed scope must match that of the Bicep file for it to be deployable. This resource's scope is computed from the \"{LanguageConstants.ResourceScopePropertyName}\" property value assigned to ancestor resource \"{ancestorIdentifier}\". You must use modules to deploy resources to a different scope.");
 
             public ErrorDiagnostic DuplicateDecorator(string decoratorName) => new(
                 TextSpan,
@@ -1343,6 +1343,32 @@ namespace Bicep.Core.Diagnostics
                 "BCP226",
                 "Expected at least one diagnostic code at this location. Valid format is \"#disable-next-line diagnosticCode1 diagnosticCode2 ...\""
             );
+
+            public ErrorDiagnostic UnsupportedResourceTypeParameterType(string resourceType) => new(
+                TextSpan,
+                "BCP227",
+                $"The type \"{resourceType}\" cannot be used as a parameter type. Extensibility types are currently not supported as parameters or outputs.");
+
+            public ErrorDiagnostic UnsupportedResourceTypeOutputType(string resourceType) => new(
+                TextSpan,
+                "BCP228",
+                $"The type \"{resourceType}\" cannot be used as an output type. Extensibility types are currently not supported as parameters or outputs.");
+
+            public ErrorDiagnostic InvalidResourceScopeCannotBeResourceTypeParameter(string parameterName) => new(
+                TextSpan,
+                "BCP229",
+                $"The parameter \"{parameterName}\" cannot be used as a resource scope or parent. Resources passed as parameters cannot be used as a scope or parent of a resource.");
+
+            public Diagnostic ModuleParamOrOutputResourceTypeUnavailable(ResourceTypeReference resourceTypeReference) => new(
+                TextSpan,
+                DiagnosticLevel.Warning,
+                "BCP230",
+                $"The referenced module uses resource type \"{resourceTypeReference.FormatName()}\" which does not have types available.");
+
+            public ErrorDiagnostic ParamOrOutputResourceTypeUnsupported() => new(
+                TextSpan,
+                "BCP231",
+                "Using resource-typed parameters and outputs requires enabling EXPERIMENTAL feature BICEP_RESOURCE_TYPED_PARAMS_AND_OUTPUTS_EXPERIMENTAL.");
         }
 
         public static DiagnosticBuilderInternal ForPosition(TextSpan span)

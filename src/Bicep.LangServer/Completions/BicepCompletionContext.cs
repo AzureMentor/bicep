@@ -167,8 +167,8 @@ namespace Bicep.LanguageServer.Completions
 
             if (featureProvider.ImportsEnabled)
             {
-                kind |= ConvertFlag(IsImportSymbolFollower(matchingNodes, offset), BicepCompletionContextKind.ImportSymbolFollower) |
-                    ConvertFlag(IsImportFromFollower(matchingNodes, offset), BicepCompletionContextKind.ImportFromFollower);
+                kind |= ConvertFlag(IsImportProviderFollower(matchingNodes, offset), BicepCompletionContextKind.ImportProviderFollower) |
+                    ConvertFlag(IsImportFollower(matchingNodes, offset), BicepCompletionContextKind.ImportFollower);
             }
 
             if (kind == BicepCompletionContextKind.None)
@@ -242,26 +242,65 @@ namespace Bicep.LanguageServer.Completions
             // local function
             bool CheckTypeIsExpected(SyntaxBase name, SyntaxBase type) => name.Span.Length > 0 && offset > name.GetEndPosition() && offset <= type.Span.Position;
 
+            bool CheckParameterResourceTypeIsExpected(ResourceTypeSyntax type) =>
+                // This handles the case where we have the resource keyword but no type-string for a parameter.
+                // Must be inside the type
+                type.Span.Length > 0 &&
+                offset >= type.Keyword.GetEndPosition() &&
+                (type.Type is null || type.Type is SkippedTriviaSyntax);
+
+            bool CheckOutputResourceTypeIsExpected(OutputDeclarationSyntax output) =>
+                // This handles the case where we have the resource keyword but no type-string for an output.
+                // Must be after the type (`resource` is valid for type) and
+                // Before the `=` if `=` is present
+                output.Type is ResourceTypeSyntax type &&
+                offset >= type.Keyword.GetEndPosition() &&
+                (type.Type is null || type.Type is SkippedTriviaSyntax) &&
+                (output.Assignment is SkippedTriviaSyntax || (output.Assignment is Token assignment && offset <= assignment.GetPosition()));
+
             if (SyntaxMatcher.IsTailMatch<ParameterDeclarationSyntax>(matchingNodes, parameter => CheckTypeIsExpected(parameter.Name, parameter.Type)) ||
-                SyntaxMatcher.IsTailMatch<ParameterDeclarationSyntax, TypeSyntax, Token>(matchingNodes, (_, _, token) => token.Type == TokenType.Identifier))
+                SyntaxMatcher.IsTailMatch<ParameterDeclarationSyntax, SimpleTypeSyntax, Token>(matchingNodes, (_, _, token) => token.Type == TokenType.Identifier))
             {
                 // the most specific matching node is a parameter declaration
                 // the declaration syntax is "param <identifier> <type> ..."
                 // the cursor position is on the type if we have an identifier (non-zero length span) and the offset matches the type position
                 // OR
-                // we are in a token that is inside a TypeSyntax node, which is inside a parameter node
+                // we are in a token that is inside a SimpleTypeSyntax node, which is inside a parameter node
                 return BicepCompletionContextKind.ParameterType;
             }
 
+            if (SyntaxMatcher.IsTailMatch<ParameterDeclarationSyntax, ResourceTypeSyntax>(matchingNodes, (parameter, type) => CheckParameterResourceTypeIsExpected(type)) ||
+                SyntaxMatcher.IsTailMatch<ParameterDeclarationSyntax, ResourceTypeSyntax, StringSyntax, Token>(matchingNodes, (_, _, _, token) => token.Type == TokenType.StringComplete))
+            {
+                // the most specific matching node is a parameter declaration with the resource keyword
+                // the declaration syntax is "param <identifier> resource ..."
+                // the cursor position is on the resource type if we have the resource keyword but nothing else
+                // OR
+                // we are in a token that is inside a ResourceTypeSyntax node, which is inside a parameter node
+                return BicepCompletionContextKind.ResourceType;
+            }
+
             if (SyntaxMatcher.IsTailMatch<OutputDeclarationSyntax>(matchingNodes, output => CheckTypeIsExpected(output.Name, output.Type)) ||
-                SyntaxMatcher.IsTailMatch<OutputDeclarationSyntax, TypeSyntax, Token>(matchingNodes, (_, _, token) => token.Type == TokenType.Identifier))
+                SyntaxMatcher.IsTailMatch<OutputDeclarationSyntax, SimpleTypeSyntax, Token>(matchingNodes, (_, _, token) => token.Type == TokenType.Identifier))
             {
                 // the most specific matching node is an output declaration
                 // the declaration syntax is "output <identifier> <type> ..."
                 // the cursor position is on the type if we have an identifier (non-zero length span) and the offset matches the type position
                 // OR
-                // we are in a token that is inside a TypeSyntax node, which is inside an output node
+                // we are in a token that is inside a SimpleTypeSyntax node, which is inside an output node
                 return BicepCompletionContextKind.OutputType;
+            }
+
+             // NOTE: this logic is different between parameters and outputs because the resource type is optional for outputs.
+            if (SyntaxMatcher.IsTailMatch<OutputDeclarationSyntax>(matchingNodes, output => CheckOutputResourceTypeIsExpected(output)) ||
+                SyntaxMatcher.IsTailMatch<OutputDeclarationSyntax, ResourceTypeSyntax, StringSyntax, Token>(matchingNodes, (_, _, _, token) => token.Type == TokenType.StringComplete))
+            {
+                // the most specific matching node is an output declaration with the resource keyword
+                // the declaration syntax is "output <identifier> resource ..."
+                // the cursor position is on the resource type if we have the resource keyword but nothing else
+                // OR
+                // we are in a token that is inside a ResourceTypeSyntax node, which is inside an output node
+                return BicepCompletionContextKind.ResourceType;
             }
 
             if (SyntaxMatcher.IsTailMatch<ResourceDeclarationSyntax>(matchingNodes, resource => CheckTypeIsExpected(resource.Name, resource.Type)) ||
@@ -619,16 +658,16 @@ namespace Bicep.LanguageServer.Completions
             // abc.someFunc(x,|)
             SyntaxMatcher.IsTailMatch<FunctionCallSyntaxBase, FunctionArgumentSyntax, Token>(matchingNodes, (func, _, _) => true);
 
-        private static bool IsImportSymbolFollower(List<SyntaxBase> matchingNodes, int offset) =>
+        private static bool IsImportProviderFollower(List<SyntaxBase> matchingNodes, int offset) =>
             // import foo |
-            SyntaxMatcher.IsTailMatch<ImportDeclarationSyntax>(matchingNodes, import => import.AliasName.IsValid && offset > import.AliasName.GetEndPosition() && offset <= import.FromKeyword.GetEndPosition()) ||
-            // import foo f|
-            SyntaxMatcher.IsTailMatch<ImportDeclarationSyntax, SkippedTriviaSyntax, Token>(matchingNodes, (import, skipped, _) => import.FromKeyword == skipped);
+            SyntaxMatcher.IsTailMatch<ImportDeclarationSyntax>(matchingNodes, import => import.ProviderName.IsValid && offset > import.ProviderName.GetEndPosition() && offset <= import.AsKeyword.GetEndPosition()) ||
+            // import foo a|
+            SyntaxMatcher.IsTailMatch<ImportDeclarationSyntax, SkippedTriviaSyntax, Token>(matchingNodes, (import, skipped, _) => import.AsKeyword == skipped);
 
-        private static bool IsImportFromFollower(List<SyntaxBase> matchingNodes, int offset) =>
-            // import foo from |
-            SyntaxMatcher.IsTailMatch<ImportDeclarationSyntax>(matchingNodes, import => offset > import.FromKeyword.GetEndPosition() && import.ProviderName.Child is SkippedTriviaSyntax) ||
-            // import foo from f|
+        private static bool IsImportFollower(List<SyntaxBase> matchingNodes, int offset) =>
+            // import |
+            SyntaxMatcher.IsTailMatch<ImportDeclarationSyntax>(matchingNodes, import => import.ProviderName.Child is SkippedTriviaSyntax && offset > import.Keyword.GetEndPosition()) ||
+            // import f|
             SyntaxMatcher.IsTailMatch<ImportDeclarationSyntax, IdentifierSyntax, Token>(matchingNodes, (import, ident, _) => import.ProviderName == ident);
 
         private static bool IsOuterExpressionContext(List<SyntaxBase> matchingNodes, int offset)

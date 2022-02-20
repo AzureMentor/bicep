@@ -10,8 +10,8 @@
 
 namespace Bicep.Cli {
     using System;
-    
-    
+
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -19,19 +19,19 @@ namespace Bicep.Cli {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "16.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "17.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class CliResources {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal CliResources() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Bicep.Cli {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,16 @@ namespace Bicep.Cli {
                 resourceCulture = value;
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0}: Decompilation failed with fatal error &quot;{1}&quot;.
+        /// </summary>
+        internal static string DecompilationFailedFormat {
+            get {
+                return ResourceManager.GetString("DecompilationFailedFormat", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to WARNING: Decompilation is a best-effort process, as there is no guaranteed mapping from ARM JSON to Bicep.
         ///You may need to fix warnings and errors in the generated bicep file(s), or decompilation may fail entirely if an accurate conversion is not possible.
@@ -70,16 +79,7 @@ namespace Bicep.Cli {
                 return ResourceManager.GetString("DecompilerDisclaimerMessage", resourceCulture);
             }
         }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to {0}: Decompilation failed with fatal error &quot;{1}&quot;.
-        /// </summary>
-        internal static string DecompilationFailedFormat {
-            get {
-                return ResourceManager.GetString("DecompilationFailedFormat", resourceCulture);
-            }
-        }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to The specified output directory &quot;{0}&quot; does not exist..
         /// </summary>
@@ -88,16 +88,22 @@ namespace Bicep.Cli {
                 return ResourceManager.GetString("DirectoryDoesNotExistFormat", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to WARNING: Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!
+        ///   Looks up a localized string similar to WARNING: Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!.
         /// </summary>
         internal static string SymbolicNamesDisclaimerMessage {
             get {
                 return ResourceManager.GetString("SymbolicNamesDisclaimerMessage", resourceCulture);
             }
         }
-        
+
+        internal static string ResourceTypesDisclaimerMessage {
+            get {
+                return ResourceManager.GetString("ResourceTypesDisclaimerMessage", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Unrecognized arguments &quot;{0}&quot; specified. Use &quot;{1} --help&quot; to view available options..
         /// </summary>

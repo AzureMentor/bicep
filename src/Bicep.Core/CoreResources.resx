@@ -125,7 +125,26 @@
     <value>No bicepconfig.json found for configuration override.</value>
   </data>
   <data name="AdminUsernameShouldNotBeLiteralRuleDescription" xml:space="preserve">
-    <value>When setting an adminUserName property, don't use a literal value.</value>
+    <value>Property 'adminUserName' should not use a literal value. Use a param instead.</value>
+  </data>
+  <data name="OutputsShouldNotContainSecretsRuleDescription" xml:space="preserve">
+    <value>Outputs should not contain secrets.</value>
+  </data>
+  <data name="OutputsShouldNotContainSecretsMessageFormat" xml:space="preserve">
+    <value>{0} Found possible secret: {1}</value>
+    <comment>{0} is the rule description as a sentence ending with a period, {1} is the name of what was found, e.g. 'myParameter'</comment>
+  </data>
+  <data name="OutputsShouldNotContainSecretsOutputName" xml:space="preserve">
+    <value>output name '{0}' suggests a secret</value>
+    <comment>{0} name of a programmatic output</comment>
+  </data>
+  <data name="OutputsShouldNotContainSecretsSecureParam" xml:space="preserve">
+    <value>secure parameter '{0}'</value>
+    <comment>{0} name of a programmatic parameter</comment>
+  </data>
+  <data name="OutputsShouldNotContainSecretsFunction" xml:space="preserve">
+    <value>function '{0}'</value>
+    <comment>{0} is the function name. This string appears in the middle of a sentence, hence doesn't start with capital letter.  Something similar to: Found: function 'listKeys()'</comment>
   </data>
   <data name="EnvironmentUrlHardcodedRuleDescription" xml:space="preserve">
     <value>Environment URLs should not be hardcoded. Use the environment() function to ensure compatibility across clouds.</value>
@@ -146,7 +165,7 @@
     <comment>string format to display error exception thrown in Linter Rule</comment>
   </data>
   <data name="LocationSetByParameterRuleDescription" xml:space="preserve">
-    <value>Resource location should be specified by a parameter with no default value or one that defaults to 'global' or resourceGroup().location.</value>
+    <value>Resource location should be specified by a parameter without a default value or one that defaults to 'global' or resourceGroup().location.</value>
   </data>
   <data name="NoUnnecessaryDependsOnRuleDescription" xml:space="preserve">
     <value>No unnecessary dependsOn.</value>
@@ -155,8 +174,49 @@
     <value>Remove unnecessary dependsOn entry '{0}'.</value>
     <comment>Text for linter rule error. {0} is a programmatic expression</comment>
   </data>
+  <data name="NoHardcodedLocationRuleDescription" xml:space="preserve">
+    <value>A resource's location should not use a hard-coded string or variable value. It should use a parameter, an expression, or the string 'global'.</value>
+  </data>
+  <data name="NoLocExprOutsideParamsRuleError" xml:space="preserve">
+    <value>Use a parameter here instead of '{0}'. 'resourceGroup().location' and 'deployment().location' should only be used as a default value for parameters.</value>
+    <comment>{0} = programmatic expression, e.g. 'resourceGroup().location'</comment>
+  </data>
+  <data name="NoLocExprOutsideParamsRuleDescription" xml:space="preserve">
+    <value>Functions resourceGroup().location and deployment().location should only be used as the default value of a parameter.</value>
+    <comment>{0} = programmatic expression, e.g. 'resourceGroup().location'</comment>
+  </data>
+  <data name="NoHardcodedLocation_ErrorChangeVarToParam" xml:space="preserve">
+    <value>A resource location should not use a hard-coded string or variable value. Change variable '{0}' into a parameter instead.</value>
+    <comment>{0} is a variable name</comment>
+  </data>
+  <data name="NoHardcodedLocation_FixChangeVarToParam" xml:space="preserve">
+    <value>Change variable '{0}' into a parameter instead</value>
+    <comment>{0} is a variable name</comment>
+  </data>
+  <data name="NoHardcodedLocation_FixNewParam" xml:space="preserve">
+    <value>Create new parameter '{0}' with default value {1}</value>
+    <comment>{0} is a variable name, {1} is a programmatic expression</comment>
+  </data>
+  <data name="NoHardcodedLocation_ErrorForResourceLocation" xml:space="preserve">
+    <value>A resource location should not use a hard-coded string or variable value.</value>
+  </data>
+  <data name="NoHardcodedLocation_ErrorForModuleParam" xml:space="preserve">
+    <value>Parameter '{0}' may be used as a resource location in the module and should not be assigned a hard-coded string or variable value.</value>
+    <comment>{0} is programmatic variable name</comment>
+  </data>
+  <data name="NoHardcodedLocation_ErrorSolution" xml:space="preserve">
+    <value>Please use a parameter value, an expression, or the string '{0}'. Found: '{1}'</value>
+  </data>
+  <data name="NoHardcodedLocation_ModuleLocationNeedsExplicitValue" xml:space="preserve">
+    <value>Parameter '{0}' of module '{1}' isn't assigned an explicit value, and its default value may not give the intended behavior for a location-related parameter. You should assign an explicit value to the parameter.</value>
+    <comment>{0}, {1} are programmatic variable names</comment>
+  </data>
+  <data name="NoHardcodedLocation_ResourceLocationShouldBeExpressionOrGlobal" xml:space="preserve">
+    <value>A resource location should be either an expression or the string '{0}'. Found '{1}'</value>
+    <comment>{0} = programmatic string value, e.g. 'global. {1} = programmatic string value, e.g. 'westus'</comment>
+  </data>
   <data name="ParameterMustBeUsedRuleDescription" xml:space="preserve">
-    <value>No unused parameters.</value>
+    <value>All parameters must be used.</value>
   </data>
   <data name="ParameterMustBeUsedRuleMessageFormat" xml:space="preserve">
     <value>Parameter "{0}" is declared but never used.</value>
@@ -164,11 +224,11 @@
   </data>
   <data name="PossibleSecretMessageFunction" xml:space="preserve">
     <value>function '{0}'</value>
-    <comment>{0} is the function name</comment>
+    <comment>{0} is the function name. This string appears in the middle of a sentence, hence doesn't start with capital letter. Something similar to: Found: function 'listKeys()'</comment>
   </data>
   <data name="PossibleSecretMessageSecureParam" xml:space="preserve">
     <value>secure parameter '{0}'</value>
-    <comment>{0} is the parameter name</comment>
+    <comment>{0} is the parameter name. This string appears in the middle of a sentence, so it doesn't start with a capital letter. Something similar to: Found: secure parameter 'parameter1'</comment>
   </data>
   <data name="SecureParameterDefaultFixTitle" xml:space="preserve">
     <value>Remove insecure default value.</value>
@@ -183,16 +243,16 @@
     <value>Remove unnecessary string interpolation.</value>
   </data>
   <data name="UnusedVariableRuleDescription" xml:space="preserve">
-    <value>No unused variables.</value>
+    <value>All variables must be used.</value>
   </data>
   <data name="UnusedVariableRuleMessageFormat" xml:space="preserve">
     <value>Variable "{0}" is declared but never used.</value>
     <comment>{0} is the variable name</comment>
   </data>
-  <data name="UseProtectedSettingsForCommandToExecuteSecretsRuleDescription" xml:space="preserve">
+  <data name="ProtectCommandToExecuteSecretsRuleDescription" xml:space="preserve">
     <value>Use protectedSettings for commandToExecute secrets</value>
   </data>
-  <data name="UseProtectedSettingsForCommandToExecuteSecretsRuleMessage" xml:space="preserve">
+  <data name="ProtectCommandToExecuteSecretsRuleMessage" xml:space="preserve">
     <value>Use protectedSettings for commandToExecute secrets. Found possible secret: {0}</value>
     <comment>{0} is the description of what was found</comment>
   </data>
@@ -201,5 +261,29 @@
   </data>
   <data name="UseStableVMImageRuleFixMessageFormat" xml:space="preserve">
     <value>Virtual machines shouldn't use preview images. Use stable version in imageReference property "{0}".</value>
+  </data>
+  <data name="MaxNumberParametersRuleDescription" xml:space="preserve">
+    <value>Maximum number of parameters used.</value>
+  </data>
+  <data name="MaxNumberParametersRuleMessageFormat" xml:space="preserve">
+    <value>Too many parameters. Number of parameters is limited to {0}.</value>
+  </data>
+  <data name="MaxNumberVariablesRuleDescription" xml:space="preserve">
+    <value>Maximum number of variables used.</value>
+  </data>
+  <data name="MaxNumberVariablesRuleMessageFormat" xml:space="preserve">
+    <value>Too many variables. Number of variables is limited to {0}.</value>
+  </data>
+  <data name="MaxNumberOutputsRuleDescription" xml:space="preserve">
+    <value>Maximum number of outputs used.</value>
+  </data>
+  <data name="MaxNumberOutputsRuleMessageFormat" xml:space="preserve">
+    <value>Too many outputs. Number of outputs is limited to {0}.</value>
+  </data>
+  <data name="MaxNumberResourcesRuleDescription" xml:space="preserve">
+    <value>Maximum number of resources used.</value>
+  </data>
+  <data name="MaxNumberResourcesRuleMessageFormat" xml:space="preserve">
+    <value>Too many resources. Number of resources is limited to {0}.</value>
   </data>
 </root>

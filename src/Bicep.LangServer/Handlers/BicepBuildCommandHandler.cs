@@ -12,15 +12,16 @@ using Azure.Deployments.Core.Entities;
 using Azure.Deployments.Core.Helpers;
 using Azure.Deployments.Core.Json;
 using Bicep.Core;
+using Bicep.Core.Analyzers.Linter;
 using Bicep.Core.Configuration;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Emit;
+using Bicep.Core.Features;
 using Bicep.Core.FileSystem;
 using Bicep.Core.Registry;
 using Bicep.Core.Semantics;
 using Bicep.Core.Semantics.Namespaces;
 using Bicep.Core.Text;
-using Bicep.Core.TypeSystem.Az;
 using Bicep.Core.Workspaces;
 using Bicep.LanguageServer.CompilationManager;
 using Newtonsoft.Json.Linq;
@@ -36,16 +37,18 @@ namespace Bicep.LanguageServer.Handlers
     {
         private readonly ICompilationManager compilationManager;
         private readonly EmitterSettings emitterSettings;
+        private readonly IFeatureProvider features;
         private readonly IFileResolver fileResolver;
         private readonly IModuleDispatcher moduleDispatcher;
         private readonly INamespaceProvider namespaceProvider;
         private readonly IConfigurationManager configurationManager;
 
-        public BicepBuildCommandHandler(ICompilationManager compilationManager, ISerializer serializer, EmitterSettings emitterSettings, INamespaceProvider namespaceProvider, IFileResolver fileResolver, IModuleDispatcher moduleDispatcher, IConfigurationManager configurationManager)
+        public BicepBuildCommandHandler(ICompilationManager compilationManager, ISerializer serializer, IFeatureProvider features, EmitterSettings emitterSettings, INamespaceProvider namespaceProvider, IFileResolver fileResolver, IModuleDispatcher moduleDispatcher, IConfigurationManager configurationManager)
             : base(LanguageConstants.Build, serializer)
         {
             this.compilationManager = compilationManager;
             this.emitterSettings = emitterSettings;
+            this.features = features;
             this.namespaceProvider = namespaceProvider;
             this.fileResolver = fileResolver;
             this.moduleDispatcher = moduleDispatcher;
@@ -96,7 +99,7 @@ namespace Bicep.LanguageServer.Handlers
             if (context is null)
             {
                 SourceFileGrouping sourceFileGrouping = SourceFileGroupingBuilder.Build(this.fileResolver, this.moduleDispatcher, new Workspace(), fileUri, configuration);
-                compilation = new Compilation(namespaceProvider, sourceFileGrouping, configuration);
+                compilation = new Compilation(features, namespaceProvider, sourceFileGrouping, configuration, new LinterAnalyzer(configuration));
             }
             else
             {

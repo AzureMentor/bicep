@@ -23,6 +23,7 @@ using Bicep.Core.Workspaces;
 using Bicep.LanguageServer.Extensions;
 using Bicep.LanguageServer.Snippets;
 using Bicep.LanguageServer.Telemetry;
+using Bicep.LanguageServer.Utils;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Range = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 using SymbolKind = Bicep.Core.Semantics.SymbolKind;
@@ -74,6 +75,7 @@ namespace Bicep.LanguageServer.Completions
                 .Concat(GetTargetScopeCompletions(model, context))
                 .Concat(GetImportCompletions(model, context))
                 .Concat(GetFunctionParamCompletions(model, context))
+                .Concat(GetExpressionCompletions(model, context))
                 .Concat(GetDisableNextLineDiagnosticsDirectiveCompletion(context))
                 .Concat(GetDisableNextLineDiagnosticsDirectiveCodesCompletion(model, context));
         }
@@ -181,12 +183,26 @@ namespace Bicep.LanguageServer.Completions
 
             if (context.Kind.HasFlag(BicepCompletionContextKind.ParameterType))
             {
-                return GetPrimitiveTypeCompletions().Concat(GetParameterTypeSnippets(compilation, context));
+                // Only show the resource type as a completion if the resource-typed parameter feature is enabled.
+                var completions = GetPrimitiveTypeCompletions().Concat(GetParameterTypeSnippets(compilation, context));
+                if (this.featureProvider.ResourceTypedParamsAndOutputsEnabled)
+                {
+                    completions = completions.Concat(CreateResourceTypeKeywordCompletion(context.ReplacementRange));
+                }
+
+                return completions;
             }
 
             if (context.Kind.HasFlag(BicepCompletionContextKind.OutputType))
             {
-                return GetPrimitiveTypeCompletions();
+                // Only show the resource type as a completion if the resource-typed parameter feature is enabled.
+                var completions = GetPrimitiveTypeCompletions();
+                if (this.featureProvider.ResourceTypedParamsAndOutputsEnabled)
+                {
+                    completions = completions.Concat(CreateResourceTypeKeywordCompletion(context.ReplacementRange));
+                }
+
+                return completions;
             }
 
             return Enumerable.Empty<CompletionItem>();
@@ -230,17 +246,35 @@ namespace Bicep.LanguageServer.Completions
                 return items;
             }
 
+            static string? TryGetFullyQualifiedType(StringSyntax? stringSyntax)
+            {
+                if (stringSyntax?.TryGetLiteralValue() is string entered && ResourceTypeReference.HasResourceTypePrefix(entered))
+                {
+                    return entered;
+                }
+
+                return null;
+            }
+
+            static string? TryGetFullyQualfiedResourceType(SyntaxBase? enclosingDeclaration)
+            {
+                return enclosingDeclaration switch
+                {
+                    ResourceDeclarationSyntax resourceSyntax => TryGetFullyQualifiedType(resourceSyntax.TypeString),
+                    ParameterDeclarationSyntax parameterSyntax when parameterSyntax.Type is ResourceTypeSyntax resourceType => TryGetFullyQualifiedType(resourceType.TypeString),
+                    OutputDeclarationSyntax outputSyntax when outputSyntax.Type is ResourceTypeSyntax resourceType => TryGetFullyQualifiedType(resourceType.TypeString),
+                    _ => null,
+                };
+            }
+
             // ResourceType completions are divided into 2 parts.
             // If the current value passes the namespace and type notation ("<Namespace>/<type>") format, we return the fully qualified resource types
-            if (context.EnclosingDeclaration is ResourceDeclarationSyntax declarationSyntax
-                && declarationSyntax.Type is StringSyntax stringSyntax
-                && stringSyntax.TryGetLiteralValue() is string entered
-                && ResourceTypeReference.HasResourceTypePrefix(entered))
+            if (TryGetFullyQualfiedResourceType(context.EnclosingDeclaration) is string qualified)
             {
                 // newest api versions should be shown first
                 // strict filtering on type so that we show api versions for only the selected type
                 return model.Binder.NamespaceResolver.GetAvailableResourceTypes()
-                    .Where(rt => StringComparer.OrdinalIgnoreCase.Equals(entered.Split('@')[0], rt.FormatType()))
+                    .Where(rt => StringComparer.OrdinalIgnoreCase.Equals(qualified.Split('@')[0], rt.FormatType()))
                     .OrderBy(rt => rt.FormatType(), StringComparer.OrdinalIgnoreCase)
                     .ThenByDescending(rt => rt.ApiVersion, ApiVersionComparer.Instance)
                     .Select((reference, index) => CreateResourceTypeCompletion(reference, index, context.ReplacementRange, showApiVersion: true))
@@ -912,6 +946,14 @@ namespace Bicep.LanguageServer.Completions
             }
         }
 
+        private IEnumerable<CompletionItem> GetExpressionCompletions(SemanticModel model, BicepCompletionContext context)
+        {
+            if (context.Kind.HasFlag(BicepCompletionContextKind.Expression))
+            {
+                yield return CreateConditionCompletion(context.ReplacementRange);
+            }
+        }
+
         private IEnumerable<CompletionItem> GetDisableNextLineDiagnosticsDirectiveCompletion(BicepCompletionContext context)
         {
             if (context.Kind.HasFlag(BicepCompletionContextKind.DisableNextLineDiagnosticsDirectiveStart))
@@ -983,6 +1025,16 @@ namespace Bicep.LanguageServer.Completions
             const string conditionLabel = "if";
             return CompletionItemBuilder.Create(CompletionItemKind.Snippet, conditionLabel)
                 .WithSnippetEdit(replacementRange, "if (${1:condition}) {\n\t$0\n}")
+                .WithDetail(conditionLabel)
+                .WithSortText(GetSortText(conditionLabel, CompletionPriority.High))
+                .Build();
+        }
+
+        private static CompletionItem CreateConditionCompletion(Range replacementRange)
+        {
+            const string conditionLabel = "if-else";
+            return CompletionItemBuilder.Create(CompletionItemKind.Snippet, conditionLabel)
+                .WithSnippetEdit(replacementRange, "${1:condition} ? ${2:TrueValue} : ${3:FalseValue}")
                 .WithDetail(conditionLabel)
                 .WithSortText(GetSortText(conditionLabel, CompletionPriority.High))
                 .Build();
@@ -1085,6 +1137,13 @@ namespace Bicep.LanguageServer.Completions
                 .WithPlainTextEdit(replacementRange, type.Name)
                 .WithDetail(type.Name)
                 .WithSortText(GetSortText(type.Name, priority))
+                .Build();
+
+        private static CompletionItem CreateResourceTypeKeywordCompletion(Range replacementRange, CompletionPriority priority = CompletionPriority.Medium) =>
+            CompletionItemBuilder.Create(CompletionItemKind.Class, LanguageConstants.ResourceKeyword)
+                .WithPlainTextEdit(replacementRange, LanguageConstants.ResourceKeyword)
+                .WithDetail(LanguageConstants.ResourceKeyword)
+                .WithSortText(GetSortText(LanguageConstants.ResourceKeyword, priority))
                 .Build();
 
         private static CompletionItem CreateOperatorCompletion(string op, Range replacementRange, bool preselect = false, CompletionPriority priority = CompletionPriority.Medium) =>
@@ -1225,8 +1284,18 @@ namespace Bicep.LanguageServer.Completions
                     completion.WithCommand(new Command { Name = EditorCommands.SignatureHelp });
                 }
 
+                ImmutableArray<FunctionOverload> overloads = function.Overloads;
+                var genericDescription = overloads.First().GenericDescription;
+                var description = overloads.First().Description;
+                string codeBlock = string.Empty;
+
+                foreach (var overload in overloads)
+                {
+                    codeBlock = $"{codeBlock}{function.Name}{overload.TypeSignature}\n";
+                }
+
                 return completion
-                    .WithDetail($"{insertText}()")
+                    .WithDocumentation(MarkdownHelper.CodeBlockWithDescription(codeBlock, genericDescription.ToString()))
                     .WithSnippetEdit(replacementRange, snippet)
                     .Build();
             }
@@ -1249,12 +1318,12 @@ namespace Bicep.LanguageServer.Completions
 
         private IEnumerable<CompletionItem> GetImportCompletions(SemanticModel model, BicepCompletionContext context)
         {
-            if (context.Kind.HasFlag(BicepCompletionContextKind.ImportSymbolFollower))
+            if (context.Kind.HasFlag(BicepCompletionContextKind.ImportProviderFollower))
             {
-                yield return CreateKeywordCompletion(LanguageConstants.FromKeyword, "From keyword", context.ReplacementRange);
+                yield return CreateKeywordCompletion(LanguageConstants.AsKeyword, "As keyword", context.ReplacementRange);
             }
 
-            if (context.Kind.HasFlag(BicepCompletionContextKind.ImportFromFollower))
+            if (context.Kind.HasFlag(BicepCompletionContextKind.ImportFollower))
             {
                 foreach (var builtInNamespace in model.Root.Namespaces.OfType<BuiltInNamespaceSymbol>().OrderBy(x => x.Name, LanguageConstants.IdentifierComparer))
                 {

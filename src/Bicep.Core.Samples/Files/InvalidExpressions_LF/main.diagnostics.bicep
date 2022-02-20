@@ -35,7 +35,7 @@ var bad = 3 * 4 /
 var bad = 222222222222222222222222222222222222222222 * 4
 //@[4:7) [BCP028 (Error)] Identifier "bad" is declared multiple times. Remove or rename the duplicates. (CodeDescription: none) |bad|
 //@[4:7) [no-unused-vars (Warning)] Variable "bad" is declared but never used. (CodeDescription: bicep core(https://aka.ms/bicep/linter/no-unused-vars)) |bad|
-//@[10:52) [BCP010 (Error)] Expected a valid 32-bit signed integer. (CodeDescription: none) |222222222222222222222222222222222222222222|
+//@[10:52) [BCP010 (Error)] Expected a valid 64-bit signed integer. (CodeDescription: none) |222222222222222222222222222222222222222222|
 var bad = (null) ?
 //@[4:7) [BCP028 (Error)] Identifier "bad" is declared multiple times. Remove or rename the duplicates. (CodeDescription: none) |bad|
 //@[4:7) [no-unused-vars (Warning)] Variable "bad" is declared but never used. (CodeDescription: bicep core(https://aka.ms/bicep/linter/no-unused-vars)) |bad|
@@ -456,7 +456,7 @@ var bannedFunctions = {
   param: parameters() + 2
 //@[9:19) [BCP061 (Error)] The "parameters" function is not supported. Directly reference parameters by their symbolic names. (CodeDescription: none) |parameters|
   if: sys.if(null,null)
-//@[10:12) [BCP100 (Error)] The "if" function is not supported. Use the ternary conditional operator instead. (CodeDescription: none) |if|
+//@[10:12) [BCP100 (Error)] The function "if" is not supported. Use the "?:" (ternary conditional) operator instead, e.g. condition ? ValueIfTrue : ValueIfFalse (CodeDescription: none) |if|
   obj: sys.createArray()
 //@[11:22) [BCP101 (Error)] The "createArray" function is not supported. Construct an array literal using []. (CodeDescription: none) |createArray|
   arr: sys.createObject()

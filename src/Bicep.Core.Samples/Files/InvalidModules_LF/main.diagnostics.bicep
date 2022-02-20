@@ -275,6 +275,7 @@ module moduleWithBadScope './empty.bicep' = {
 resource runtimeValidRes1 'Microsoft.Storage/storageAccounts@2019-06-01' = {
   name: 'runtimeValidRes1Name'
   location: 'westeurope'
+//@[12:24) [no-hardcoded-location (Warning)] A resource location should not use a hard-coded string or variable value. Please use a parameter value, an expression, or the string 'global'. Found: 'westeurope' (CodeDescription: bicep core(https://aka.ms/bicep/linter/no-hardcoded-location)) |'westeurope'|
   kind: 'Storage'
   sku: {
     name: 'Standard_GRS'
@@ -781,3 +782,8 @@ module jsonModMissingParam 'moduled.json' = {
   }
 }
 
+module assignToOutput 'empty.bicep' = {
+  name: 'assignToOutput'
+  outputs: {}
+//@[2:9) [BCP073 (Error)] The property "outputs" is read-only. Expressions cannot be assigned to read-only properties. (CodeDescription: none) |outputs|
+}

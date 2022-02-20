@@ -126,7 +126,13 @@ namespace Bicep.Core.Syntax
             this.Visit(syntax.Child);
         }
 
-        public virtual void VisitTypeSyntax(TypeSyntax syntax)
+        public virtual void VisitResourceTypeSyntax(ResourceTypeSyntax syntax)
+        {
+            this.Visit(syntax.Keyword);
+            this.Visit(syntax.Type);
+        }
+
+        public virtual void VisitSimpleTypeSyntax(SimpleTypeSyntax syntax)
         {
             this.Visit(syntax.Identifier);
         }
@@ -319,9 +325,9 @@ namespace Bicep.Core.Syntax
         {
             this.VisitNodes(syntax.LeadingNodes);
             this.Visit(syntax.Keyword);
-            this.Visit(syntax.AliasName);
-            this.Visit(syntax.FromKeyword);
             this.Visit(syntax.ProviderName);
+            this.Visit(syntax.AsKeyword);
+            this.Visit(syntax.AliasName);
             this.Visit(syntax.Config);
         }
 

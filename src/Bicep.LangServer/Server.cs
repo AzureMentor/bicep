@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Bicep.Core.Analyzers.Linter;
 using Bicep.Core.Configuration;
 using Bicep.Core.Emit;
 using Bicep.Core.Features;
@@ -13,6 +14,7 @@ using Bicep.Core.TypeSystem.Az;
 using Bicep.Core.Workspaces;
 using Bicep.LanguageServer.CompilationManager;
 using Bicep.LanguageServer.Completions;
+using Bicep.LanguageServer.Configuration;
 using Bicep.LanguageServer.Extensions;
 using Bicep.LanguageServer.Handlers;
 using Bicep.LanguageServer.Providers;
@@ -46,17 +48,7 @@ namespace Bicep.LanguageServer
 
         private readonly OmnisharpLanguageServer server;
 
-        public Server(PipeReader input, PipeWriter output, CreationOptions creationOptions)
-            : this(creationOptions, options => options.WithInput(input).WithOutput(output))
-        {
-        }
-
-        public Server(Stream input, Stream output, CreationOptions creationOptions)
-            : this(creationOptions, options => options.WithInput(input).WithOutput(output))
-        {
-        }
-
-        private Server(CreationOptions creationOptions, Action<LanguageServerOptions> onOptionsFunc)
+        public Server(CreationOptions creationOptions, Action<LanguageServerOptions> onOptionsFunc)
         {
             BicepDeploymentsInterop.Initialize();
             server = OmnisharpLanguageServer.PreInit(options =>
@@ -133,6 +125,8 @@ namespace Bicep.LanguageServer
             services.AddSingleton<ICompletionProvider, BicepCompletionProvider>();
             services.AddSingletonOrInstance<IModuleRestoreScheduler, ModuleRestoreScheduler>(creationOptions.ModuleRestoreScheduler);
             services.AddSingleton<IAzResourceProvider, AzResourceProvider>();
+            services.AddSingleton<ILinterRulesProvider, LinterRulesProvider>();
+            services.AddSingleton<IBicepConfigChangeHandler, BicepConfigChangeHandler>();
         }
 
         public void Dispose()

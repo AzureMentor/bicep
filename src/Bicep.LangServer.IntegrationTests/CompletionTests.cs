@@ -119,7 +119,7 @@ namespace Bicep.LangServer.IntegrationTests
                 {
                     [combinedFileUri] = bicepContentsReplaced,
                 }, combinedFileUri, BicepTestConstants.FileResolver, BicepTestConstants.BuiltInConfiguration);
-                var compilation = new Compilation(NamespaceProvider, sourceFileGrouping, BicepTestConstants.BuiltInConfiguration);
+                var compilation = new Compilation(BicepTestConstants.Features, NamespaceProvider, sourceFileGrouping, BicepTestConstants.BuiltInConfiguration, BicepTestConstants.LinterAnalyzer);
                 var diagnostics = compilation.GetEntrypointSemanticModel().GetAllDiagnostics();
 
                 var sourceTextWithDiags = OutputHelper.AddDiagsToSourceText(bicepContentsReplaced, "\n", diagnostics, diag => OutputHelper.GetDiagLoggingString(bicepContentsReplaced, outputDirectory, diag));
@@ -991,7 +991,7 @@ module mod2 './|' = {}
         }
 
         [TestMethod]
-        public async Task VerifyObjectBodyCompletionReturnsEmptyAndRequiredPropertiesSnippets()
+        public async Task VerifyObjectBodyCompletionReturnsSnippets()
         {
             string fileWithCursors = @"resource cosmosDbAccount 'Microsoft.DocumentDB/databaseAccounts@2021-03-15' = {
   name: 'name'
@@ -1015,6 +1015,10 @@ module mod2 './|' = {}
                 c =>
                 {
                     c.Label.Should().Be("required-properties");
+                },
+                c =>
+                {
+                    c.Label.Should().Be("if-else");
                 });
         }
 
@@ -1102,6 +1106,10 @@ module mod2 './|' = {}
                 c =>
                 {
                     c.Label.Should().Be("required-properties");
+                },
+                c =>
+                {
+                    c.Label.Should().Be("if-else");
                 });
         }
 
@@ -1111,23 +1119,17 @@ module mod2 './|' = {}
             var fileWithCursors = @"
 |
 import ns1 |
-import ns2 f|
-import ns3 f|r
-import ns4 from|
-import ns5 from |
-import ns6 from a|
-import ns7 from s|y
-import ns8 from sys|
+import ns2 a|
+import ns3 as|
+import |
+import a|
 ";
             var features = BicepTestConstants.CreateFeaturesProvider(TestContext, importsEnabled: true);
             await RunCompletionScenarioTest(this.TestContext, fileWithCursors, completions => completions.Should().SatisfyRespectively(
                 c => c!.Select(x => x.Label).Should().Contain("import"),
-                c => c!.Select(x => x.Label).Should().Equal("from"),
-                c => c!.Select(x => x.Label).Should().Equal("from"),
-                c => c!.Select(x => x.Label).Should().Equal("from"),
+                c => c!.Select(x => x.Label).Should().Equal("as"),
+                c => c!.Select(x => x.Label).Should().Equal("as"),
                 c => c!.Select(x => x.Label).Should().BeEmpty(),
-                c => c!.Select(x => x.Label).Should().Equal("az", "sys"),
-                c => c!.Select(x => x.Label).Should().Equal("az", "sys"),
                 c => c!.Select(x => x.Label).Should().Equal("az", "sys"),
                 c => c!.Select(x => x.Label).Should().Equal("az", "sys")
             ), features);
@@ -1135,9 +1137,6 @@ import ns8 from sys|
             features = BicepTestConstants.CreateFeaturesProvider(TestContext, importsEnabled: false);
             await RunCompletionScenarioTest(this.TestContext, fileWithCursors, completions => completions.Should().SatisfyRespectively(
                 c => c!.Select(x => x.Label).Should().NotContain("import"),
-                c => c!.Select(x => x.Label).Should().BeEmpty(),
-                c => c!.Select(x => x.Label).Should().BeEmpty(),
-                c => c!.Select(x => x.Label).Should().BeEmpty(),
                 c => c!.Select(x => x.Label).Should().BeEmpty(),
                 c => c!.Select(x => x.Label).Should().BeEmpty(),
                 c => c!.Select(x => x.Label).Should().BeEmpty(),
@@ -1871,7 +1870,7 @@ resource test";
             var fileSystemDict = new Dictionary<Uri, string>();
             fileSystemDict[uri] = file;
 
-            var compilation = new Compilation(BicepTestConstants.NamespaceProvider, SourceFileGroupingFactory.CreateForFiles(fileSystemDict, uri, BicepTestConstants.FileResolver, BicepTestConstants.BuiltInConfiguration), BicepTestConstants.BuiltInConfiguration);
+            var compilation = new Compilation(BicepTestConstants.Features, BicepTestConstants.NamespaceProvider, SourceFileGroupingFactory.CreateForFiles(fileSystemDict, uri, BicepTestConstants.FileResolver, BicepTestConstants.BuiltInConfiguration), BicepTestConstants.BuiltInConfiguration, BicepTestConstants.LinterAnalyzer);
             var diagnostics = compilation.GetEntrypointSemanticModel().GetAllDiagnostics();
 
             diagnostics.Should().SatisfyRespectively(
@@ -1894,6 +1893,30 @@ resource test";
 
             var completions = await RequestCompletion(client, bicepFile, cursors[0]);
             completions.Should().BeEmpty();
+        }
+
+        [TestMethod]
+        public async Task Descriptions_for_function_completions()
+        {
+            var fileWithCursors = @"
+var foo = resourceI|
+";
+
+            var (file, cursors) = ParserHelper.GetFileWithCursors(fileWithCursors);
+            var bicepFile = SourceFileFactory.CreateBicepFile(new Uri("file:///main.bicep"), file);
+            using var helper = await LanguageServerHelper.StartServerWithTextAsync(TestContext, file, bicepFile.FileUri, creationOptions: new LanguageServer.Server.CreationOptions(NamespaceProvider: BuiltInTestTypes.Create()));
+            var client = helper.Client;
+            var completions = await RequestCompletion(client, bicepFile, cursors.Single());
+            completions.Where(x => x.Label == "resourceId").First().Documentation!.MarkupContent!.Value.Should().EqualIgnoringNewlines(@"```bicep
+resourceId(resourceType: string, ... : string): string
+resourceId(subscriptionId: string, resourceType: string, ... : string): string
+resourceId(resourceGroupName: string, resourceType: string, ... : string): string
+resourceId(subscriptionId: string, resourceGroupName: string, resourceType: string, ... : string): string
+
+```
+Returns the unique identifier of a resource. You use this function when the resource name is ambiguous or not provisioned within the same template. The format of the returned identifier varies based on whether the deployment happens at the scope of a resource group, subscription, management group, or tenant.
+"
+);
         }
 
         private string ApplyCompletion(CompletionItem completionItem, BicepFile bicepFile)

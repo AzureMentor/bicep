@@ -30,13 +30,13 @@
     "file-loader": "^6.2.0",
     "html-webpack-plugin": "^5.3.2",
     "monaco-editor-webpack-plugin": "^4.2.0",
-    "nerdbank-gitversioning": "^3.4.231",
+    "nerdbank-gitversioning": "^3.4.255",
     "style-loader": "^3.3.0",
     "ts-loader": "^9.2.6",
     "ts-node": "^10.2.1",
     "typescript": "^4.4.3",
-    "webpack": "^5.53.0",
-    "webpack-cli": "^4.8.0",
+    "webpack": "^5.67.0",
+    "webpack-cli": "^4.9.1",
     "webpack-dev-server": "^4.2.1"
   },
   "dependencies": {

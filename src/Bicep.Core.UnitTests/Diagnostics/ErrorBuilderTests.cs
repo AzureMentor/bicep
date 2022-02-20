@@ -97,12 +97,9 @@ namespace Bicep.Core.UnitTests.Diagnostics
                 return new List<TypeSymbol> { new PrimitiveType($"<list_type_{index}>", TypeSymbolValidationFlags.Default) };
             }
 
-            if (parameter.ParameterType == typeof(IEnumerable<string>))
-            {
-                return new List<string> { $"<value_{index}" };
-            }
-
-            if (parameter.ParameterType == typeof(IList<string>))
+            if (parameter.ParameterType == typeof(IEnumerable<string>) ||
+                parameter.ParameterType == typeof(IList<string>) ||
+                parameter.ParameterType == typeof(ICollection<string>))
             {
                 return new List<string> { $"<value_{index}" };
             }
@@ -219,21 +216,21 @@ namespace Bicep.Core.UnitTests.Diagnostics
        )]
         [DataRow(@"
                  resource vnet 'Microsoft.Network/virtualNetworks@2018-10-01' = {
-                   location: 'westus2'
+                   location: 'global'
                  }",
             @"
                  resource vnet 'Microsoft.Network/virtualNetworks@2018-10-01' = {
-                   location: 'westus2'
+                   location: 'global'
                    name:
                  }"
         )]
         [DataRow(@"
                  resource vnet 'Microsoft.Network/virtualNetworks@2018-10-01' = {
-                               location: 'westus2'
+                               location: 'global'
                  }",
             @"
                  resource vnet 'Microsoft.Network/virtualNetworks@2018-10-01' = {
-                               location: 'westus2'
+                               location: 'global'
                                name:
                  }"
         )]

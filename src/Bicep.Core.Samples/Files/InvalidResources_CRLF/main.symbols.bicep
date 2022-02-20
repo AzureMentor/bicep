@@ -189,6 +189,22 @@ resource baz 'Microsoft.Foo/foos@2020-02-02-alpha' = {
   apiVersion: true
 }
 
+resource readOnlyPropertyAssignment 'Microsoft.Network/virtualNetworks@2020-06-01' = {
+//@[9:35) Resource readOnlyPropertyAssignment. Type: Microsoft.Network/virtualNetworks@2020-06-01. Declaration start char: 0, length: 352
+  name: 'vnet-bicep'
+  location: 'westeurope'
+  etag: 'assigning-to-read-only-value'
+  properties: {
+    resourceGuid: 'assigning-to-read-only-value'
+    addressSpace: {
+      addressPrefixes: [
+        '10.0.0.0/16'
+      ]
+    }
+    subnets: []
+  }
+}
+
 resource badDepends 'Microsoft.Foo/foos@2020-02-02-alpha' = {
 //@[9:19) Resource badDepends. Type: Microsoft.Foo/foos@2020-02-02-alpha. Declaration start char: 0, length: 113
   name: 'test'
@@ -1542,9 +1558,10 @@ resource stuffs 'Microsoft.Storage/storageAccounts@2019-06-01' = [for account in
 // using the same loop variable in a new language scope should be allowed
 resource premiumStorages 'Microsoft.Storage/storageAccounts@2019-06-01' = [for account in storageAccounts: {
 //@[79:86) Local account. Type: any. Declaration start char: 79, length: 7
-//@[9:24) Resource premiumStorages. Type: Microsoft.Storage/storageAccounts@2019-06-01[]. Declaration start char: 0, length: 321
-  // #completionTest(7,8) -> symbolsPlusAccount2
+//@[9:24) Resource premiumStorages. Type: Microsoft.Storage/storageAccounts@2019-06-01[]. Declaration start char: 0, length: 368
+  // #completionTest(7) -> symbolsPlusAccount1
   name: account.name
+  // #completionTest(12) -> symbolsPlusAccount2
   location: account.location
   sku: {
     // #completionTest(9,10) -> storageSkuNamePlusSymbols

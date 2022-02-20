@@ -264,10 +264,17 @@ namespace Bicep.LanguageServer
             }
         }
 
-        public override void VisitTypeSyntax(TypeSyntax syntax)
+        public override void VisitResourceTypeSyntax(ResourceTypeSyntax syntax)
+        {
+            // This is intentional, we want 'resource' to look like 'object' or 'array'.
+            AddTokenType(syntax.Keyword, SemanticTokenType.Type);
+            base.VisitResourceTypeSyntax(syntax);
+        }
+
+        public override void VisitSimpleTypeSyntax(SimpleTypeSyntax syntax)
         {
             AddTokenType(syntax.Identifier, SemanticTokenType.Type);
-            base.VisitTypeSyntax(syntax);
+            base.VisitSimpleTypeSyntax(syntax);
         }
 
         public override void VisitUnaryOperationSyntax(UnaryOperationSyntax syntax)
@@ -298,9 +305,9 @@ namespace Bicep.LanguageServer
         public override void VisitImportDeclarationSyntax(ImportDeclarationSyntax syntax)
         {
             AddTokenType(syntax.Keyword, SemanticTokenType.Keyword);
-            AddTokenType(syntax.AliasName, SemanticTokenType.Variable);
-            AddContextualKeyword(syntax.FromKeyword, LanguageConstants.FromKeyword);
             AddTokenType(syntax.ProviderName, SemanticTokenType.Variable);
+            AddContextualKeyword(syntax.AsKeyword, LanguageConstants.AsKeyword);
+            AddTokenType(syntax.AliasName, SemanticTokenType.Variable);
             base.VisitImportDeclarationSyntax(syntax);
         }
     }

@@ -953,7 +953,7 @@ param resrefpar string = foo.id
 //@[0:5)  Identifier |param|
 //@[6:15)  IdentifierSyntax
 //@[6:15)   Identifier |resrefpar|
-//@[16:22)  TypeSyntax
+//@[16:22)  SimpleTypeSyntax
 //@[16:22)   Identifier |string|
 //@[23:31)  ParameterDefaultValueSyntax
 //@[23:24)   Assignment |=|
@@ -971,7 +971,7 @@ output resrefout bool = bar.id
 //@[0:6)  Identifier |output|
 //@[7:16)  IdentifierSyntax
 //@[7:16)   Identifier |resrefout|
-//@[17:21)  TypeSyntax
+//@[17:21)  SimpleTypeSyntax
 //@[17:21)   Identifier |bool|
 //@[22:23)  Assignment |=|
 //@[24:30)  PropertyAccessSyntax
@@ -1028,6 +1028,100 @@ resource baz 'Microsoft.Foo/foos@2020-02-02-alpha' = {
 //@[14:18)    BooleanLiteralSyntax
 //@[14:18)     TrueKeyword |true|
 //@[18:20)   NewLine |\r\n|
+}
+//@[0:1)   RightBrace |}|
+//@[1:5) NewLine |\r\n\r\n|
+
+resource readOnlyPropertyAssignment 'Microsoft.Network/virtualNetworks@2020-06-01' = {
+//@[0:352) ResourceDeclarationSyntax
+//@[0:8)  Identifier |resource|
+//@[9:35)  IdentifierSyntax
+//@[9:35)   Identifier |readOnlyPropertyAssignment|
+//@[36:82)  StringSyntax
+//@[36:82)   StringComplete |'Microsoft.Network/virtualNetworks@2020-06-01'|
+//@[83:84)  Assignment |=|
+//@[85:352)  ObjectSyntax
+//@[85:86)   LeftBrace |{|
+//@[86:88)   NewLine |\r\n|
+  name: 'vnet-bicep'
+//@[2:20)   ObjectPropertySyntax
+//@[2:6)    IdentifierSyntax
+//@[2:6)     Identifier |name|
+//@[6:7)    Colon |:|
+//@[8:20)    StringSyntax
+//@[8:20)     StringComplete |'vnet-bicep'|
+//@[20:22)   NewLine |\r\n|
+  location: 'westeurope'
+//@[2:24)   ObjectPropertySyntax
+//@[2:10)    IdentifierSyntax
+//@[2:10)     Identifier |location|
+//@[10:11)    Colon |:|
+//@[12:24)    StringSyntax
+//@[12:24)     StringComplete |'westeurope'|
+//@[24:26)   NewLine |\r\n|
+  etag: 'assigning-to-read-only-value'
+//@[2:38)   ObjectPropertySyntax
+//@[2:6)    IdentifierSyntax
+//@[2:6)     Identifier |etag|
+//@[6:7)    Colon |:|
+//@[8:38)    StringSyntax
+//@[8:38)     StringComplete |'assigning-to-read-only-value'|
+//@[38:40)   NewLine |\r\n|
+  properties: {
+//@[2:173)   ObjectPropertySyntax
+//@[2:12)    IdentifierSyntax
+//@[2:12)     Identifier |properties|
+//@[12:13)    Colon |:|
+//@[14:173)    ObjectSyntax
+//@[14:15)     LeftBrace |{|
+//@[15:17)     NewLine |\r\n|
+    resourceGuid: 'assigning-to-read-only-value'
+//@[4:48)     ObjectPropertySyntax
+//@[4:16)      IdentifierSyntax
+//@[4:16)       Identifier |resourceGuid|
+//@[16:17)      Colon |:|
+//@[18:48)      StringSyntax
+//@[18:48)       StringComplete |'assigning-to-read-only-value'|
+//@[48:50)     NewLine |\r\n|
+    addressSpace: {
+//@[4:84)     ObjectPropertySyntax
+//@[4:16)      IdentifierSyntax
+//@[4:16)       Identifier |addressSpace|
+//@[16:17)      Colon |:|
+//@[18:84)      ObjectSyntax
+//@[18:19)       LeftBrace |{|
+//@[19:21)       NewLine |\r\n|
+      addressPrefixes: [
+//@[6:56)       ObjectPropertySyntax
+//@[6:21)        IdentifierSyntax
+//@[6:21)         Identifier |addressPrefixes|
+//@[21:22)        Colon |:|
+//@[23:56)        ArraySyntax
+//@[23:24)         LeftSquare |[|
+//@[24:26)         NewLine |\r\n|
+        '10.0.0.0/16'
+//@[8:21)         ArrayItemSyntax
+//@[8:21)          StringSyntax
+//@[8:21)           StringComplete |'10.0.0.0/16'|
+//@[21:23)         NewLine |\r\n|
+      ]
+//@[6:7)         RightSquare |]|
+//@[7:9)       NewLine |\r\n|
+    }
+//@[4:5)       RightBrace |}|
+//@[5:7)     NewLine |\r\n|
+    subnets: []
+//@[4:15)     ObjectPropertySyntax
+//@[4:11)      IdentifierSyntax
+//@[4:11)       Identifier |subnets|
+//@[11:12)      Colon |:|
+//@[13:15)      ArraySyntax
+//@[13:14)       LeftSquare |[|
+//@[14:15)       RightSquare |]|
+//@[15:17)     NewLine |\r\n|
+  }
+//@[2:3)     RightBrace |}|
+//@[3:5)   NewLine |\r\n|
 }
 //@[0:1)   RightBrace |}|
 //@[1:5) NewLine |\r\n\r\n|
@@ -8870,14 +8964,14 @@ resource stuffs 'Microsoft.Storage/storageAccounts@2019-06-01' = [for account in
 // using the same loop variable in a new language scope should be allowed
 //@[73:75) NewLine |\r\n|
 resource premiumStorages 'Microsoft.Storage/storageAccounts@2019-06-01' = [for account in storageAccounts: {
-//@[0:321) ResourceDeclarationSyntax
+//@[0:368) ResourceDeclarationSyntax
 //@[0:8)  Identifier |resource|
 //@[9:24)  IdentifierSyntax
 //@[9:24)   Identifier |premiumStorages|
 //@[25:71)  StringSyntax
 //@[25:71)   StringComplete |'Microsoft.Storage/storageAccounts@2019-06-01'|
 //@[72:73)  Assignment |=|
-//@[74:321)  ForSyntax
+//@[74:368)  ForSyntax
 //@[74:75)   LeftSquare |[|
 //@[75:78)   Identifier |for|
 //@[79:86)   LocalVariableSyntax
@@ -8888,11 +8982,11 @@ resource premiumStorages 'Microsoft.Storage/storageAccounts@2019-06-01' = [for a
 //@[90:105)    IdentifierSyntax
 //@[90:105)     Identifier |storageAccounts|
 //@[105:106)   Colon |:|
-//@[107:320)   ObjectSyntax
+//@[107:367)   ObjectSyntax
 //@[107:108)    LeftBrace |{|
 //@[108:110)    NewLine |\r\n|
-  // #completionTest(7,8) -> symbolsPlusAccount2
-//@[48:50)    NewLine |\r\n|
+  // #completionTest(7) -> symbolsPlusAccount1
+//@[46:48)    NewLine |\r\n|
   name: account.name
 //@[2:20)    ObjectPropertySyntax
 //@[2:6)     IdentifierSyntax
@@ -8906,6 +9000,8 @@ resource premiumStorages 'Microsoft.Storage/storageAccounts@2019-06-01' = [for a
 //@[16:20)      IdentifierSyntax
 //@[16:20)       Identifier |name|
 //@[20:22)    NewLine |\r\n|
+  // #completionTest(12) -> symbolsPlusAccount2
+//@[47:49)    NewLine |\r\n|
   location: account.location
 //@[2:28)    ObjectPropertySyntax
 //@[2:10)     IdentifierSyntax
@@ -8967,7 +9063,7 @@ output directRefViaOutput array = union(premiumStorages, stuffs)
 //@[0:6)  Identifier |output|
 //@[7:25)  IdentifierSyntax
 //@[7:25)   Identifier |directRefViaOutput|
-//@[26:31)  TypeSyntax
+//@[26:31)  SimpleTypeSyntax
 //@[26:31)   Identifier |array|
 //@[32:33)  Assignment |=|
 //@[34:64)  FunctionCallSyntax
@@ -11279,7 +11375,7 @@ param dataCollectionRule object
 //@[0:5)  Identifier |param|
 //@[6:24)  IdentifierSyntax
 //@[6:24)   Identifier |dataCollectionRule|
-//@[25:31)  TypeSyntax
+//@[25:31)  SimpleTypeSyntax
 //@[25:31)   Identifier |object|
 //@[31:33) NewLine |\r\n|
 param tags object
@@ -11287,7 +11383,7 @@ param tags object
 //@[0:5)  Identifier |param|
 //@[6:10)  IdentifierSyntax
 //@[6:10)   Identifier |tags|
-//@[11:17)  TypeSyntax
+//@[11:17)  SimpleTypeSyntax
 //@[11:17)   Identifier |object|
 //@[17:21) NewLine |\r\n\r\n|
 
@@ -11876,7 +11972,7 @@ param issue4668_kind string = 'AzureCLI'
 //@[0:5)  Identifier |param|
 //@[6:20)  IdentifierSyntax
 //@[6:20)   Identifier |issue4668_kind|
-//@[21:27)  TypeSyntax
+//@[21:27)  SimpleTypeSyntax
 //@[21:27)   Identifier |string|
 //@[28:40)  ParameterDefaultValueSyntax
 //@[28:29)   Assignment |=|
@@ -11900,7 +11996,7 @@ param issue4668_identity object
 //@[0:5)  Identifier |param|
 //@[6:24)  IdentifierSyntax
 //@[6:24)   Identifier |issue4668_identity|
-//@[25:31)  TypeSyntax
+//@[25:31)  SimpleTypeSyntax
 //@[25:31)   Identifier |object|
 //@[31:33) NewLine |\r\n|
 @description('The properties of the Deployment Script.')
@@ -11920,7 +12016,7 @@ param issue4668_properties object
 //@[0:5)  Identifier |param|
 //@[6:26)  IdentifierSyntax
 //@[6:26)   Identifier |issue4668_properties|
-//@[27:33)  TypeSyntax
+//@[27:33)  SimpleTypeSyntax
 //@[27:33)   Identifier |object|
 //@[33:35) NewLine |\r\n|
 resource issue4668_mainResource 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
