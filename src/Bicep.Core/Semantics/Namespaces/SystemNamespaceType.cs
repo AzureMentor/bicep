@@ -3,16 +3,16 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
-using Azure.Deployments.Core.Json;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Extensions;
 using Bicep.Core.FileSystem;
 using Bicep.Core.Modules;
 using Bicep.Core.Syntax;
 using Bicep.Core.TypeSystem;
-using Bicep.Core.Workspaces;
+using Microsoft.WindowsAzure.ResourceStack.Common.Json;
 using Newtonsoft.Json.Linq;
 
 namespace Bicep.Core.Semantics.Namespaces
@@ -30,7 +30,7 @@ namespace Bicep.Core.Semantics.Namespaces
         public const string lastDescription = "Returns the last element of the array, or last character of the string.";
         public const string minDescription = "Returns the minimum value from an array of integers or a comma-separated list of integers.";
         public const string maxDescription = "Returns the maximum value from an array of integers or a comma-separated list of integers.";
-        
+
         public static NamespaceSettings Settings { get; } = new(
             IsSingleton: true,
             BicepProviderName: BuiltInName,
@@ -44,7 +44,7 @@ namespace Bicep.Core.Semantics.Namespaces
                 .WithReturnType(LanguageConstants.Any)
                 .WithGenericDescription("Converts the specified value to the `any` type.")
                 .WithRequiredParameter("value", LanguageConstants.Any, "The value to convert to `any` type")
-                .WithEvaluator((FunctionCallSyntaxBase functionCall, Symbol symbol, TypeSymbol typeSymbol) => {
+                .WithEvaluator((FunctionCallSyntaxBase functionCall, Symbol symbol, TypeSymbol typeSymbol, FunctionVariable? functionVariable) => {
                     return functionCall.Arguments.Single().Expression;
                 })
                 .Build(),
@@ -212,7 +212,7 @@ namespace Bicep.Core.Semantics.Namespaces
             new FunctionOverloadBuilder("contains")
                 .WithReturnType(LanguageConstants.Bool)
                 .WithGenericDescription(containsDescription)
-                .WithDescription("Checks whether an array contains a value.")
+                .WithDescription("Checks whether an array contains a value. For arrays of simple values, exact match is done (case-sensitive for strings). For arrays of objects or arrays a deep comparison is done.")
                 .WithRequiredParameter("array", LanguageConstants.Array, "The array")
                 .WithRequiredParameter("itemToFind", LanguageConstants.Any, "The value to find.")
                 .Build(),
@@ -288,11 +288,25 @@ namespace Bicep.Core.Semantics.Namespaces
                 .WithRequiredParameter("stringToFind", LanguageConstants.String, "The value to find.")
                 .Build(),
 
+            new FunctionOverloadBuilder("indexOf")
+                .WithReturnType(LanguageConstants.Int)
+                .WithGenericDescription("Returns the first position of a value within an array. For arrays of simple values, exact match is done (case-sensitive for strings). For arrays of objects or arrays a deep comparison is done.")
+                .WithRequiredParameter("array", LanguageConstants.Array, "The array that contains the item to find.")
+                .WithRequiredParameter("itemToFind", LanguageConstants.Any, "The value to find.")
+                .Build(),
+
             new FunctionOverloadBuilder("lastIndexOf")
                 .WithReturnType(LanguageConstants.Int)
                 .WithGenericDescription("Returns the last position of a value within a string. The comparison is case-insensitive.")
                 .WithRequiredParameter("stringToSearch", LanguageConstants.String, "The value that contains the item to find.")
                 .WithRequiredParameter("stringToFind", LanguageConstants.String, "The value to find.")
+                .Build(),
+
+            new FunctionOverloadBuilder("lastIndexOf")
+                .WithReturnType(LanguageConstants.Int)
+                .WithGenericDescription("Returns the last position of a value within an array. For arrays of simple values, exact match is done (case-sensitive for strings). For arrays of objects or arrays a deep comparison is done.")
+                .WithRequiredParameter("array", LanguageConstants.Array, "The array that contains the item to find.")
+                .WithRequiredParameter("itemToFind", LanguageConstants.Any, "The value to find.")
                 .Build(),
 
             new FunctionOverloadBuilder("startsWith")
@@ -426,6 +440,18 @@ namespace Bicep.Core.Semantics.Namespaces
                 .WithOptionalParameter("format", LanguageConstants.String, "The output format for the date time result. If not provided, the format of the base value is used. Use either [standard format strings](https://docs.microsoft.com/en-us/dotnet/standard/base-types/standard-date-and-time-format-strings) or [custom format strings](https://docs.microsoft.com/en-us/dotnet/standard/base-types/custom-date-and-time-format-strings).")
                 .Build(),
 
+            new FunctionOverloadBuilder("dateTimeToEpoch")
+                .WithReturnType(LanguageConstants.Int)
+                .WithGenericDescription("Converts an [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) dateTime string to an epoch time integer value.")
+                .WithOptionalParameter("dateTime", LanguageConstants.String, "An [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) formatted dateTime string to be converted to epoch time.")
+                .Build(),
+
+            new FunctionOverloadBuilder("dateTimeFromEpoch")
+                .WithReturnType(LanguageConstants.String)
+                .WithGenericDescription("Converts an epoch time integer value to an [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) dateTime string.")
+                .WithOptionalParameter("epochTime", LanguageConstants.Int, "An epoch time value that will be converted to an [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) dateTime formatted string.")
+                .Build(),
+
             // newGuid and utcNow are only allowed in parameter default values
             new FunctionOverloadBuilder("utcNow")
                 .WithReturnType(LanguageConstants.String)
@@ -446,6 +472,7 @@ namespace Bicep.Core.Semantics.Namespaces
                 .WithOptionalParameter("encoding", LanguageConstants.LoadTextContentEncodings, "File encoding. If not provided, UTF-8 will be used.")
                 .WithDynamicReturnType(LoadTextContentTypeBuilder, LanguageConstants.String)
                 .WithEvaluator(StringLiteralFunctionReturnTypeEvaluator)
+                .WithVariableGenerator(StringLiteralFunctionVariableGenerator)
                 .Build(),
 
             new FunctionOverloadBuilder("loadFileAsBase64")
@@ -453,6 +480,7 @@ namespace Bicep.Core.Semantics.Namespaces
                 .WithRequiredParameter("filePath", LanguageConstants.String, "The path to the file that will be loaded")
                 .WithDynamicReturnType(LoadContentAsBase64TypeBuilder, LanguageConstants.String)
                 .WithEvaluator(StringLiteralFunctionReturnTypeEvaluator)
+                .WithVariableGenerator(StringLiteralFunctionVariableGenerator)
                 .Build(),
 
             new FunctionOverloadBuilder("items")
@@ -515,7 +543,7 @@ namespace Bicep.Core.Semantics.Namespaces
                 diagnostics.Write(fileReadFailureBuilder.Invoke(DiagnosticBuilder.ForPosition(arguments[0])));
                 return LanguageConstants.String;
             }
-            if (arguments.Length > 1 && fileEncoding != detectedEncoding)
+            if (arguments.Length > 1 && !Equals(fileEncoding, detectedEncoding))
             {
                 diagnostics.Write(DiagnosticBuilder.ForPosition(arguments[1]).FileEncodingMismatch(detectedEncoding.WebName));
             }
@@ -545,12 +573,32 @@ namespace Bicep.Core.Semantics.Namespaces
             return new StringLiteralType(binder.FileSymbol.FileUri.MakeRelativeUri(fileUri).ToString(), fileContent);
         }
 
-        private static SyntaxBase StringLiteralFunctionReturnTypeEvaluator(FunctionCallSyntaxBase functionCall, Symbol symbol, TypeSymbol typeSymbol)
+        private static SyntaxBase StringLiteralFunctionReturnTypeEvaluator(FunctionCallSyntaxBase functionCall, Symbol symbol, TypeSymbol typeSymbol, FunctionVariable? functionVariable)
+        {
+            if (functionVariable is not null)
+            {
+                return SyntaxFactory.CreateExplicitVariableAccess(functionVariable.Name);
+            }
+
+            return CreateStringLiteral(typeSymbol);
+        }
+
+        private static SyntaxBase? StringLiteralFunctionVariableGenerator(FunctionCallSyntaxBase functionCall, Symbol symbol, TypeSymbol typeSymbol, bool directVariableAssignment)
+        {
+            if (directVariableAssignment)
+            {
+                return null;
+            }
+            return CreateStringLiteral(typeSymbol);
+        }
+
+        private static SyntaxBase CreateStringLiteral(TypeSymbol typeSymbol)
         {
             if (typeSymbol is not StringLiteralType stringLiteral)
             {
                 throw new InvalidOperationException($"Expecting function to return {nameof(StringLiteralType)}, but {typeSymbol.GetType().Name} received.");
             }
+
             return SyntaxFactory.CreateStringLiteral(stringLiteral.RawStringValue);
         }
 
@@ -689,12 +737,13 @@ namespace Bicep.Core.Semantics.Namespaces
                 // long.MaxValue + 1 (9,223,372,036,854,775,808) is the only invalid 64 bit integer value that may be passed. we avoid casting to a long because this causes overflow. we need to just return long.MinValue (-9,223,372,036,854,775,808)
                 // if integerLiteralSyntax.Value is outside the range, return null. it should have already been caught by a different validation
                 UnaryOperationSyntax { Operator: UnaryOperator.Minus } unaryOperatorSyntax
-                    when unaryOperatorSyntax.Expression is IntegerLiteralSyntax integerLiteralSyntax => integerLiteralSyntax.Value switch { 
+                    when unaryOperatorSyntax.Expression is IntegerLiteralSyntax integerLiteralSyntax => integerLiteralSyntax.Value switch
+                    {
                         <= long.MaxValue => -(long)integerLiteralSyntax.Value,
                         (ulong)long.MaxValue + 1 => long.MinValue,
                         _ => null
                     },
-                
+
                 // this ternary check is to make sure that the integer value is within the range of a signed 64 bit integer before casting to a long type
                 // if not, it would have been caught already by a different validation
                 IntegerLiteralSyntax integerLiteralSyntax => integerLiteralSyntax.Value <= long.MaxValue ? (long)integerLiteralSyntax.Value : null,
@@ -741,7 +790,7 @@ namespace Bicep.Core.Semantics.Namespaces
                         SingleArgumentSelector(decoratorSyntax) is ArraySyntax allowedValues &&
                         allowedValues.Items.All(item => item.Value is not ArraySyntax))
                     {
-                        /* 
+                        /*
                          * ARM handles array params with allowed values differently. If none of items of
                          * the allowed values is array, it will check if the parameter value is a subset
                          * of the allowed values.

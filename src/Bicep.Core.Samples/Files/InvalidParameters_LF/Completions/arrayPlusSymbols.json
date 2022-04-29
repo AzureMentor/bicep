@@ -341,6 +341,46 @@
     }
   },
   {
+    "label": "dateTimeFromEpoch",
+    "kind": "function",
+    "documentation": {
+      "kind": "markdown",
+      "value": "```bicep\ndateTimeFromEpoch([epochTime: int]): string\n\n```\nConverts an epoch time integer value to an [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) dateTime string.\n"
+    },
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "3_dateTimeFromEpoch",
+    "insertTextFormat": "snippet",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "dateTimeFromEpoch($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
+    }
+  },
+  {
+    "label": "dateTimeToEpoch",
+    "kind": "function",
+    "documentation": {
+      "kind": "markdown",
+      "value": "```bicep\ndateTimeToEpoch([dateTime: string]): int\n\n```\nConverts an [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) dateTime string to an epoch time integer value.\n"
+    },
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "3_dateTimeToEpoch",
+    "insertTextFormat": "snippet",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "dateTimeToEpoch($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
+    }
+  },
+  {
     "label": "defaultValueOneLinerCompletions",
     "kind": "field",
     "detail": "defaultValueOneLinerCompletions",
@@ -611,7 +651,7 @@
     "kind": "function",
     "documentation": {
       "kind": "markdown",
-      "value": "```bicep\nindexOf(stringToSearch: string, stringToFind: string): int\n\n```\nReturns the first position of a value within a string. The comparison is case-insensitive.\n"
+      "value": "```bicep\nindexOf(stringToSearch: string, stringToFind: string): int\nindexOf(array: array, itemToFind: any): int\n\n```\nReturns the first position of a value within a string. The comparison is case-insensitive.\n"
     },
     "deprecated": false,
     "preselect": false,
@@ -773,7 +813,7 @@
     "kind": "function",
     "documentation": {
       "kind": "markdown",
-      "value": "```bicep\nlastIndexOf(stringToSearch: string, stringToFind: string): int\n\n```\nReturns the last position of a value within a string. The comparison is case-insensitive.\n"
+      "value": "```bicep\nlastIndexOf(stringToSearch: string, stringToFind: string): int\nlastIndexOf(array: array, itemToFind: any): int\n\n```\nReturns the last position of a value within a string. The comparison is case-insensitive.\n"
     },
     "deprecated": false,
     "preselect": false,
@@ -905,6 +945,26 @@
     "textEdit": {
       "range": {},
       "newText": "managementGroup($0)"
+    },
+    "command": {
+      "command": "editor.action.triggerParameterHints"
+    }
+  },
+  {
+    "label": "managementGroupResourceId",
+    "kind": "function",
+    "documentation": {
+      "kind": "markdown",
+      "value": "```bicep\nmanagementGroupResourceId(resourceType: string, ... : string): string\nmanagementGroupResourceId(managementGroupId: string, resourceType: string, ... : string): string\n\n```\nReturns the unique identifier for a resource deployed at the management group level.\n"
+    },
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "3_managementGroupResourceId",
+    "insertTextFormat": "snippet",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "managementGroupResourceId($0)"
     },
     "command": {
       "command": "editor.action.triggerParameterHints"

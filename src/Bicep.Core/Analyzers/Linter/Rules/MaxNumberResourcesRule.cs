@@ -3,7 +3,6 @@
 
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Semantics;
-using Bicep.Core.Semantics.Metadata;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,7 +18,6 @@ namespace Bicep.Core.Analyzers.Linter.Rules
             code: Code,
             description: CoreResources.MaxNumberResourcesRuleDescription,
             docUri: new Uri($"https://aka.ms/bicep/linter/{Code}"),
-            diagnosticLabel: Diagnostics.DiagnosticLabel.Unnecessary,
             diagnosticLevel: DiagnosticLevel.Error)
         { }
 

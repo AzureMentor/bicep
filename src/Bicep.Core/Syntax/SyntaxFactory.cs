@@ -2,9 +2,7 @@
 // Licensed under the MIT License.
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Extensions;
@@ -23,11 +21,11 @@ namespace Bicep.Core.Syntax
         public static Token CreateToken(TokenType tokenType, string text = "")
             => new Token(tokenType, EmptySpan, string.IsNullOrEmpty(text) ? TryGetTokenText(tokenType) : text, EmptyTrivia, EmptyTrivia);
 
-        public static IdentifierSyntax CreateIdentifier(string text)
-            => new IdentifierSyntax(CreateToken(TokenType.Identifier, text));
+        public static IdentifierSyntax CreateIdentifier(string text) => new(CreateToken(TokenType.Identifier, text));
 
-        public static VariableAccessSyntax CreateVariableAccess(string text)
-            => new VariableAccessSyntax(CreateIdentifier(text));
+        public static VariableAccessSyntax CreateVariableAccess(string text) => new(CreateIdentifier(text));
+
+        public static ExplicitVariableAccessSyntax CreateExplicitVariableAccess(string text) => new(CreateIdentifier(text));
 
         public static Token NewlineToken => CreateToken(TokenType.NewLine, Environment.NewLine);
         public static Token AtToken => CreateToken(TokenType.At, "@");
@@ -131,6 +129,8 @@ namespace Bicep.Core.Syntax
                 children,
                 RightSquareToken);
         }
+
+        public static ArrayAccessSyntax CreateArrayAccess(SyntaxBase baseExpression, SyntaxBase indexExpression) => new(baseExpression, LeftSquareToken, indexExpression, RightSquareToken);
 
         public static SyntaxBase CreateObjectPropertyKey(string text)
         {
