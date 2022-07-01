@@ -1,5 +1,5 @@
 var loadedText1 = loadTextContent('Assets/TextFile.CRLF.txt')
-//@[000:2940) ProgramSyntax
+//@[000:3790) ProgramSyntax
 //@[000:0061) ├─VariableDeclarationSyntax
 //@[000:0003) | ├─Token(Identifier) |var|
 //@[004:0015) | ├─IdentifierSyntax
@@ -43,10 +43,10 @@ var loadedTextEncoding1 = loadTextContent('Assets/encoding-ascii.txt', 'us-ascii
 //@[026:0041) | | ├─IdentifierSyntax
 //@[026:0041) | | | └─Token(Identifier) |loadTextContent|
 //@[041:0042) | | ├─Token(LeftParen) |(|
-//@[042:0070) | | ├─FunctionArgumentSyntax
-//@[042:0069) | | | ├─StringSyntax
+//@[042:0069) | | ├─FunctionArgumentSyntax
+//@[042:0069) | | | └─StringSyntax
 //@[042:0069) | | | | └─Token(StringComplete) |'Assets/encoding-ascii.txt'|
-//@[069:0070) | | | └─Token(Comma) |,|
+//@[069:0070) | | ├─Token(Comma) |,|
 //@[071:0081) | | ├─FunctionArgumentSyntax
 //@[071:0081) | | | └─StringSyntax
 //@[071:0081) | | | | └─Token(StringComplete) |'us-ascii'|
@@ -62,10 +62,10 @@ var loadedTextEncoding2 = loadTextContent('Assets/encoding-utf8.txt', 'utf-8')
 //@[026:0041) | | ├─IdentifierSyntax
 //@[026:0041) | | | └─Token(Identifier) |loadTextContent|
 //@[041:0042) | | ├─Token(LeftParen) |(|
-//@[042:0069) | | ├─FunctionArgumentSyntax
-//@[042:0068) | | | ├─StringSyntax
+//@[042:0068) | | ├─FunctionArgumentSyntax
+//@[042:0068) | | | └─StringSyntax
 //@[042:0068) | | | | └─Token(StringComplete) |'Assets/encoding-utf8.txt'|
-//@[068:0069) | | | └─Token(Comma) |,|
+//@[068:0069) | | ├─Token(Comma) |,|
 //@[070:0077) | | ├─FunctionArgumentSyntax
 //@[070:0077) | | | └─StringSyntax
 //@[070:0077) | | | | └─Token(StringComplete) |'utf-8'|
@@ -81,10 +81,10 @@ var loadedTextEncoding3 = loadTextContent('Assets/encoding-utf16.txt', 'utf-16')
 //@[026:0041) | | ├─IdentifierSyntax
 //@[026:0041) | | | └─Token(Identifier) |loadTextContent|
 //@[041:0042) | | ├─Token(LeftParen) |(|
-//@[042:0070) | | ├─FunctionArgumentSyntax
-//@[042:0069) | | | ├─StringSyntax
+//@[042:0069) | | ├─FunctionArgumentSyntax
+//@[042:0069) | | | └─StringSyntax
 //@[042:0069) | | | | └─Token(StringComplete) |'Assets/encoding-utf16.txt'|
-//@[069:0070) | | | └─Token(Comma) |,|
+//@[069:0070) | | ├─Token(Comma) |,|
 //@[071:0079) | | ├─FunctionArgumentSyntax
 //@[071:0079) | | | └─StringSyntax
 //@[071:0079) | | | | └─Token(StringComplete) |'utf-16'|
@@ -100,10 +100,10 @@ var loadedTextEncoding4 = loadTextContent('Assets/encoding-utf16be.txt', 'utf-16
 //@[026:0041) | | ├─IdentifierSyntax
 //@[026:0041) | | | └─Token(Identifier) |loadTextContent|
 //@[041:0042) | | ├─Token(LeftParen) |(|
-//@[042:0072) | | ├─FunctionArgumentSyntax
-//@[042:0071) | | | ├─StringSyntax
+//@[042:0071) | | ├─FunctionArgumentSyntax
+//@[042:0071) | | | └─StringSyntax
 //@[042:0071) | | | | └─Token(StringComplete) |'Assets/encoding-utf16be.txt'|
-//@[071:0072) | | | └─Token(Comma) |,|
+//@[071:0072) | | ├─Token(Comma) |,|
 //@[073:0083) | | ├─FunctionArgumentSyntax
 //@[073:0083) | | | └─StringSyntax
 //@[073:0083) | | | | └─Token(StringComplete) |'utf-16BE'|
@@ -119,10 +119,10 @@ var loadedTextEncoding5 = loadTextContent('Assets/encoding-iso.txt', 'iso-8859-1
 //@[026:0041) | | ├─IdentifierSyntax
 //@[026:0041) | | | └─Token(Identifier) |loadTextContent|
 //@[041:0042) | | ├─Token(LeftParen) |(|
-//@[042:0068) | | ├─FunctionArgumentSyntax
-//@[042:0067) | | | ├─StringSyntax
+//@[042:0067) | | ├─FunctionArgumentSyntax
+//@[042:0067) | | | └─StringSyntax
 //@[042:0067) | | | | └─Token(StringComplete) |'Assets/encoding-iso.txt'|
-//@[067:0068) | | | └─Token(Comma) |,|
+//@[067:0068) | | ├─Token(Comma) |,|
 //@[069:0081) | | ├─FunctionArgumentSyntax
 //@[069:0081) | | | └─StringSyntax
 //@[069:0081) | | | | └─Token(StringComplete) |'iso-8859-1'|
@@ -599,10 +599,10 @@ var loadWithEncoding01 = loadTextContent('Assets/encoding-iso.txt', 'iso-8859-1'
 //@[025:0040) | | ├─IdentifierSyntax
 //@[025:0040) | | | └─Token(Identifier) |loadTextContent|
 //@[040:0041) | | ├─Token(LeftParen) |(|
-//@[041:0067) | | ├─FunctionArgumentSyntax
-//@[041:0066) | | | ├─StringSyntax
+//@[041:0066) | | ├─FunctionArgumentSyntax
+//@[041:0066) | | | └─StringSyntax
 //@[041:0066) | | | | └─Token(StringComplete) |'Assets/encoding-iso.txt'|
-//@[066:0067) | | | └─Token(Comma) |,|
+//@[066:0067) | | ├─Token(Comma) |,|
 //@[068:0080) | | ├─FunctionArgumentSyntax
 //@[068:0080) | | | └─StringSyntax
 //@[068:0080) | | | | └─Token(StringComplete) |'iso-8859-1'|
@@ -618,10 +618,10 @@ var loadWithEncoding06 = loadTextContent('Assets/encoding-ascii.txt', 'us-ascii'
 //@[025:0040) | | ├─IdentifierSyntax
 //@[025:0040) | | | └─Token(Identifier) |loadTextContent|
 //@[040:0041) | | ├─Token(LeftParen) |(|
-//@[041:0069) | | ├─FunctionArgumentSyntax
-//@[041:0068) | | | ├─StringSyntax
+//@[041:0068) | | ├─FunctionArgumentSyntax
+//@[041:0068) | | | └─StringSyntax
 //@[041:0068) | | | | └─Token(StringComplete) |'Assets/encoding-ascii.txt'|
-//@[068:0069) | | | └─Token(Comma) |,|
+//@[068:0069) | | ├─Token(Comma) |,|
 //@[070:0080) | | ├─FunctionArgumentSyntax
 //@[070:0080) | | | └─StringSyntax
 //@[070:0080) | | | | └─Token(StringComplete) |'us-ascii'|
@@ -637,10 +637,10 @@ var loadWithEncoding07 = loadTextContent('Assets/encoding-ascii.txt', 'iso-8859-
 //@[025:0040) | | ├─IdentifierSyntax
 //@[025:0040) | | | └─Token(Identifier) |loadTextContent|
 //@[040:0041) | | ├─Token(LeftParen) |(|
-//@[041:0069) | | ├─FunctionArgumentSyntax
-//@[041:0068) | | | ├─StringSyntax
+//@[041:0068) | | ├─FunctionArgumentSyntax
+//@[041:0068) | | | └─StringSyntax
 //@[041:0068) | | | | └─Token(StringComplete) |'Assets/encoding-ascii.txt'|
-//@[068:0069) | | | └─Token(Comma) |,|
+//@[068:0069) | | ├─Token(Comma) |,|
 //@[070:0082) | | ├─FunctionArgumentSyntax
 //@[070:0082) | | | └─StringSyntax
 //@[070:0082) | | | | └─Token(StringComplete) |'iso-8859-1'|
@@ -656,10 +656,10 @@ var loadWithEncoding08 = loadTextContent('Assets/encoding-ascii.txt', 'utf-8')
 //@[025:0040) | | ├─IdentifierSyntax
 //@[025:0040) | | | └─Token(Identifier) |loadTextContent|
 //@[040:0041) | | ├─Token(LeftParen) |(|
-//@[041:0069) | | ├─FunctionArgumentSyntax
-//@[041:0068) | | | ├─StringSyntax
+//@[041:0068) | | ├─FunctionArgumentSyntax
+//@[041:0068) | | | └─StringSyntax
 //@[041:0068) | | | | └─Token(StringComplete) |'Assets/encoding-ascii.txt'|
-//@[068:0069) | | | └─Token(Comma) |,|
+//@[068:0069) | | ├─Token(Comma) |,|
 //@[070:0077) | | ├─FunctionArgumentSyntax
 //@[070:0077) | | | └─StringSyntax
 //@[070:0077) | | | | └─Token(StringComplete) |'utf-8'|
@@ -675,10 +675,10 @@ var loadWithEncoding11 = loadTextContent('Assets/encoding-utf8.txt', 'utf-8')
 //@[025:0040) | | ├─IdentifierSyntax
 //@[025:0040) | | | └─Token(Identifier) |loadTextContent|
 //@[040:0041) | | ├─Token(LeftParen) |(|
-//@[041:0068) | | ├─FunctionArgumentSyntax
-//@[041:0067) | | | ├─StringSyntax
+//@[041:0067) | | ├─FunctionArgumentSyntax
+//@[041:0067) | | | └─StringSyntax
 //@[041:0067) | | | | └─Token(StringComplete) |'Assets/encoding-utf8.txt'|
-//@[067:0068) | | | └─Token(Comma) |,|
+//@[067:0068) | | ├─Token(Comma) |,|
 //@[069:0076) | | ├─FunctionArgumentSyntax
 //@[069:0076) | | | └─StringSyntax
 //@[069:0076) | | | | └─Token(StringComplete) |'utf-8'|
@@ -694,10 +694,10 @@ var loadWithEncoding12 = loadTextContent('Assets/encoding-utf8-bom.txt', 'utf-8'
 //@[025:0040) | | ├─IdentifierSyntax
 //@[025:0040) | | | └─Token(Identifier) |loadTextContent|
 //@[040:0041) | | ├─Token(LeftParen) |(|
-//@[041:0072) | | ├─FunctionArgumentSyntax
-//@[041:0071) | | | ├─StringSyntax
+//@[041:0071) | | ├─FunctionArgumentSyntax
+//@[041:0071) | | | └─StringSyntax
 //@[041:0071) | | | | └─Token(StringComplete) |'Assets/encoding-utf8-bom.txt'|
-//@[071:0072) | | | └─Token(Comma) |,|
+//@[071:0072) | | ├─Token(Comma) |,|
 //@[073:0080) | | ├─FunctionArgumentSyntax
 //@[073:0080) | | | └─StringSyntax
 //@[073:0080) | | | | └─Token(StringComplete) |'utf-8'|
@@ -803,6 +803,230 @@ var testJsonNestedString = testJson.object.nestedString
 //@[042:0043) | | ├─Token(Dot) |.|
 //@[043:0055) | | └─IdentifierSyntax
 //@[043:0055) | | | └─Token(Identifier) |nestedString|
-//@[055:0057) ├─Token(NewLine) |\r\n|
+//@[055:0059) ├─Token(NewLine) |\r\n\r\n|
+
+var testJson2 = loadJsonContent('./Assets/test.json.txt')
+//@[000:0057) ├─VariableDeclarationSyntax
+//@[000:0003) | ├─Token(Identifier) |var|
+//@[004:0013) | ├─IdentifierSyntax
+//@[004:0013) | | └─Token(Identifier) |testJson2|
+//@[014:0015) | ├─Token(Assignment) |=|
+//@[016:0057) | └─FunctionCallSyntax
+//@[016:0031) | | ├─IdentifierSyntax
+//@[016:0031) | | | └─Token(Identifier) |loadJsonContent|
+//@[031:0032) | | ├─Token(LeftParen) |(|
+//@[032:0056) | | ├─FunctionArgumentSyntax
+//@[032:0056) | | | └─StringSyntax
+//@[032:0056) | | | | └─Token(StringComplete) |'./Assets/test.json.txt'|
+//@[056:0057) | | └─Token(RightParen) |)|
+//@[057:0059) ├─Token(NewLine) |\r\n|
+var testJsonString2 = testJson.string
+//@[000:0037) ├─VariableDeclarationSyntax
+//@[000:0003) | ├─Token(Identifier) |var|
+//@[004:0019) | ├─IdentifierSyntax
+//@[004:0019) | | └─Token(Identifier) |testJsonString2|
+//@[020:0021) | ├─Token(Assignment) |=|
+//@[022:0037) | └─PropertyAccessSyntax
+//@[022:0030) | | ├─VariableAccessSyntax
+//@[022:0030) | | | └─IdentifierSyntax
+//@[022:0030) | | | | └─Token(Identifier) |testJson|
+//@[030:0031) | | ├─Token(Dot) |.|
+//@[031:0037) | | └─IdentifierSyntax
+//@[031:0037) | | | └─Token(Identifier) |string|
+//@[037:0039) ├─Token(NewLine) |\r\n|
+var testJsonString2_1 = loadJsonContent('./Assets/test.json.txt', '.string')
+//@[000:0076) ├─VariableDeclarationSyntax
+//@[000:0003) | ├─Token(Identifier) |var|
+//@[004:0021) | ├─IdentifierSyntax
+//@[004:0021) | | └─Token(Identifier) |testJsonString2_1|
+//@[022:0023) | ├─Token(Assignment) |=|
+//@[024:0076) | └─FunctionCallSyntax
+//@[024:0039) | | ├─IdentifierSyntax
+//@[024:0039) | | | └─Token(Identifier) |loadJsonContent|
+//@[039:0040) | | ├─Token(LeftParen) |(|
+//@[040:0064) | | ├─FunctionArgumentSyntax
+//@[040:0064) | | | └─StringSyntax
+//@[040:0064) | | | | └─Token(StringComplete) |'./Assets/test.json.txt'|
+//@[064:0065) | | ├─Token(Comma) |,|
+//@[066:0075) | | ├─FunctionArgumentSyntax
+//@[066:0075) | | | └─StringSyntax
+//@[066:0075) | | | | └─Token(StringComplete) |'.string'|
+//@[075:0076) | | └─Token(RightParen) |)|
+//@[076:0078) ├─Token(NewLine) |\r\n|
+var testJsonInt2 = testJson.int
+//@[000:0031) ├─VariableDeclarationSyntax
+//@[000:0003) | ├─Token(Identifier) |var|
+//@[004:0016) | ├─IdentifierSyntax
+//@[004:0016) | | └─Token(Identifier) |testJsonInt2|
+//@[017:0018) | ├─Token(Assignment) |=|
+//@[019:0031) | └─PropertyAccessSyntax
+//@[019:0027) | | ├─VariableAccessSyntax
+//@[019:0027) | | | └─IdentifierSyntax
+//@[019:0027) | | | | └─Token(Identifier) |testJson|
+//@[027:0028) | | ├─Token(Dot) |.|
+//@[028:0031) | | └─IdentifierSyntax
+//@[028:0031) | | | └─Token(Identifier) |int|
+//@[031:0033) ├─Token(NewLine) |\r\n|
+var testJsonInt2_1 = loadJsonContent('./Assets/test.json.txt', '.int')
+//@[000:0070) ├─VariableDeclarationSyntax
+//@[000:0003) | ├─Token(Identifier) |var|
+//@[004:0018) | ├─IdentifierSyntax
+//@[004:0018) | | └─Token(Identifier) |testJsonInt2_1|
+//@[019:0020) | ├─Token(Assignment) |=|
+//@[021:0070) | └─FunctionCallSyntax
+//@[021:0036) | | ├─IdentifierSyntax
+//@[021:0036) | | | └─Token(Identifier) |loadJsonContent|
+//@[036:0037) | | ├─Token(LeftParen) |(|
+//@[037:0061) | | ├─FunctionArgumentSyntax
+//@[037:0061) | | | └─StringSyntax
+//@[037:0061) | | | | └─Token(StringComplete) |'./Assets/test.json.txt'|
+//@[061:0062) | | ├─Token(Comma) |,|
+//@[063:0069) | | ├─FunctionArgumentSyntax
+//@[063:0069) | | | └─StringSyntax
+//@[063:0069) | | | | └─Token(StringComplete) |'.int'|
+//@[069:0070) | | └─Token(RightParen) |)|
+//@[070:0072) ├─Token(NewLine) |\r\n|
+var testJsonArrayVal2 = testJson.array[0]
+//@[000:0041) ├─VariableDeclarationSyntax
+//@[000:0003) | ├─Token(Identifier) |var|
+//@[004:0021) | ├─IdentifierSyntax
+//@[004:0021) | | └─Token(Identifier) |testJsonArrayVal2|
+//@[022:0023) | ├─Token(Assignment) |=|
+//@[024:0041) | └─ArrayAccessSyntax
+//@[024:0038) | | ├─PropertyAccessSyntax
+//@[024:0032) | | | ├─VariableAccessSyntax
+//@[024:0032) | | | | └─IdentifierSyntax
+//@[024:0032) | | | | | └─Token(Identifier) |testJson|
+//@[032:0033) | | | ├─Token(Dot) |.|
+//@[033:0038) | | | └─IdentifierSyntax
+//@[033:0038) | | | | └─Token(Identifier) |array|
+//@[038:0039) | | ├─Token(LeftSquare) |[|
+//@[039:0040) | | ├─IntegerLiteralSyntax
+//@[039:0040) | | | └─Token(Integer) |0|
+//@[040:0041) | | └─Token(RightSquare) |]|
+//@[041:0043) ├─Token(NewLine) |\r\n|
+var testJsonArrayVal2_1 = loadJsonContent('./Assets/test.json.txt', '.array[0]')
+//@[000:0080) ├─VariableDeclarationSyntax
+//@[000:0003) | ├─Token(Identifier) |var|
+//@[004:0023) | ├─IdentifierSyntax
+//@[004:0023) | | └─Token(Identifier) |testJsonArrayVal2_1|
+//@[024:0025) | ├─Token(Assignment) |=|
+//@[026:0080) | └─FunctionCallSyntax
+//@[026:0041) | | ├─IdentifierSyntax
+//@[026:0041) | | | └─Token(Identifier) |loadJsonContent|
+//@[041:0042) | | ├─Token(LeftParen) |(|
+//@[042:0066) | | ├─FunctionArgumentSyntax
+//@[042:0066) | | | └─StringSyntax
+//@[042:0066) | | | | └─Token(StringComplete) |'./Assets/test.json.txt'|
+//@[066:0067) | | ├─Token(Comma) |,|
+//@[068:0079) | | ├─FunctionArgumentSyntax
+//@[068:0079) | | | └─StringSyntax
+//@[068:0079) | | | | └─Token(StringComplete) |'.array[0]'|
+//@[079:0080) | | └─Token(RightParen) |)|
+//@[080:0082) ├─Token(NewLine) |\r\n|
+var testJsonObject2 = testJson.object
+//@[000:0037) ├─VariableDeclarationSyntax
+//@[000:0003) | ├─Token(Identifier) |var|
+//@[004:0019) | ├─IdentifierSyntax
+//@[004:0019) | | └─Token(Identifier) |testJsonObject2|
+//@[020:0021) | ├─Token(Assignment) |=|
+//@[022:0037) | └─PropertyAccessSyntax
+//@[022:0030) | | ├─VariableAccessSyntax
+//@[022:0030) | | | └─IdentifierSyntax
+//@[022:0030) | | | | └─Token(Identifier) |testJson|
+//@[030:0031) | | ├─Token(Dot) |.|
+//@[031:0037) | | └─IdentifierSyntax
+//@[031:0037) | | | └─Token(Identifier) |object|
+//@[037:0039) ├─Token(NewLine) |\r\n|
+var testJsonObject2_1 = loadJsonContent('./Assets/test.json.txt', '.object')
+//@[000:0076) ├─VariableDeclarationSyntax
+//@[000:0003) | ├─Token(Identifier) |var|
+//@[004:0021) | ├─IdentifierSyntax
+//@[004:0021) | | └─Token(Identifier) |testJsonObject2_1|
+//@[022:0023) | ├─Token(Assignment) |=|
+//@[024:0076) | └─FunctionCallSyntax
+//@[024:0039) | | ├─IdentifierSyntax
+//@[024:0039) | | | └─Token(Identifier) |loadJsonContent|
+//@[039:0040) | | ├─Token(LeftParen) |(|
+//@[040:0064) | | ├─FunctionArgumentSyntax
+//@[040:0064) | | | └─StringSyntax
+//@[040:0064) | | | | └─Token(StringComplete) |'./Assets/test.json.txt'|
+//@[064:0065) | | ├─Token(Comma) |,|
+//@[066:0075) | | ├─FunctionArgumentSyntax
+//@[066:0075) | | | └─StringSyntax
+//@[066:0075) | | | | └─Token(StringComplete) |'.object'|
+//@[075:0076) | | └─Token(RightParen) |)|
+//@[076:0078) ├─Token(NewLine) |\r\n|
+var testJsonNestedString2 = testJson.object.nestedString
+//@[000:0056) ├─VariableDeclarationSyntax
+//@[000:0003) | ├─Token(Identifier) |var|
+//@[004:0025) | ├─IdentifierSyntax
+//@[004:0025) | | └─Token(Identifier) |testJsonNestedString2|
+//@[026:0027) | ├─Token(Assignment) |=|
+//@[028:0056) | └─PropertyAccessSyntax
+//@[028:0043) | | ├─PropertyAccessSyntax
+//@[028:0036) | | | ├─VariableAccessSyntax
+//@[028:0036) | | | | └─IdentifierSyntax
+//@[028:0036) | | | | | └─Token(Identifier) |testJson|
+//@[036:0037) | | | ├─Token(Dot) |.|
+//@[037:0043) | | | └─IdentifierSyntax
+//@[037:0043) | | | | └─Token(Identifier) |object|
+//@[043:0044) | | ├─Token(Dot) |.|
+//@[044:0056) | | └─IdentifierSyntax
+//@[044:0056) | | | └─Token(Identifier) |nestedString|
+//@[056:0058) ├─Token(NewLine) |\r\n|
+var testJsonNestedString2_1 = testJsonObject2_1.nestedString
+//@[000:0060) ├─VariableDeclarationSyntax
+//@[000:0003) | ├─Token(Identifier) |var|
+//@[004:0027) | ├─IdentifierSyntax
+//@[004:0027) | | └─Token(Identifier) |testJsonNestedString2_1|
+//@[028:0029) | ├─Token(Assignment) |=|
+//@[030:0060) | └─PropertyAccessSyntax
+//@[030:0047) | | ├─VariableAccessSyntax
+//@[030:0047) | | | └─IdentifierSyntax
+//@[030:0047) | | | | └─Token(Identifier) |testJsonObject2_1|
+//@[047:0048) | | ├─Token(Dot) |.|
+//@[048:0060) | | └─IdentifierSyntax
+//@[048:0060) | | | └─Token(Identifier) |nestedString|
+//@[060:0062) ├─Token(NewLine) |\r\n|
+var testJsonNestedString2_2 = loadJsonContent('./Assets/test.json.txt', '.object.nestedString')
+//@[000:0095) ├─VariableDeclarationSyntax
+//@[000:0003) | ├─Token(Identifier) |var|
+//@[004:0027) | ├─IdentifierSyntax
+//@[004:0027) | | └─Token(Identifier) |testJsonNestedString2_2|
+//@[028:0029) | ├─Token(Assignment) |=|
+//@[030:0095) | └─FunctionCallSyntax
+//@[030:0045) | | ├─IdentifierSyntax
+//@[030:0045) | | | └─Token(Identifier) |loadJsonContent|
+//@[045:0046) | | ├─Token(LeftParen) |(|
+//@[046:0070) | | ├─FunctionArgumentSyntax
+//@[046:0070) | | | └─StringSyntax
+//@[046:0070) | | | | └─Token(StringComplete) |'./Assets/test.json.txt'|
+//@[070:0071) | | ├─Token(Comma) |,|
+//@[072:0094) | | ├─FunctionArgumentSyntax
+//@[072:0094) | | | └─StringSyntax
+//@[072:0094) | | | | └─Token(StringComplete) |'.object.nestedString'|
+//@[094:0095) | | └─Token(RightParen) |)|
+//@[095:0099) ├─Token(NewLine) |\r\n\r\n|
+
+var testJsonTokensAsArray = loadJsonContent('./Assets/test2.json.txt', '.products[?(@.price > 3)].name')
+//@[000:0104) ├─VariableDeclarationSyntax
+//@[000:0003) | ├─Token(Identifier) |var|
+//@[004:0025) | ├─IdentifierSyntax
+//@[004:0025) | | └─Token(Identifier) |testJsonTokensAsArray|
+//@[026:0027) | ├─Token(Assignment) |=|
+//@[028:0104) | └─FunctionCallSyntax
+//@[028:0043) | | ├─IdentifierSyntax
+//@[028:0043) | | | └─Token(Identifier) |loadJsonContent|
+//@[043:0044) | | ├─Token(LeftParen) |(|
+//@[044:0069) | | ├─FunctionArgumentSyntax
+//@[044:0069) | | | └─StringSyntax
+//@[044:0069) | | | | └─Token(StringComplete) |'./Assets/test2.json.txt'|
+//@[069:0070) | | ├─Token(Comma) |,|
+//@[071:0103) | | ├─FunctionArgumentSyntax
+//@[071:0103) | | | └─StringSyntax
+//@[071:0103) | | | | └─Token(StringComplete) |'.products[?(@.price > 3)].name'|
+//@[103:0104) | | └─Token(RightParen) |)|
+//@[104:0106) ├─Token(NewLine) |\r\n|
 
 //@[000:0000) └─Token(EndOfFile) ||

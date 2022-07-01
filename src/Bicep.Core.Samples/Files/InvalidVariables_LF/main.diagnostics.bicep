@@ -6,12 +6,10 @@ bad
 // incomplete variable declaration #completionTest(0,1,2) -> declarations
 var
 //@[03:03) [BCP015 (Error)] Expected a variable identifier at this location. (CodeDescription: none) ||
-//@[03:03) [no-unused-vars (Warning)] Variable "<missing>" is declared but never used. (CodeDescription: bicep core(https://aka.ms/bicep/linter/no-unused-vars)) ||
 
 // missing identifier #completionTest(4) -> empty
 var 
 //@[04:04) [BCP015 (Error)] Expected a variable identifier at this location. (CodeDescription: none) ||
-//@[04:04) [no-unused-vars (Warning)] Variable "<missing>" is declared but never used. (CodeDescription: bicep core(https://aka.ms/bicep/linter/no-unused-vars)) ||
 
 // incomplete keyword
 // #completionTest(0,1) -> declarations
@@ -35,16 +33,13 @@ var missingValue =
 // malformed identifier
 var 2 
 //@[04:05) [BCP015 (Error)] Expected a variable identifier at this location. (CodeDescription: none) |2|
-//@[04:05) [no-unused-vars (Warning)] Variable "<error>" is declared but never used. (CodeDescription: bicep core(https://aka.ms/bicep/linter/no-unused-vars)) |2|
 //@[06:06) [BCP018 (Error)] Expected the "=" character at this location. (CodeDescription: none) ||
 var $ = 23
 //@[04:05) [BCP015 (Error)] Expected a variable identifier at this location. (CodeDescription: none) |$|
 //@[04:05) [BCP001 (Error)] The following token is not recognized: "$". (CodeDescription: none) |$|
-//@[04:05) [no-unused-vars (Warning)] Variable "<error>" is declared but never used. (CodeDescription: bicep core(https://aka.ms/bicep/linter/no-unused-vars)) |$|
 var # 33 = 43
 //@[04:05) [BCP015 (Error)] Expected a variable identifier at this location. (CodeDescription: none) |#|
 //@[04:05) [BCP001 (Error)] The following token is not recognized: "#". (CodeDescription: none) |#|
-//@[04:08) [no-unused-vars (Warning)] Variable "<error>" is declared but never used. (CodeDescription: bicep core(https://aka.ms/bicep/linter/no-unused-vars)) |# 33|
 
 // no value assigned
 var foo =
@@ -65,7 +60,6 @@ var badEquals2 3 true
 // malformed identifier but type check should happen regardless
 var 2 = x
 //@[04:05) [BCP015 (Error)] Expected a variable identifier at this location. (CodeDescription: none) |2|
-//@[04:05) [no-unused-vars (Warning)] Variable "<error>" is declared but never used. (CodeDescription: bicep core(https://aka.ms/bicep/linter/no-unused-vars)) |2|
 //@[08:09) [BCP062 (Error)] The referenced declaration with name "x" is not valid. (CodeDescription: none) |x|
 
 // bad token value
@@ -141,6 +135,7 @@ var test3 = {
 var testDupe = {
 //@[04:12) [no-unused-vars (Warning)] Variable "testDupe" is declared but never used. (CodeDescription: bicep core(https://aka.ms/bicep/linter/no-unused-vars)) |testDupe|
   'duplicate': true
+//@[02:13) [prefer-unquoted-property-names (Warning)] Property names that are valid identifiers should be declared without quotation marks and accessed using dot notation. (CodeDescription: bicep core(https://aka.ms/bicep/linter/prefer-unquoted-property-names)) |'duplicate'|
 //@[02:13) [BCP025 (Error)] The property "duplicate" is declared multiple times in this object. Remove or rename the duplicate properties. (CodeDescription: none) |'duplicate'|
   duplicate: true
 //@[02:11) [BCP025 (Error)] The property "duplicate" is declared multiple times in this object. Remove or rename the duplicate properties. (CodeDescription: none) |duplicate|
@@ -280,7 +275,6 @@ var anotherThing = true
 var ☕ = true
 //@[04:05) [BCP015 (Error)] Expected a variable identifier at this location. (CodeDescription: none) |☕|
 //@[04:05) [BCP001 (Error)] The following token is not recognized: "☕". (CodeDescription: none) |☕|
-//@[04:05) [no-unused-vars (Warning)] Variable "<error>" is declared but never used. (CodeDescription: bicep core(https://aka.ms/bicep/linter/no-unused-vars)) |☕|
 var a☕ = true
 //@[04:05) [no-unused-vars (Warning)] Variable "a" is declared but never used. (CodeDescription: bicep core(https://aka.ms/bicep/linter/no-unused-vars)) |a|
 //@[05:06) [BCP018 (Error)] Expected the "=" character at this location. (CodeDescription: none) |☕|
@@ -413,3 +407,12 @@ var keyVaultSecretArrayInterpolatedVar = [
 //@[05:29) [BCP180 (Error)] Function "getSecret" is not valid at this location. It can only be used when directly assigning to a module parameter with a secure decorator. (CodeDescription: none) |kv.getSecret('mySecret')|
 ]
 
+var copy = [
+//@[04:08) [BCP239 (Error)] Identifier "copy" is a reserved Bicep symbol name and cannot be used in this context. (CodeDescription: none) |copy|
+//@[04:08) [no-unused-vars (Warning)] Variable "copy" is declared but never used. (CodeDescription: bicep core(https://aka.ms/bicep/linter/no-unused-vars)) |copy|
+  {
+    name: 'one'
+    count: '[notAFunction()]'
+    input: {}
+  }
+]

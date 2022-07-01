@@ -102,6 +102,16 @@ namespace Bicep.Core.Emit
                 case VariableAccessSyntax variableAccess:
                     return ConvertVariableAccess(variableAccess);
 
+                case LambdaSyntax lambda:
+                    var variables = lambda.GetLocalVariables();
+
+                    var variableNames = variables.Select(x => new JTokenExpression(x.Name.IdentifierName));
+                    var body = ConvertExpression(lambda.Body);
+
+                    return CreateFunction(
+                        "lambda",
+                        variableNames.Concat(body));
+
                 default:
                     throw new NotImplementedException($"Cannot emit unexpected expression of type {expression.GetType().Name}");
             }
@@ -111,9 +121,13 @@ namespace Bicep.Core.Emit
         {
             var symbol = context.SemanticModel.GetSymbolInfo(functionCall);
             if (symbol is FunctionSymbol &&
-                context.SemanticModel.TypeManager.GetMatchedFunctionOverload(functionCall) is {Evaluator: { }} functionOverload)
+                context.SemanticModel.TypeManager.GetMatchedFunctionOverload(functionCall) is { Evaluator: { } } functionOverload)
             {
-                return ConvertExpression(functionOverload.Evaluator(functionCall, symbol, context.SemanticModel.GetTypeInfo(functionCall), context.FunctionVariables.GetValueOrDefault(functionCall)));
+                return ConvertExpression(functionOverload.Evaluator(functionCall,
+                    symbol,
+                    context.SemanticModel.GetTypeInfo(functionCall),
+                    context.FunctionVariables.GetValueOrDefault(functionCall),
+                    context.SemanticModel.TypeManager.GetMatchedFunctionResultValue(functionCall)));
             }
 
             switch (functionCall)
@@ -124,11 +138,8 @@ namespace Bicep.Core.Emit
                         function.Arguments.Select(a => ConvertExpression(a.Expression)));
 
                 case InstanceFunctionCallSyntax instanceFunctionCall:
-                    var (baseSymbol, indexExpression) = instanceFunctionCall.BaseExpression switch
-                    {
-                        ArrayAccessSyntax arrayAccessSyntax => (context.SemanticModel.GetSymbolInfo(arrayAccessSyntax.BaseExpression), arrayAccessSyntax.IndexExpression),
-                        _ => (context.SemanticModel.GetSymbolInfo(instanceFunctionCall.BaseExpression), null),
-                    };
+                    var (baseExpression, indexExpression) = SyntaxHelper.UnwrapArrayAccessSyntax(instanceFunctionCall.BaseExpression);
+                    var baseSymbol = context.SemanticModel.GetSymbolInfo(baseExpression);
 
                     switch (baseSymbol)
                     {
@@ -322,7 +333,7 @@ namespace Bicep.Core.Emit
                     case ("name", true):
                     case ("type", true):
                     case ("apiVersion", true):
-                        var symbolExpression = GenerateSymbolicReference(declaredResource.Symbol.Name, indexExpression);
+                        var symbolExpression = GenerateSymbolicReference(declaredResource, indexExpression);
 
                         return AppendProperties(
                             CreateFunction("resourceInfo", symbolExpression),
@@ -562,7 +573,7 @@ namespace Bicep.Core.Emit
         private SyntaxBase GetResourceNameAncestorSyntaxSegment(DeclaredResourceMetadata resource, int startingAncestorIndex)
         {
             var ancestors = this.context.SemanticModel.ResourceAncestors.GetAncestors(resource);
-            if(startingAncestorIndex >= ancestors.Length)
+            if (startingAncestorIndex >= ancestors.Length)
             {
                 // not enough ancestors
                 throw new ArgumentException($"Resource type has {ancestors.Length} ancestor types but name expression was requested for ancestor type at index {startingAncestorIndex}.");
@@ -570,33 +581,33 @@ namespace Bicep.Core.Emit
 
             /*
              * Consider the following example:
-             * 
+             *
              * resource one 'MS.Example/ones@...' = [for (_, i) in range(0, ...) : {
              *   name: name_exp1(i)
              * }]
-             * 
+             *
              * resource two 'MS.Example/ones/twos@...' = [for (_, j) in range(0, ...) : {
              *   parent: one[index_exp2(j)]
              *   name: name_exp2(j)
              * }]
-             * 
+             *
              * resource three 'MS.Example/ones/twos/threes@...' = [for (_, k) in range(0, ...) : {
              *   parent: two[index_exp3(k)]
              *   name: name_exp3(k)
              * }]
-             * 
+             *
              * name_exp* and index_exp* are expressions represented here as functions
-             * 
+             *
              * The name segment expressions for "three" are the following:
              * 0. name_exp1(index_exp2(index_exp3(k)))
              * 1. name_exp2(index_exp3(k))
              * 2. name_exp3(k)
-             * 
+             *
              * (The formula can be generalized to more levels of nesting.)
-             * 
+             *
              * This function can be used to get 0 and 1 above by passing 0 or 1 respectively as the startingAncestorIndex.
              * The name segment 2 above must be obtained from the resource directly.
-             * 
+             *
              * Given that we don't have proper functions in our runtime AND that our expressions don't have side effects,
              * the formula is implemented via local variable replacement.
              */
@@ -604,7 +615,7 @@ namespace Bicep.Core.Emit
             // the initial ancestor gives us the base expression
             SyntaxBase? rewritten = ancestors[startingAncestorIndex].Resource.NameSyntax;
 
-            for(int i = startingAncestorIndex; i < ancestors.Length; i++)
+            for (int i = startingAncestorIndex; i < ancestors.Length; i++)
             {
                 var ancestor = ancestors[i];
 
@@ -621,10 +632,10 @@ namespace Bicep.Core.Emit
                         /*
                          * There are no local vars to replace. It is impossible for a local var to be introduced at the next level
                          * so we can just bail out with the result.
-                         * 
+                         *
                          * This path is followed by non-loop resources.
-                         * 
-                         * Case 0 is not possible for non-starting ancestor index because 
+                         *
+                         * Case 0 is not possible for non-starting ancestor index because
                          * once we have a local variable replacement, it will propagate to the next levels
                          */
                         return ancestor.Resource.NameSyntax;
@@ -647,7 +658,7 @@ namespace Bicep.Core.Emit
                                   _ => throw new NotImplementedException($"Unexpected local kind '{local.LocalKind}'.")
                               });
 
-                        rewritten = SymbolReplacer.Replace(this.context.SemanticModel, replacements, rewritten);                        
+                        rewritten = SymbolReplacer.Replace(this.context.SemanticModel, replacements, rewritten);
 
                         break;
 
@@ -791,7 +802,7 @@ namespace Bicep.Core.Emit
                     new JTokenExpression("value")),
 
                 DeclaredResourceMetadata declared when context.Settings.EnableSymbolicNames =>
-                    GenerateSymbolicReference(declared.Symbol.Name, indexExpression),
+                    GenerateSymbolicReference(declared, indexExpression),
                 DeclaredResourceMetadata => GetFullyQualifiedResourceId(resource),
 
                 _ => throw new InvalidOperationException($"Unexpected resource metadata type: {resource.GetType()}"),
@@ -848,8 +859,15 @@ namespace Bicep.Core.Emit
                 return replacement;
             }
 
-            var @for = GetEnclosingForExpression(localVariableSymbol);
-            return GetLoopVariableExpression(localVariableSymbol, @for, CreateCopyIndexFunction(@for));
+            var enclosingSyntax = GetEnclosingDeclaringSyntax(localVariableSymbol);
+            switch (enclosingSyntax) {
+                case ForSyntax @for:
+                    return GetLoopVariableExpression(localVariableSymbol, @for, CreateCopyIndexFunction(@for));
+                case LambdaSyntax lambda:
+                    return CreateFunction("lambdaVariables", new JTokenExpression(localVariableSymbol.Name));
+            }
+
+            throw new NotImplementedException($"{nameof(LocalVariableSymbol)} was declared by an unexpected syntax type '{enclosingSyntax?.GetType().Name}'.");
         }
 
         private LanguageExpression GetLoopVariableExpression(LocalVariableSymbol localVariableSymbol, ForSyntax @for, LanguageExpression indexExpression)
@@ -868,7 +886,7 @@ namespace Bicep.Core.Emit
             };
         }
 
-        private ForSyntax GetEnclosingForExpression(LocalVariableSymbol localVariable)
+        private SyntaxBase GetEnclosingDeclaringSyntax(LocalVariableSymbol localVariable)
         {
             // we're following the symbol hierarchy rather than syntax hierarchy because
             // this guarantees a single hop in all cases
@@ -878,12 +896,19 @@ namespace Bicep.Core.Emit
                 throw new NotImplementedException($"{nameof(LocalVariableSymbol)} has un unexpected parent of type '{symbolParent?.GetType().Name}'.");
             }
 
-            if (localScope.DeclaringSyntax is ForSyntax @for)
+            return localScope.DeclaringSyntax;
+        }
+
+        private ForSyntax GetEnclosingForExpression(LocalVariableSymbol localVariable)
+        {
+            var declaringSyntax = GetEnclosingDeclaringSyntax(localVariable);
+
+            if (declaringSyntax is ForSyntax @for)
             {
                 return @for;
             }
 
-            throw new NotImplementedException($"{nameof(LocalVariableSymbol)} was declared by an unexpected syntax type '{localScope.DeclaringSyntax?.GetType().Name}'.");
+            throw new NotImplementedException($"{nameof(LocalVariableSymbol)} was declared by an unexpected syntax type '{declaringSyntax?.GetType().Name}'.");
         }
 
         private string? GetCopyIndexName(ForSyntax @for)
@@ -930,9 +955,9 @@ namespace Bicep.Core.Emit
             if (variableAccessSyntax is ExplicitVariableAccessSyntax)
             {
                 //just return a call to variables.
-                return CreateFunction("variables", new JTokenExpression(name));  
+                return CreateFunction("variables", new JTokenExpression(name));
             }
-            
+
             var symbol = context.SemanticModel.GetSymbolInfo(variableAccessSyntax);
 
             switch (symbol)
@@ -971,6 +996,7 @@ namespace Bicep.Core.Emit
 
                 default:
                     throw new NotImplementedException($"Encountered an unexpected symbol kind '{symbol?.Kind}' when generating a variable access expression.");
+
             }
         }
 
@@ -1171,7 +1197,19 @@ namespace Bicep.Core.Emit
             }
         }
 
-        public LanguageExpression GenerateSymbolicReference(string symbolName, SyntaxBase? indexExpression)
+        public string GetSymbolicName(DeclaredResourceMetadata resource)
+        {
+            var nestedHierarchy = this.context.SemanticModel.ResourceAncestors.GetAncestors(resource)
+                .Reverse()
+                .TakeWhile(x => x.AncestorType == ResourceAncestorGraph.ResourceAncestorType.Nested)
+                .Select(x => x.Resource)
+                .Reverse()
+                .Concat(resource);
+
+            return string.Join("::", nestedHierarchy.Select(x => x.Symbol.Name));
+        }
+
+        private LanguageExpression GenerateSymbolicReference(string symbolName, SyntaxBase? indexExpression)
         {
             if (indexExpression is null)
             {
@@ -1183,6 +1221,12 @@ namespace Bicep.Core.Emit
                 new JTokenExpression($"{symbolName}[{{0}}]"),
                 ConvertExpression(indexExpression));
         }
+
+        public LanguageExpression GenerateSymbolicReference(DeclaredResourceMetadata resource, SyntaxBase? indexExpression)
+            => GenerateSymbolicReference(GetSymbolicName(resource), indexExpression);
+
+        public LanguageExpression GenerateSymbolicReference(ModuleSymbol module, SyntaxBase? indexExpression)
+            => GenerateSymbolicReference(module.Name, indexExpression);
 
         public static LanguageExpression GenerateUnqualifiedResourceId(string fullyQualifiedType, IEnumerable<LanguageExpression> nameSegments)
         {
