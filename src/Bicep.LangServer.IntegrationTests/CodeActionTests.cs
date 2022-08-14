@@ -45,8 +45,9 @@ namespace Bicep.LangServer.IntegrationTests
         private const string MaxLengthTitle = "Add @maxLength";
         private const string MinValueTitle = "Add @minValue";
         private const string MaxValueTitle = "Add @maxValue";
-        private const string RemoveUnusedVariableTitle = "Remove unused variable";
+        private const string RemoveUnusedExistingResourceTitle = "Remove unused existing resource";
         private const string RemoveUnusedParameterTitle = "Remove unused parameter";
+        private const string RemoveUnusedVariableTitle = "Remove unused variable";
 
         private static readonly SharedLanguageHelperManager DefaultServer = new();
 
@@ -101,59 +102,64 @@ namespace Bicep.LangServer.IntegrationTests
             {
                 foreach (var span in GetOverlappingSpans(fixable.Span))
                 {
-                    var range = span.ToRange(lineStarts);
-                    var quickFixes = await client.RequestCodeAction(new CodeActionParams
+                    using (new AssertionScope().WithVisualCursor(compilation.SourceFileGrouping.EntryPoint, fixable.Span))
                     {
-                        TextDocument = new TextDocumentIdentifier(uri),
-                        Range = range,
-                    });
-
-                    // Assert.
-                    quickFixes.Should().NotBeNull();
-
-                    var spansOverlapOrAbut = (IFixable f) =>
-                    {
-                        if (span.Position <= f.Span.Position)
+                        var range = span.ToRange(lineStarts);
+                        var quickFixes = await client.RequestCodeAction(new CodeActionParams
                         {
-                            return span.GetEndPosition() >= f.Span.Position;
+                            TextDocument = new TextDocumentIdentifier(uri),
+                            Range = range,
+                        });
+
+                        // Assert.
+                        quickFixes.Should().NotBeNull();
+
+                        var spansOverlapOrAbut = (IFixable f) =>
+                        {
+                            if (span.Position <= f.Span.Position)
+                            {
+                                return span.GetEndPosition() >= f.Span.Position;
+                            }
+
+                            return f.Span.GetEndPosition() >= span.Position;
+                        };
+
+                        var bicepFixes = fixables.Where(spansOverlapOrAbut).SelectMany(f => f.Fixes).ToHashSet();
+                        var quickFixList = quickFixes.Where(x => x.CodeAction?.Kind == CodeActionKind.QuickFix).ToList();
+
+                        var bicepFixDescriptions = bicepFixes.Select(f => f.Description);
+                        var quickFixTitles = quickFixList.Select(f => f.CodeAction.Title);
+                        bicepFixDescriptions.Should().BeEquivalentTo(quickFixTitles);
+
+                        for (int i = 0; i < quickFixList.Count; i++)
+                        {
+                            var quickFix = quickFixList[i];
+
+                            quickFix.IsCodeAction.Should().BeTrue();
+                            quickFix.CodeAction!.Kind.Should().Be(CodeActionKind.QuickFix);
+                            quickFix.CodeAction.Edit!.Changes.Should().ContainKey(uri);
+
+                            var textEditList = quickFix.CodeAction.Edit.Changes![uri].ToList();
+
+                            bicepFixes.RemoveWhere(fix =>
+                            {
+                                if (fix.Description != quickFix.CodeAction.Title)
+                                {
+                                    return false;
+                                }
+
+                                var replacementSet = fix.Replacements.ToHashSet();
+                                foreach (var edit in textEditList)
+                                {
+                                    replacementSet.RemoveWhere(replacement => edit.Range == replacement.ToRange(lineStarts) && edit.NewText == replacement.Text);
+                                }
+
+                                return replacementSet.Count == 0;
+                            }).Should().Be(1, "No matching fix found.");
                         }
 
-                        return f.Span.GetEndPosition() >= span.Position;
-                    };
-
-                    var bicepFixes = fixables.Where(spansOverlapOrAbut).SelectMany(f => f.Fixes).ToHashSet();
-                    var quickFixList = quickFixes.Where(x => x.CodeAction?.Kind == CodeActionKind.QuickFix).ToList();
-
-                    quickFixList.Should().HaveSameCount(bicepFixes);
-
-                    for (int i = 0; i < quickFixList.Count; i++)
-                    {
-                        var quickFix = quickFixList[i];
-
-                        quickFix.IsCodeAction.Should().BeTrue();
-                        quickFix.CodeAction!.Kind.Should().Be(CodeActionKind.QuickFix);
-                        quickFix.CodeAction.Edit!.Changes.Should().ContainKey(uri);
-
-                        var textEditList = quickFix.CodeAction.Edit.Changes![uri].ToList();
-
-                        bicepFixes.RemoveWhere(fix =>
-                        {
-                            if (fix.Description != quickFix.CodeAction.Title)
-                            {
-                                return false;
-                            }
-
-                            var replacementSet = fix.Replacements.ToHashSet();
-                            foreach (var edit in textEditList)
-                            {
-                                replacementSet.RemoveWhere(replacement => edit.Range == replacement.ToRange(lineStarts) && edit.NewText == replacement.Text);
-                            }
-
-                            return replacementSet.Count == 0;
-                        }).Should().Be(1, "No matching fix found.");
+                        bicepFixes.Count.Should().Be(0);
                     }
-
-                    bicepFixes.Count.Should().Be(0);
                 }
             }
         }
@@ -230,7 +236,7 @@ namespace Bicep.LangServer.IntegrationTests
             var bicepConfigUri = DocumentUri.FromFileSystemPath(bicepConfigFilePath);
             fileSystemDict[bicepConfigUri.ToUri()] = bicepConfigFileContents;
 
-            var compilation = new Compilation(BicepTestConstants.Features, BicepTestConstants.NamespaceProvider, SourceFileGroupingFactory.CreateForFiles(fileSystemDict, uri, BicepTestConstants.FileResolver, BicepTestConstants.BuiltInConfiguration), BicepTestConstants.BuiltInConfiguration, BicepTestConstants.LinterAnalyzer);
+            var compilation = new Compilation(BicepTestConstants.Features, BicepTestConstants.NamespaceProvider, SourceFileGroupingFactory.CreateForFiles(fileSystemDict, uri, BicepTestConstants.FileResolver, BicepTestConstants.BuiltInConfiguration), BicepTestConstants.BuiltInConfiguration, BicepTestConstants.ApiVersionProvider, BicepTestConstants.LinterAnalyzer);
             var diagnostics = compilation.GetEntrypointSemanticModel().GetAllDiagnostics();
 
             diagnostics.Should().HaveCount(1);
@@ -269,7 +275,7 @@ resource test";
                 [uri] = bicepFileContents,
             };
 
-            var compilation = new Compilation(BicepTestConstants.Features, BicepTestConstants.NamespaceProvider, SourceFileGroupingFactory.CreateForFiles(files, uri, BicepTestConstants.FileResolver, BicepTestConstants.BuiltInConfiguration), BicepTestConstants.BuiltInConfiguration, BicepTestConstants.LinterAnalyzer);
+            var compilation = new Compilation(BicepTestConstants.Features, BicepTestConstants.NamespaceProvider, SourceFileGroupingFactory.CreateForFiles(files, uri, BicepTestConstants.FileResolver, BicepTestConstants.BuiltInConfiguration), BicepTestConstants.BuiltInConfiguration, BicepTestConstants.ApiVersionProvider, BicepTestConstants.LinterAnalyzer);
             var diagnostics = compilation.GetEntrypointSemanticModel().GetAllDiagnostics();
 
             diagnostics.Should().HaveCount(2);
@@ -331,7 +337,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2020-12-01' = {
                 [uri] = bicepFileContents,
             };
 
-            var compilation = new Compilation(BicepTestConstants.Features, BicepTestConstants.NamespaceProvider, SourceFileGroupingFactory.CreateForFiles(files, uri, BicepTestConstants.FileResolver, BicepTestConstants.BuiltInConfiguration), BicepTestConstants.BuiltInConfiguration, BicepTestConstants.LinterAnalyzer);
+            var compilation = new Compilation(BicepTestConstants.Features, BicepTestConstants.NamespaceProvider, SourceFileGroupingFactory.CreateForFiles(files, uri, BicepTestConstants.FileResolver, BicepTestConstants.BuiltInConfiguration), BicepTestConstants.BuiltInConfiguration, BicepTestConstants.ApiVersionProvider, BicepTestConstants.LinterAnalyzer);
             var diagnostics = compilation.GetEntrypointSemanticModel().GetAllDiagnostics();
 
             diagnostics.Should().HaveCount(3);
@@ -459,6 +465,38 @@ param foo {type}
             codeActions.Should().NotContain(x => x.Title == title);
         }
 
+        [DataRow(
+            @"resource ap|p 'Microsoft.Web/sites@2021-03-01' existing = {
+                name: 'app'
+            }",
+            "")]
+        [DataRow(
+            @"resource ap|p 'Microsoft.Web/sites@2021-03-01' existing = {
+                name: 'app'
+            }
+var foo = 'foo'",
+            "var foo = 'foo'")]
+        [DataRow(
+            @"resource app1 'Microsoft.Web/sites@2021-03-01' = {
+                name: 'app1'
+            }
+resource ap|p2 'Microsoft.Web/sites@2021-03-01' existing = {
+                name: 'app2'
+            }",
+            @"resource app1 'Microsoft.Web/sites@2021-03-01' = {
+                name: 'app1'
+            }
+")]
+        [DataTestMethod]
+        public async Task Unused_existing_resource_actions_are_suggested(string fileWithCursors, string expectedText)
+        {
+            (var codeActions, var bicepFile) = await RunSyntaxTest(fileWithCursors);
+            codeActions.Should().Contain(x => x.Title.StartsWith(RemoveUnusedExistingResourceTitle));
+            codeActions.First(x => x.Title.StartsWith(RemoveUnusedExistingResourceTitle)).Kind.Should().Be(CodeActionKind.QuickFix);
+
+            var updatedFile = ApplyCodeAction(bicepFile, codeActions.Single(x => x.Title.StartsWith(RemoveUnusedExistingResourceTitle)));
+            updatedFile.Should().HaveSourceText(expectedText);
+        }
 
         [DataRow(@"var fo|o = 'foo'
 var foo2 = 'foo2'", "var foo2 = 'foo2'")]
@@ -594,7 +632,7 @@ var nested = [
         {
             var (codeActions, bicepFile) = await RunSyntaxTest(fileWithCursors);
             codeActions.Should().Contain(x => x.Title == MultilineObjectsAndArraysCodeFixProvider.ConvertToMultiLineDescription);
-            codeActions.First(x => x.Title ==  MultilineObjectsAndArraysCodeFixProvider.ConvertToMultiLineDescription).Kind.Should().Be(CodeActionKind.Refactor);
+            codeActions.First(x => x.Title == MultilineObjectsAndArraysCodeFixProvider.ConvertToMultiLineDescription).Kind.Should().Be(CodeActionKind.Refactor);
 
             var updatedFile = ApplyCodeAction(bicepFile, codeActions.Single(x => x.Title == MultilineObjectsAndArraysCodeFixProvider.ConvertToMultiLineDescription));
             updatedFile.Should().HaveSourceText(result);

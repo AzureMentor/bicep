@@ -671,7 +671,7 @@ resource rg 'Microsoft.Resources/resourceGroups@2020-06-01' = {
   location: location
 }
 
-resource rgOwner 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
+resource rgOwner 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
   name: '${guid(rg.name, 'owner')}'
   scope: rg
   properties: {
@@ -681,7 +681,7 @@ resource rgOwner 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = 
   }
 }
 
-resource rgContributor 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
+resource rgContributor 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
   name: '${guid(rg.name, 'contributor')}'
   scope: rg
   properties: {
@@ -691,7 +691,7 @@ resource rgContributor 'Microsoft.Authorization/roleAssignments@2020-04-01-previ
   }
 }
 
-resource rgReader 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
+resource rgReader 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
   name: '${guid(rg.name, 'reader')}'
   scope: rg
   properties: {
@@ -1094,7 +1094,7 @@ resource aksDefaultPoolSubnet 'Microsoft.Network/virtualNetworks/subnets' existi
   name: aksDefaultPoolSubnetName
 }
 
-resource roleAssignment 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
+resource roleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
   name: guid(aksDefaultPoolSubnet.id, 'Network Contributor')
   scope: aksDefaultPoolSubnet
   properties: {
@@ -1141,7 +1141,7 @@ resource aksDefaultPoolSubnet 'Microsoft.Network/virtualNetworks/subnets@2020-08
   name: aksDefaultPoolSubnetName
 }
 
-resource roleAssignment 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
+resource roleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
   name: guid(aksDefaultPoolSubnet.id, 'Network Contributor')
   scope: aksDefaultPoolSubnet
   properties: {
@@ -1182,7 +1182,7 @@ resource userAssignedIdentities 'Microsoft.ManagedIdentity/userAssignedIdentitie
   location: 'West US'
 }
 
-resource roleAssignment 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
+resource roleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
   name: guid(virtualNetwork::aksDefaultPoolSubnet.id, 'Network Contributor')
   scope: virtualNetwork::aksDefaultPoolSubnet
   properties: {
@@ -1228,7 +1228,7 @@ resource aksDefaultPoolSubnet 'Microsoft.Network/virtualNetworks/subnets@2020-08
   name: aksDefaultPoolSubnetName
 }]
 
-resource roleAssignment 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = [for (vnet, i) in vnets: {
+resource roleAssignment 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = [for (vnet, i) in vnets: {
   name: guid(aksDefaultPoolSubnet[i].id, 'Network Contributor')
   scope: aksDefaultPoolSubnet[i]
   properties: {
@@ -1539,7 +1539,7 @@ resource my_subnet 'Microsoft.Network/virtualNetworks/subnets@2020-08-01' existi
   parent: vnet
 }
 
-resource my_interface 'Microsoft.Network/networkInterfaces@2015-05-01-preview' = {
+resource my_interface 'Microsoft.Network/networkInterfaces@2021-02-01' = {
   name: 'nic-test01'
   location: vnet.location // this is not valid because it requires reference() if resource is 'existing'
   properties: {
@@ -1576,7 +1576,7 @@ var sqlDatabase = {
   dataEncryption: 'Enabled'
 }
 
-resource sqlDb 'Microsoft.Sql/servers/databases@2020-02-02-preview' existing = {
+resource sqlDb 'Microsoft.Sql/servers/databases@2021-02-01-preview' existing = {
   name: '${sqlServerName}/${sqlDatabase.name}'
 }
 
@@ -2072,14 +2072,14 @@ resource publicIPAddress 'Microsoft.Network/publicIPAddresses@2019-11-01' = {
         public void Test_Issue2291()
         {
             var result = CompilationHelper.Compile(@"
-resource registry 'Microsoft.ContainerRegistry/registries@2019-12-01-preview' existing = {
+resource registry 'Microsoft.ContainerRegistry/registries@2021-06-01-preview' existing = {
   name: 'foo'
   resource importPipeline 'importPipelines' existing = {
     name: 'import'
   }
 }
 
-resource pipelineRun 'Microsoft.ContainerRegistry/registries/pipelineRuns@2019-12-01-preview' = [for index in range(0, 3): if(registry::importPipeline.properties.trigger.sourceTrigger.status == 'Disabled') {
+resource pipelineRun 'Microsoft.ContainerRegistry/registries/pipelineRuns@2021-06-01-preview' = [for index in range(0, 3): if(registry::importPipeline.properties.trigger.sourceTrigger.status == 'Disabled') {
   parent: registry
   name: 'bar${index}'
   properties: {
@@ -2288,7 +2288,7 @@ param endPointPropertiesWithIdentity object
 param endPointProperties object
 param defaultAdvancedFilterObject object
 
-resource eventSubscription 'Microsoft.EventGrid/systemTopics/eventSubscriptions@2020-10-15-preview' = {
+resource eventSubscription 'Microsoft.EventGrid/systemTopics/eventSubscriptions@2021-06-01-preview' = {
   name: '${eventGridSystemTopicName}/${subscription.name}'
   properties: {
     deliveryWithResourceIdentity: subscription.destination.useIdentity ? endPointPropertiesWithIdentity[toLower(subscription.destination.type)] : null
@@ -2427,6 +2427,7 @@ output test string = res.id
             {
                 ("BCP036", DiagnosticLevel.Error, "The property \"parent\" expected a value of type \"Microsoft.Network/virtualNetworks\" but the provided value is of type \"module\"."),
                 ("BCP240", DiagnosticLevel.Error, "The \"parent\" property only permits direct references to resources. Expressions are not supported."),
+                ("no-unused-existing-resources", DiagnosticLevel.Warning, "Existing resource \"res2\" is declared but never used."),
                 ("BCP036", DiagnosticLevel.Error, "The property \"parent\" expected a value of type \"Microsoft.Network/virtualNetworks\" but the provided value is of type \"tenant\"."),
                 ("BCP240", DiagnosticLevel.Error, "The \"parent\" property only permits direct references to resources. Expressions are not supported."),
             });
@@ -2467,7 +2468,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2019-04-01' = {
   }
 }
 
-resource registry 'Microsoft.ContainerRegistry/registries@2019-12-01-preview' = {
+resource registry 'Microsoft.ContainerRegistry/registries@2021-06-01-preview' = {
   name: 'foo'
   location: 'westus'
   sku: {
@@ -2866,14 +2867,12 @@ output contentVersion string = deployment().properties.template.contentVersion
 
             var result = CompilationHelper.Compile(context, @"
 var adminUsername = 'cooluser'
-var adminPassword = 'p@ssw0rd'
 
 resource server 'Microsoft.Sql/servers@2021-02-01-preview' = {
   name: 'sql-${uniqueString(resourceGroup().id)}'
   location: resourceGroup().location
   properties: {
     administratorLogin: adminUsername
-    administratorLoginPassword: adminPassword
   }
 
   resource db 'databases' = {
@@ -2895,7 +2894,6 @@ resource server2 'Microsoft.Sql/servers@2021-02-01-preview' = {
   location: resourceGroup().location
   properties: {
     administratorLogin: adminUsername
-    administratorLoginPassword: adminPassword
   }
 
   resource db 'databases' = {
@@ -3020,7 +3018,7 @@ module test './con.txt'
             var sourceFileGrouping = SourceFileGroupingFactory.CreateForFiles(ImmutableDictionary.Create<Uri, string>(), new Uri(inputFile), fileResolver, configuration, features);
 
             // the bug was that the compilation would not complete
-            var compilation = new Compilation(features, BicepTestConstants.NamespaceProvider, sourceFileGrouping, configuration, BicepTestConstants.LinterAnalyzer);
+            var compilation = new Compilation(features, BicepTestConstants.NamespaceProvider, sourceFileGrouping, configuration,BicepTestConstants.ApiVersionProvider, BicepTestConstants.LinterAnalyzer);
             compilation.GetEntrypointSemanticModel().GetAllDiagnostics().Should().NotBeEmpty();
         }
 
@@ -3232,6 +3230,11 @@ resource auth 'Microsoft.Web/sites/config@2021-03-01' = [for (c, i) in configs: 
         public void Test_Issue_3356_Accept_Correct_Type_Definitions()
         {
             var result = CompilationHelper.Compile(@"
+resource msi 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
+  name: 'myIdentity'
+  location: resourceGroup().location
+}
+
 #disable-next-line BCP081
 resource foo 'Microsoft.Storage/storageAccounts@2021-09-00' = {
   name: 'test'
@@ -3251,10 +3254,14 @@ resource foo 'Microsoft.Storage/storageAccounts@2021-09-00' = {
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      clientId: 'client1'
-      principalId: 'principal1'
+      '${msi.id}': {}
     }
   }
+}
+
+output fooIdProps object = {
+  clientId: foo.identity.userAssignedIdentities[msi.id].clientId
+  principalId: foo.identity.userAssignedIdentities[msi.id].principalId
 }
 ");
             result.ExcludingLinterDiagnostics().Should().NotHaveAnyDiagnostics();
@@ -3287,10 +3294,16 @@ resource foo 'Microsoft.Storage/storageAccounts@2021-09-00' = {
     type: 'noType'
     tenantId: 3
     userAssignedIdentities: {
-      clientId: 1
-      principalId: 2
+      'blah': {
+        clientId: 1
+        principalId: 2
+      }
     }
   }
+}
+
+output fooBadIdProps object = {
+  clientId: foo.identity.userAssignedIdentities['blah'].hello
 }
 ");
             result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new[]
@@ -3302,7 +3315,8 @@ resource foo 'Microsoft.Storage/storageAccounts@2021-09-00' = {
                 ("BCP036", DiagnosticLevel.Warning, "The property \"capacity\" expected a value of type \"int\" but the provided value is of type \"'2'\". If this is an inaccuracy in the documentation, please report it to the Bicep Team."),
                 ("BCP036", DiagnosticLevel.Warning, "The property \"tenantId\" expected a value of type \"string\" but the provided value is of type \"int\". If this is an inaccuracy in the documentation, please report it to the Bicep Team."),
                 ("BCP036", DiagnosticLevel.Warning, "The property \"clientId\" expected a value of type \"string\" but the provided value is of type \"int\". If this is an inaccuracy in the documentation, please report it to the Bicep Team."),
-                ("BCP036", DiagnosticLevel.Warning, "The property \"principalId\" expected a value of type \"string\" but the provided value is of type \"int\". If this is an inaccuracy in the documentation, please report it to the Bicep Team.")
+                ("BCP036", DiagnosticLevel.Warning, "The property \"principalId\" expected a value of type \"string\" but the provided value is of type \"int\". If this is an inaccuracy in the documentation, please report it to the Bicep Team."),
+                ("BCP053", DiagnosticLevel.Error, "The type \"userAssignedIdentityProperties\" does not contain property \"hello\". Available properties include \"clientId\", \"principalId\"."),
             });
         }
 
@@ -3686,6 +3700,135 @@ var providersTest2 = providers('Microsoft.Resources', 'deployments').locations
         }
 
         /// <summary>
+        /// https://github.com/Azure/bicep/issues/7482
+        /// </summary>
+        [TestMethod]
+        public void Test_Issue7482()
+        {
+            var result = CompilationHelper.Compile(
+                ("main.bicep", @"
+module optionModuleLoop 'module.bicep' = [for item in ['option:a','option:b']: {
+  name: 'myOptionModule-${uniqueString(item)}'
+  params: {
+    option: item
+  }
+}]
+"),
+                ("module.bicep", @"
+@allowed(['option:a','option:b', 'option:c', 'option:d'])
+param option string
+
+var optionsLUT = {
+  'option:a': {
+    text: 'Option A'
+    value: 'a'
+  }
+  'option:b': {
+    text: 'Option B'
+    value: 'b'
+  }
+  'option:c': {
+    text: 'Option C'
+    value: 'c'
+  }
+}
+
+var optionType = optionsLUT[option]
+
+output optionTypeText string = optionType.text
+output optionTypeValue string = optionType.value
+")).ExcludingLinterDiagnostics();
+
+            result.Should().NotHaveAnyDiagnostics();
+        }
+
+        /// <summary>
+        /// https://github.com/Azure/bicep/issues/7482
+        /// </summary>
+        [TestMethod]
+        public void Test_Issue7482_alternative()
+        {
+            var result = CompilationHelper.Compile(
+                ("main.bicep", @"
+var options = ['option:a','option:b']
+module optionModuleLoop 'module.bicep' = [for item in options: {
+  name: 'myOptionModule-${uniqueString(item)}'
+  params: {
+    option: item
+  }
+}]
+"),
+                ("module.bicep", @"
+@allowed(['option:a','option:b', 'option:c', 'option:d'])
+param option string
+
+var optionsLUT = {
+  'option:a': {
+    text: 'Option A'
+    value: 'a'
+  }
+  'option:b': {
+    text: 'Option B'
+    value: 'b'
+  }
+  'option:c': {
+    text: 'Option C'
+    value: 'c'
+  }
+}
+
+var optionType = optionsLUT[option]
+
+output optionTypeText string = optionType.text
+output optionTypeValue string = optionType.value
+")).ExcludingLinterDiagnostics();
+
+            result.Should().NotHaveAnyDiagnostics();
+        }
+
+        /// <summary>
+        /// https://github.com/Azure/bicep/issues/7861
+        /// </summary>
+        [TestMethod]
+        public void Test_Issue7861()
+        {
+            var result = CompilationHelper.Compile(
+                ("main.bicep", @"
+param objectId string
+param keyvaultName string
+
+resource kv 'Microsoft.KeyVault/vaults@2019-09-01' existing = {
+  name: keyvaultName
+
+  resource accessPolicy 'accessPolicies' = {
+    name: 'add'
+    properties: {
+      accessPolicies: [
+        {
+          tenantId: subscription().tenantId
+          objectId: objectId
+          permissions: {
+            certificates: [
+              'get'
+            ]
+            secrets: [
+              'get'
+            ]
+            keys:[
+              'get'
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+"));
+
+            result.Should().NotHaveAnyDiagnostics();
+        }
+
+        /// <summary>
         /// https://github.com/Azure/bicep/issues/6477
         /// </summary>
         [TestMethod]
@@ -3747,6 +3890,92 @@ resource storageAccountName_resource 'Microsoft.Storage/storageAccounts@2021-04-
 
             result.Template.Should().HaveValueAtPath("$.resources[1].type", "Microsoft.Storage/storageAccounts");
             result.Template.Should().NotHaveValueAtPath("$.resources[1].dependsOn");
+        }
+
+        /// <summary>
+        /// https://github.com/Azure/bicep/issues/7455
+        /// </summary>
+        [TestMethod]
+        public void Test_Issue7455()
+        {
+            var result = CompilationHelper.Compile(@"
+var test1  = {
+  'tata':'loco'
+}
+
+var test2 = {
+  'tata':'cola'
+}
+
+param useFirst bool = true
+
+var value = (useFirst ? test1 : test2).tata
+").ExcludingLinterDiagnostics();
+
+            result.Should().NotHaveAnyDiagnostics();
+       }
+
+        /// <summary>
+        /// https://github.com/Azure/bicep/issues/6863
+        /// </summary>
+        [TestMethod]
+        public void Test_Issue6863()
+        {
+            var result = CompilationHelper.Compile(@"
+@description('Region to deploy to')
+param Location string = resourceGroup().location
+
+var Names = [
+  'fruit-primary'
+  'fruit-secondary'
+]
+
+var Service_Bus_Queues = [
+  'apples'
+  'oranges'
+]
+
+resource serviceBuses 'Microsoft.ServiceBus/namespaces@2021-11-01' = [for name in Names: {
+  name: name
+  location: Location
+  sku: {
+    name: 'Premium'
+    tier: 'Premium'
+  }
+  properties: {
+    zoneRedundant: false
+  }
+}]
+
+resource queues 'Microsoft.ServiceBus/namespaces/queues@2021-11-01' = [for item in Service_Bus_Queues: {
+  parent: serviceBuses[0]
+  name: item
+}]
+
+resource queueAuthorizationRules 'Microsoft.ServiceBus/namespaces/queues/authorizationRules@2021-11-01' = [for (item, index) in Service_Bus_Queues: {
+  parent: queues[index]
+  name: 'Listen'
+  properties: {
+    rights: [
+      'Listen'
+    ]
+  }
+}]
+");
+
+            result.Should().NotHaveAnyDiagnostics();
+
+            result.Template.Should().HaveValueAtPath("$.resources[0].copy.name", "serviceBuses");
+            result.Template.Should().HaveValueAtPath("$.resources[0].name", "[variables('Names')[copyIndex()]]");
+            result.Template.Should().NotHaveValueAtPath("$.resources[0].dependsOn");
+
+            result.Template.Should().HaveValueAtPath("$.resources[1].copy.name", "queues");
+            result.Template.Should().HaveValueAtPath("$.resources[1].name", "[format('{0}/{1}', variables('Names')[0], variables('Service_Bus_Queues')[copyIndex()])]");
+            result.Template.Should().HaveValueAtPath("$.resources[1].dependsOn", new JArray("[resourceId('Microsoft.ServiceBus/namespaces', variables('Names')[0])]"));
+
+            result.Template.Should().HaveValueAtPath("$.resources[2].copy.name", "queueAuthorizationRules");
+            result.Template.Should().HaveValueAtPath("$.resources[2].name", "[format('{0}/{1}/{2}', variables('Names')[0], variables('Service_Bus_Queues')[copyIndex()], 'Listen')]");
+            result.Template.Should().HaveValueAtPath("$.resources[2].dependsOn", new JArray("[resourceId('Microsoft.ServiceBus/namespaces/queues', variables('Names')[0], variables('Service_Bus_Queues')[copyIndex()])]"));
         }
     }
 }

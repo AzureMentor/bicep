@@ -1518,16 +1518,16 @@ resource expectedLoopBody 'Microsoft.Storage/storageAccounts@2019-06-01' = [for 
 
 // loop index parsing cases
 resource expectedLoopItemName 'Microsoft.Network/dnsZones@2018-05-01' = [for ()]
-//@[078:079) [BCP136 (Error)] Expected a loop item variable identifier at this location. (CodeDescription: none) |)|
+//@[077:079) [BCP249 (Error)] Expected loop variable block to consist of exactly 2 elements (item variable and index variable), but found 0. (CodeDescription: none) |()|
 
 resource expectedLoopItemName2 'Microsoft.Network/dnsZones@2018-05-01' = [for (
-//@[079:079) [BCP136 (Error)] Expected a loop item variable identifier at this location. (CodeDescription: none) ||
+//@[079:079) [BCP009 (Error)] Expected a literal value, an array, an object, a parenthesized expression, or a function call at this location. (CodeDescription: none) ||
 
 resource expectedComma 'Microsoft.Network/dnsZones@2018-05-01' = [for (x)]
-//@[072:073) [BCP018 (Error)] Expected the "," character at this location. (CodeDescription: none) |)|
+//@[070:073) [BCP249 (Error)] Expected loop variable block to consist of exactly 2 elements (item variable and index variable), but found 1. (CodeDescription: none) |(x)|
 
 resource expectedLoopIndexName 'Microsoft.Network/dnsZones@2018-05-01' = [for (x, )]
-//@[082:083) [BCP163 (Error)] Expected a loop index variable identifier at this location. (CodeDescription: none) |)|
+//@[078:083) [BCP249 (Error)] Expected loop variable block to consist of exactly 2 elements (item variable and index variable), but found 1. (CodeDescription: none) |(x, )|
 
 resource expectedInKeyword3 'Microsoft.Network/dnsZones@2018-05-01' = [for (x, y)]
 //@[081:082) [BCP012 (Error)] Expected the "in" keyword at this location. (CodeDescription: none) |]|
@@ -2051,6 +2051,7 @@ resource anyTypeInScopeConditional 'Microsoft.Authorization/locks@2016-09-01' = 
 }
 
 resource anyTypeInExistingScope 'Microsoft.Network/dnsZones/AAAA@2018-05-01' existing = {
+//@[009:031) [no-unused-existing-resources (Warning)] Existing resource "anyTypeInExistingScope" is declared but never used. (CodeDescription: bicep core(https://aka.ms/bicep/linter/no-unused-existing-resources)) |anyTypeInExistingScope|
 //@[009:031) [BCP035 (Error)] The specified "resource" declaration is missing the following required properties: "name". (CodeDescription: none) |anyTypeInExistingScope|
   parent: any('')
 //@[010:017) [BCP240 (Error)] The "parent" property only permits direct references to resources. Expressions are not supported. (CodeDescription: none) |any('')|
@@ -2060,6 +2061,7 @@ resource anyTypeInExistingScope 'Microsoft.Network/dnsZones/AAAA@2018-05-01' exi
 }
 
 resource anyTypeInExistingScopeLoop 'Microsoft.Network/dnsZones/AAAA@2018-05-01' existing = [for thing in []: {
+//@[009:035) [no-unused-existing-resources (Warning)] Existing resource "anyTypeInExistingScopeLoop" is declared but never used. (CodeDescription: bicep core(https://aka.ms/bicep/linter/no-unused-existing-resources)) |anyTypeInExistingScopeLoop|
 //@[009:035) [BCP035 (Error)] The specified "resource" declaration is missing the following required properties: "name". (CodeDescription: none) |anyTypeInExistingScopeLoop|
   parent: any('')
 //@[010:017) [BCP240 (Error)] The "parent" property only permits direct references to resources. Expressions are not supported. (CodeDescription: none) |any('')|
