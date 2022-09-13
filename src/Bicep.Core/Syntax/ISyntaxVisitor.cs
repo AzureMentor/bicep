@@ -24,6 +24,8 @@ namespace Bicep.Core.Syntax
 
         void VisitInstanceFunctionCallSyntax(InstanceFunctionCallSyntax syntax);
 
+        void VisitMetadataDeclarationSyntax(MetadataDeclarationSyntax syntax);
+
         void VisitModuleDeclarationSyntax(ModuleDeclarationSyntax syntax);
 
         void VisitNullLiteralSyntax(NullLiteralSyntax syntax);
@@ -37,6 +39,8 @@ namespace Bicep.Core.Syntax
         void VisitOutputDeclarationSyntax(OutputDeclarationSyntax syntax);
 
         void VisitParameterDeclarationSyntax(ParameterDeclarationSyntax syntax);
+
+        void VisitParameterAssignmentSyntax(ParameterAssignmentSyntax syntax);
 
         void VisitParameterDefaultValueSyntax(ParameterDefaultValueSyntax syntax);
 
@@ -86,6 +90,8 @@ namespace Bicep.Core.Syntax
 
         void VisitImportDeclarationSyntax(ImportDeclarationSyntax syntax);
 
+        void VisitUsingDeclarationSyntax(UsingDeclarationSyntax syntax);
+        
         void VisitLambdaSyntax(LambdaSyntax syntax);
     }
 }

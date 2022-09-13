@@ -4,6 +4,8 @@
 using Bicep.Core.Analyzers.Linter.Rules;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+#pragma warning disable CA1825 // Avoid zero-length array allocations
+
 namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
 {
     [TestClass]
@@ -12,6 +14,11 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
         private static void CompileAndTest(string bicep, params string[] expectedMessages)
         {
             AssertLinterRuleDiagnostics(UseResourceIdFunctionsRule.Code, bicep, expectedMessages, new Options(OnCompileErrors.IncludeErrors, IncludePosition.LineNumberAndColumn));
+        }
+
+        private static void CompileAndTest(string bicep, Options options, params string[] expectedMessages)
+        {
+            AssertLinterRuleDiagnostics(UseResourceIdFunctionsRule.Code, bicep, expectedMessages, options);
         }
 
         [DataRow(@"
@@ -64,7 +71,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 // TTK result:      
                 // Property: "id" must use one of the following expressions for an resourceId property:                            
                 //  extensionResourceId,resourceId,subscriptionResourceId,tenantResourceId.,if,parameters,reference,variables,subscription,guid
-                "[39:25] If property \"id\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                "[39:25] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
             },
             DisplayName = "virtualNetworkName fail"
         )]
@@ -103,9 +110,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             }",
             new object[]
             {
-                "[24:31] If property \"id\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                "[24:31] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
             },
-            DisplayName = "'id' should be found anywhere in the resource tree"
+            DisplayName = "'id' should be analyzed anywhere in the resource tree"
         )]
         [DataRow(@"
               resource parent 'Microsoft.Web/sites@2022-03-01' = {
@@ -125,10 +132,10 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 }",
             new object[]
             {
-                "[7:21] If property \"firstId\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId.",
-                "[13:23] If property \"secondId\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId.",
+                "[7:21] If property \"firstId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId.",
+                "[13:23] If property \"secondId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId.",
             },
-            DisplayName = "'id' should be found in nested resources"
+            DisplayName = "'id' should be analyzed in nested resources"
         )]
         [DataRow(@"
             param id string = '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroup().name}/providers/Microsoft.Network/networkSecurityGroups/${'NSGName'}'
@@ -137,7 +144,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             {
             // pass
             },
-            DisplayName = "'id' should not be found in params")]
+            DisplayName = "'id' should not be analyzed in params")]
         [DataRow(@"
                 output id object = {
                   id: {
@@ -148,7 +155,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             {
                 // pass
             },
-            DisplayName = "'id' should not be found in outputs"
+            DisplayName = "'id' should not be analyzed in outputs"
         )]
         [DataRow(@"
                 var id = {
@@ -160,7 +167,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             {
                 // pass
             },
-            DisplayName = "'id' should not be found in vars"
+            DisplayName = "'id' should not be analyzed in vars"
         )]
         [DataRow(@"
                 module m1 'module.bicep' = {
@@ -174,7 +181,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                  // pass
                  "[2:27] An error occurred reading file. Could not find file \"/path/to/module.bicep\""
             },
-            DisplayName = "'id' should not be found in modules"
+            DisplayName = "'id' should not be analyzed in modules"
         )]
         [DataRow(@"
                 resource r 'Microsoft.Web/sites@2022-03-01' = {
@@ -187,7 +194,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 }",
             new object[]
             {
-                "[7:21] If property \"id\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                "[7:21] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
             },
             DisplayName = "Quoted property keys"
         )]
@@ -279,7 +286,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 // TTK result:
                 // Property: "resourceId" must use one of the following expressions for an resourceId property:                    
                 // extensionResourceId,resourceId,subscriptionResourceId,tenantResourceId.,if,parameters,reference,variables,subscription,guid
-                "[8:23] If property \"resourceId\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                "[8:23] If property \"resourceId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
             },
             DisplayName = "Fail/concat.json")]
         // from https://github.com/Azure/arm-ttk/blob/master/unit-tests/IDs-Should-Be-Derived-From-ResourceIDs/Fail/documentdb-sqldatabases-that-contains-invalid-id-property-should-fail.json
@@ -302,7 +309,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 // TTK result:
                 // Property: "id" must use one of the following expressions for an resourceId property:                            
                 //   extensionResourceId,resourceId,subscriptionResourceId,tenantResourceId.,if,parameters,reference,variables,subscription,guid
-                "[11:21] If property \"failId\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId.",
+                "[11:21] If property \"failId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId.",
             },
             DisplayName = "Fail/documentdb-sqldatabases-that-contains-invalid-id-property-should-fail.json")]
         // from https://github.com/Azure/arm-ttk/blob/master/unit-tests/IDs-Should-Be-Derived-From-ResourceIDs/Fail/empty-string.json
@@ -344,7 +351,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 }",
             new object[]
             {
-                "[6:23] If property \"id\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                "[6:23] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
             },
             DisplayName = "Fail/literal.json")]
         [DataRow(
@@ -359,7 +366,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 }",
             new object[]
             {
-                "[6:23] If property \"id\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                "[6:23] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
             },
             DisplayName = "literal without any forward slashes - pass - if it doesn't look like an ID, probably not intended to be, so reduce likelihood of false positives")]
         [DataRow(
@@ -387,7 +394,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 }",
             new object[]
             {
-                "[19:23] If property \"slashesFailId\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId. Found nonconforming expression at slashesFailId -> slashes2 -> slashes"
+                "[19:23] If property \"slashesFailId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId. Found nonconforming expression at slashesFailId -> slashes2 -> slashes"
             },
             DisplayName = "literal in variable")]
         [DataRow(
@@ -419,7 +426,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 }",
             new object[]
             {
-                "[20:23] If property \"slashesFailId\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId. Found nonconforming expression at slashesFailId -> slashes2 -> slashes"
+                // pass - all parameters are acceptable regardless of default value
             },
             DisplayName = "literal in param default value")]
         // from "Pass/IDs-In-AppSettings.json"
@@ -467,7 +474,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             ",
             new object[]
             {
-                "[20:17] If property \"keyVaultShouldFailId\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId. Found nonconforming expression at keyVaultShouldFailId -> existingKeyVaultId",
+                "[20:17] If property \"keyVaultShouldFailId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId. Found nonconforming expression at keyVaultShouldFailId -> existingKeyVaultId",
             },
             DisplayName = "pass/IDs-In-KeyVault.json")]
         // from https://github.com/Azure/arm-ttk/blob/master/unit-tests/IDs-Should-Be-Derived-From-ResourceIDs/Pass/IDs-In-Metadata.json
@@ -879,7 +886,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             new object[]
             {
                 // guId: 'abc/def'   // not considered "guid", fail
-                "[9:17] If property \"guId\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                "[9:17] If property \"guId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
             },
             DisplayName = "Ignore properties like \"UID\" and \"guid\" (but not 'guId')")]
         [DataRow(
@@ -894,7 +901,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             }",
             new object[]
             {
-                "[7:17] If property \"id\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId. Found nonconforming expression at id -> idValue",
+                "[7:17] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId. Found nonconforming expression at id -> idValue",
             },
             DisplayName = "resolved variable simple")]
         [DataRow(
@@ -910,7 +917,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             }",
             new object[]
             {
-                "[8:17] If property \"id\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId. Found nonconforming expression at id -> idValue2 -> idValue",
+                "[8:17] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId. Found nonconforming expression at id -> idValue2 -> idValue",
             },
         DisplayName = "resolved variable double")]
         [DataRow(
@@ -930,33 +937,25 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
         },
             DisplayName = "resolved variable double - passing")]
         [DataRow(@"
-            param idValue string
+            param idValue1 string
+            param idValue2 string = concat('a/', 'b')
+            param idValue3 string = concat('a', 'b')
+            param idValue4 string = idValue3
 
             resource res1 'Microsoft.CustomProviders/resourceProviders@2018-09-01-preview' = {
               name: 'res1'
               properties: {
-                id: idValue
+                firstId: idValue1
+                secondId: idValue2
+                thirdId: idValue3
+                fourthId: idValue4
               }
             }",
             new object[]
             {
                 // pass
             },
-            DisplayName = "parameter with no default value should pass")]
-        [DataRow(@"
-            param idValue string = concat('a/', 'b')
-
-            resource res1 'Microsoft.CustomProviders/resourceProviders@2018-09-01-preview' = {
-              name: 'res1'
-              properties: {
-                myId: idValue
-              }
-            }",
-            new object[]
-            {
-                "[7:17] If property \"myId\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId. Found nonconforming expression at myId -> idValue"
-            },
-            DisplayName = "resolved parameter default value simple")]
+            DisplayName = "parameters should always pass")]
         [DataRow(@"
             param p1 string = concat('a/', 'b')
             param p2 string = p1
@@ -971,9 +970,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             }",
             new object[]
             {
-                "[10:17] If property \"id\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId. Found nonconforming expression at id -> p4 -> v3 -> p2 -> p1"
+                // pass
             },
-        DisplayName = "resolved parameter default values and variables")]
+        DisplayName = "variables defined from parameters")]
         [DataRow(@"
             param p1 string = resourceId('', '') // acceptable function call
             param p2 string = p1
@@ -993,9 +992,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             },
             DisplayName = "resolved parameter default values and variables - passing")]
         [DataRow(@"
-            param storageAccountName string = 'name/id'
-            param storageResourceGroupName string = 'name/id'
-            param appGatewayBackendPool string = 'name/id'
+            var storageAccountName = 'name/id'
+            var storageResourceGroupName = 'name/id'
+            var appGatewayBackendPool = 'name/id'
 
             var id = guid('ok') // acceptable function
 
@@ -1016,7 +1015,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             }",
             new object[]
             {
-                "[16:19] If property \"fail2id\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId. Found nonconforming expression at fail2id -> appGatewayBackendPool",
+                "[16:19] If property \"fail2id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId. Found nonconforming expression at fail2id -> appGatewayBackendPool",
             },
             DisplayName = "Resolved variables with string literals")]
         [DataRow(@"
@@ -1092,7 +1091,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             ,
             new object[]
             {
-                "[5:21] If property \"resourceId\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                "[5:21] If property \"resourceId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
             },
             DisplayName = "resourceId has to be outermost function")]
         [DataRow(@"
@@ -1259,10 +1258,10 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 // [-] IDs Should Be Derived From ResourceIDs                                                                 
                 // Property: "id" must use one of the following expressions for an resourceId property:                            
                 //   extensionResourceId,resourceId,subscriptionResourceId,tenantResourceId,if,parameters,reference,variables,subscription,guid
-                "[86:23] If property \"id\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId.",
+                "[86:23] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId.",
             },
             DisplayName = "https://github.com/Azure/arm-ttk/issues/497")]
-            [DataRow(@"
+        [DataRow(@"
                 resource storageaccount 'ms.something/else@2021-02-01' = {
                   name: 'name'
                   properties: {
@@ -1277,7 +1276,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             ",
             new object[]
             {
-                "[5:21] If property \"id\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                "[5:21] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
             },
             DisplayName = "concat")]
         [DataRow(@"
@@ -1290,7 +1289,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             ",
             new object[]
             {
-                "[5:21] If property \"failid\" represents a resource ID, it must use a symbolic resource reference (preferred) or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                "[5:21] If property \"failid\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
             },
             DisplayName = "loops")]
         [DataRow(@"
@@ -1324,10 +1323,568 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             "[19:173] The name \"NSGName\" does not exist in the current context."
             },
             DisplayName = "undefined variable error")]
+        [DataRow(@"
+            param location string = resourceGroup().location
+            param vnetIPPrefix string = '10.0.0.0/16'
+            param containerInstancesSubnetIPPrefix string = '10.0.0.0/24'
+            param applicationGatewaySubnetIPPrefix string = '10.0.1.0/24'
+
+            var containerGroupNetworkProfileName = 'aci-networkprofile'
+            var containerGroupNetworkProfileInterfaceName = 'eth0'
+            var containerGroupNetworkProfileInterfaceIPConfigurationName = 'ipconfigprofile1'
+            var vnetName = 'VNet'
+            var containerGroupSubnetName = 'Containers'
+            var applicationGatewaySubnetName = 'ApplicationGateway'
+            var nsgName = 'MyNSG'
+
+            resource containerGroupNetworkProfile 'Microsoft.Network/networkProfiles@2021-02-01' = {
+              name: containerGroupNetworkProfileName
+              location: location
+              properties: {
+                containerNetworkInterfaceConfigurations: [
+                  {
+                    name: containerGroupNetworkProfileInterfaceName
+                    properties: {
+                      ipConfigurations: [
+                        {
+                          name: containerGroupNetworkProfileInterfaceIPConfigurationName
+                          properties: {
+                            subnet: {
+                              id: vnet::containerGroupSubnet.id
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+
+            resource vnet 'Microsoft.Network/virtualNetworks@2020-06-01' = {
+              name: vnetName
+              location: location
+              properties: {
+                addressSpace: {
+                  addressPrefixes: [
+                    vnetIPPrefix
+                  ]
+                }
+                subnets: [
+                  {
+                    name: containerGroupSubnetName
+                    properties: {
+                      addressPrefix: containerInstancesSubnetIPPrefix
+                      delegations: [
+                        {
+                          name: 'DelegationService'
+                          properties: {
+                            serviceName: 'Microsoft.ContainerInstance/containerGroups'
+                          }
+                        }
+                      ]
+                    }
+                  }
+                  {
+                    name: applicationGatewaySubnetName
+                    properties: {
+                      addressPrefix: applicationGatewaySubnetIPPrefix
+                      networkSecurityGroup: {
+                        id: nsg.id
+                      }
+                    }
+                  }
+                ]
+              }
+
+              resource containerGroupSubnet 'subnets' existing = {
+                name: containerGroupSubnetName
+              }
+
+              resource applicationGatewaySubnet 'subnets' existing = {
+                name: applicationGatewaySubnetName
+              }
+            }
+
+            resource nsg 'Microsoft.Network/networkSecurityGroups@2020-05-01' = {
+              name: nsgName
+              location: location
+              properties: {
+                securityRules: [
+                  {
+                    name: 'Allow_Front_Door_to_send_HTTP_traffic'
+                    properties: {
+                      protocol: 'Tcp'
+                      sourcePortRange: '*'
+                      destinationPortRanges: [
+                        '80'
+                        '443'
+                      ]
+                      sourceAddressPrefix: 'AzureFrontDoor.Backend'
+                      destinationAddressPrefix: 'VirtualNetwork'
+                      access: 'Allow'
+                      priority: 120
+                      direction: 'Inbound'
+                    }
+                  }
+
+                  // Rules for Application Gateway as documented here: https://docs.microsoft.com/en-us/azure/application-gateway/application-gateway-faq
+                  {
+                    name: 'Allow_GWM'
+                    properties: {
+                      protocol: '*'
+                      sourcePortRange: '*'
+                      destinationPortRange: '65200-65535'
+                      sourceAddressPrefix: 'GatewayManager'
+                      destinationAddressPrefix: '*'
+                      access: 'Allow'
+                      priority: 100
+                      direction: 'Inbound'
+                    }
+                  }
+                  {
+                    name: 'Allow_AzureLoadBalancer'
+                    properties: {
+                      protocol: '*'
+                      sourcePortRange: '*'
+                      destinationPortRange: '*'
+                      sourceAddressPrefix: 'AzureLoadBalancer'
+                      destinationAddressPrefix: '*'
+                      access: 'Allow'
+                      priority: 110
+                      direction: 'Inbound'
+                    }
+                  }
+                ]
+              }
+            }
+            ",
+            new object[]
+            {
+                // pass
+            },
+            DisplayName = "subnets")]
+        [DataRow(@"
+            param location string = resourceGroup().location
+            param vnetIPPrefix string = '10.0.0.0/16'
+            param containerInstancesSubnetIPPrefix string = '10.0.0.0/24'
+            param applicationGatewaySubnetIPPrefix string = '10.0.1.0/24'
+
+            var containerGroupNetworkProfileName = 'aci-networkprofile'
+            var containerGroupNetworkProfileInterfaceName = 'eth0'
+            var containerGroupNetworkProfileInterfaceIPConfigurationName = 'ipconfigprofile1'
+            var vnetName = 'VNet'
+            var containerGroupSubnetName = 'Containers'
+            var applicationGatewaySubnetName = 'ApplicationGateway'
+            var nsgName = 'MyNSG'
+
+            resource containerGroupNetworkProfile 'Microsoft.Network/networkProfiles@2021-02-01' = {
+              name: containerGroupNetworkProfileName
+              location: location
+              properties: {
+                containerNetworkInterfaceConfigurations: [
+                  {
+                    name: containerGroupNetworkProfileInterfaceName
+                    properties: {
+                      ipConfigurations: [
+                        {
+                          name: containerGroupNetworkProfileInterfaceIPConfigurationName
+                          properties: {
+                            subnet: {
+                              id: vnet::containerGroupSubnet.id
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+
+            resource vnet 'Microsoft.Network/virtualNetworks@2020-06-01' = {
+              name: vnetName
+              location: location
+              properties: {
+                addressSpace: {
+                  addressPrefixes: [
+                    vnetIPPrefix
+                  ]
+                }
+                subnets: [
+                  {
+                    name: containerGroupSubnetName
+                    properties: {
+                      addressPrefix: containerInstancesSubnetIPPrefix
+                      delegations: [
+                        {
+                          name: 'DelegationService'
+                          properties: {
+                            serviceName: 'Microsoft.ContainerInstance/containerGroups'
+                          }
+                        }
+                      ]
+                    }
+                  }
+                  {
+                    name: applicationGatewaySubnetName
+                    properties: {
+                      addressPrefix: applicationGatewaySubnetIPPrefix
+                      networkSecurityGroup: {
+                        id: nsg.id
+                      }
+                    }
+                  }
+                ]
+              }
+
+              resource containerGroupSubnet 'subnets' existing = {
+                name: containerGroupSubnetName
+              }
+
+              resource applicationGatewaySubnet 'subnets' existing = {
+                name: applicationGatewaySubnetName
+              }
+            }
+
+            resource nsg 'Microsoft.Network/networkSecurityGroups@2020-05-01' = {
+              name: nsgName
+              location: location
+              properties: {
+                securityRules: [
+                  {
+                    name: 'Allow_Front_Door_to_send_HTTP_traffic'
+                    properties: {
+                      protocol: 'Tcp'
+                      sourcePortRange: '*'
+                      destinationPortRanges: [
+                        '80'
+                        '443'
+                      ]
+                      sourceAddressPrefix: 'AzureFrontDoor.Backend'
+                      destinationAddressPrefix: 'VirtualNetwork'
+                      access: 'Allow'
+                      priority: 120
+                      direction: 'Inbound'
+                    }
+                  }
+
+                  // Rules for Application Gateway as documented here: https://docs.microsoft.com/en-us/azure/application-gateway/application-gateway-faq
+                  {
+                    name: 'Allow_GWM'
+                    properties: {
+                      protocol: '*'
+                      sourcePortRange: '*'
+                      destinationPortRange: '65200-65535'
+                      sourceAddressPrefix: 'GatewayManager'
+                      destinationAddressPrefix: '*'
+                      access: 'Allow'
+                      priority: 100
+                      direction: 'Inbound'
+                    }
+                  }
+                  {
+                    name: 'Allow_AzureLoadBalancer'
+                    properties: {
+                      protocol: '*'
+                      sourcePortRange: '*'
+                      destinationPortRange: '*'
+                      sourceAddressPrefix: 'AzureLoadBalancer'
+                      destinationAddressPrefix: '*'
+                      access: 'Allow'
+                      priority: 110
+                      direction: 'Inbound'
+                    }
+                  }
+                ]
+              }
+            }
+            ",
+            new object[]
+            {
+                // pass
+            },
+            DisplayName = "subnets")]
         [DataTestMethod]
         public void Test(string text, params string[] expectedMessages)
         {
             CompileAndTest(text, expectedMessages);
+        }
+
+        [TestMethod]
+        public void AssumeModuleReferencesAreOkay()
+        {
+            // https://github.com/Azure/bicep/issues/8030
+
+            string bicep = @"
+                @description('Deployment Location')
+                param location string = resourceGroup().location
+
+                @description('Name of VMSS Cluster')
+                param vmssName string
+
+                @description('GameDev Sku')
+                param vmssSku string = 'Standard_D4ds_v4'
+
+                @description('GameDev Image Publisher')
+                @allowed([
+                  'microsoftcorporation1602274591143'
+                  'azure-gaming'
+                ])
+                param vmssImgPublisher string = 'microsoftcorporation1602274591143'
+
+                @description('GameDev Image Product Id')
+                @allowed([
+                  'game-dev-vm'
+                ])
+                param vmssImgProduct string = 'game-dev-vm'
+
+                @description('GameDev Image Sku')
+                @allowed([
+                  'win10_no_engine_1_0'
+                  'ws2019_no_engine_1_0'
+                  'win10_unreal_4_27_2'
+                  'ws2019_unreal_4_27_2'
+                  'win10_unreal_5_0_1'
+                  'ws2019_unreal_5_0_1'
+                ])
+                param vmssImgSku string = 'win10_unreal_4_27_2'
+
+                @description('GameDev Image Product Id')
+                param vmssImgVersion string = 'latest'
+
+                @description('GameDev Disk Type')
+                param vmssOsDiskType string = 'Premium_LRS'
+
+                @description('VMSS Instance Count')
+                @maxValue(100)
+                @minValue(1)
+                param vmssInstanceCount int = 1
+
+                @description('Administrator Login for access')
+                param administratorLogin string
+
+                @description('Administrator Password for access')
+                @secure()
+                param passwordAdministratorLogin string
+
+                @description('File Share Storage Account name')
+                param fileShareStorageAccount string = ''
+
+                @description('File Share Storage Account key')
+                @secure()
+                param fileShareStorageAccountKey string = ''
+
+                @description('File Share name')
+                param fileShareName string = ''
+
+                @description('Perforce Port address')
+                param p4Port string = ''
+
+                @description('Perforce User')
+                param p4Username string = ''
+
+                @description('Perforce User password')
+                @secure()
+                param p4Password string = ''
+
+                @description('Perforce Client Workspace')
+                param p4Workspace string = ''
+
+                @description('Perforce Stream')
+                param p4Stream string = ''
+
+                @description('Perforce Depot Client View mappings')
+                param p4ClientViews string = ''
+
+                @description('Incredibuild License Key')
+                @secure()
+                param ibLicenseKey string = ''
+
+                @description('GDK Version')
+                param gdkVersion string = 'June_2021_Update_4'
+
+                @description('Use VM to sysprep an image from')
+                param useVmToSysprepCustomImage bool = false
+
+                @description('Remote Access technology')
+                @allowed([
+                  'RDP'
+                  'Teradici'
+                  'Parsec'
+                ])
+                param remoteAccessTechnology string = 'RDP'
+
+                @description('Teradici Registration Key')
+                @secure()
+                param teradiciRegKey string = ''
+
+                @description('Parsec Team ID')
+                param parsecTeamId string = ''
+
+                @description('Parsec Team Key')
+                @secure()
+                param parsecTeamKey string = ''
+
+                @description('Parsec Hostname')
+                param parsecHost string = ''
+
+                @description('Parsec User Email')
+                param parsecUserEmail string = ''
+
+                @description('Parsec Is Guest Access')
+                param parsecIsGuestAccess bool = false
+
+                @description('Virtual Network Resource Name')
+                param vnetName string = 'vnet-${vmssName}'
+
+                @description('Virtual Network Subnet Name')
+                param subnetName string = 'subnet${vmssName}'
+
+                @description('Virtual Network Security Group Name')
+                param networkSecurityGroupName string = 'nsg-${vmssName}'
+
+                @description('Virtual Network Address Prefix')
+                param vnetAddressPrefix string = '172.17.72.0/24' //Change as needed
+
+                @description('Virtual Network Subnet Address Prefix')
+                param subnetAddressPrefix string = '172.17.72.0/25' // 172.17.72.[0-128] is part of this subnet
+
+                var customData = format('''
+                fileShareStorageAccount={0}
+                fileShareStorageAccountKey={1}
+                fileShareName={2}
+                p4Port={3}
+                p4Username={4}
+                p4Password={5}
+                p4Workspace={6}
+                p4Stream={7}
+                p4ClientViews={8}
+                ibLicenseKey={9}
+                gdkVersion={10}
+                useVmToSysprepCustomImage={11}
+                remoteAccessTechnology={12}
+                teradiciRegKey={13}
+                parsecTeamId={14}
+                parsecTeamKey={15}
+                parsecHost={16}
+                parsecUserEmail={17}
+                parsecIsGuestAccess={18}
+                deployedFromSolutionTemplate={19}
+                ''', fileShareStorageAccount, fileShareStorageAccountKey, fileShareName, p4Port, p4Username, p4Password, p4Workspace, p4Stream, p4ClientViews, ibLicenseKey, gdkVersion, useVmToSysprepCustomImage, remoteAccessTechnology, teradiciRegKey, parsecTeamId, parsecTeamKey, parsecHost, parsecUserEmail, parsecIsGuestAccess, false)
+
+
+                module vnet './nestedtemplates/virtualNetworks.bicep'  = {
+                  name:                       vnetName
+                  params: {
+                    location:                 location
+                    vnetName:                 vnetName
+                    subnetName:               subnetName
+                    networkSecurityGroupName: networkSecurityGroupName
+                    vnetAddressPrefix:        vnetAddressPrefix
+                    subnetAddressPrefix:      subnetAddressPrefix
+                  }
+                }
+
+                resource vmss 'Microsoft.Compute/virtualMachineScaleSets@2021-04-01' = {
+                  name: vmssName
+                  location: location
+                  sku: {
+                    name:     vmssSku
+                    tier:     'Standard'
+                    capacity: vmssInstanceCount
+                  }
+                  plan: {
+                    name:      vmssImgSku
+                    publisher: vmssImgPublisher
+                    product:   vmssImgProduct
+                  }  
+                  properties: {
+                    singlePlacementGroup: false
+                    upgradePolicy: {
+                      mode: 'Manual'
+                    }
+                    virtualMachineProfile: {
+                      storageProfile: {
+                        osDisk: {
+                          createOption: 'FromImage'
+                          caching: 'ReadWrite'
+                          managedDisk: {
+                            storageAccountType: vmssOsDiskType
+                          }
+                        }
+                        imageReference: {
+                          publisher: vmssImgPublisher
+                          offer:     vmssImgProduct
+                          sku:       vmssImgSku
+                          version:   vmssImgVersion
+	                }
+                      }
+                      networkProfile: {
+                        networkInterfaceConfigurations: [
+                          {
+                            name: '${vmssName}Nic'
+                            properties: {
+                              primary: true
+                              ipConfigurations: [
+                                {
+                                  name: '${vmssName}IpConfig'
+                                  properties: {
+                                    subnet: {
+                                      id: vnet.outputs.subnetId
+                                    }
+                                  }
+                                }
+                              ]
+                              networkSecurityGroup: {
+                                id: vnet.outputs.nsgID
+                              }
+                            }
+                          }
+                        ]
+                      }
+                      osProfile: {
+                        computerNamePrefix: vmssName
+                        adminUsername:      administratorLogin
+                        adminPassword:      passwordAdministratorLogin
+	                customData:         base64(customData)
+	                windowsConfiguration: {
+                          provisionVMAgent: true
+                        }	
+                      }
+                      priority: 'Regular'
+                    }
+                    overprovision: false
+                  }
+                }
+
+                output id   string = vmss.id
+                output name string = vmss.name
+            ";
+            CompileAndTest(
+                bicep,
+                new Options(
+                    AdditionalFiles: new[]
+                    {
+                        (
+                        "nestedtemplates/virtualNetworks.bicep",
+                        @"
+                            param location string
+                            param vnetName string
+                            param subnetName string
+                            param networkSecurityGroupName string
+                            param vnetAddressPrefix string
+                            param subnetAddressPrefix string
+
+                            output subnetId string = 'id'
+                            output nsgID string = 'name'
+                        "
+                        )
+                    }),
+                expectedMessages: new string[]
+                {
+                    // pass
+                });
         }
     }
 }

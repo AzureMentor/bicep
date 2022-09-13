@@ -142,7 +142,7 @@ namespace Bicep.Core.Semantics.Namespaces
 
             yield return new FunctionOverloadBuilder("uniqueString")
                 .WithReturnResultBuilder(PerformArmConversionOfStringLiterals("uniqueString"), LanguageConstants.String)
-                .WithGenericDescription("Creates a deterministic hash string based on the values provided as parameters.")
+                .WithGenericDescription("Creates a deterministic hash string based on the values provided as parameters. The returned value is 13 characters long.")
                 .WithVariableParameter("arg", LanguageConstants.String, minimumCount: 1, "The value used in the hash function to create a unique string.")
                 .Build();
 
@@ -1081,7 +1081,7 @@ namespace Bicep.Core.Semantics.Namespaces
             yield return new DecoratorBuilder(LanguageConstants.ParameterMetadataPropertyName)
                 .WithDescription("Defines metadata of the parameter.")
                 .WithRequiredParameter("object", LanguageConstants.Object, "The metadata object.")
-                .WithFlags(FunctionFlags.ParameterDecorator)
+                .WithFlags(FunctionFlags.ParamterOrOutputDecorator)
                 .WithValidator((_, decoratorSyntax, _, typeManager, binder, diagnosticWriter) =>
                     TypeValidator.NarrowTypeAndCollectDiagnostics(typeManager, binder, diagnosticWriter, SingleArgumentSelector(decoratorSyntax), LanguageConstants.ParameterModifierMetadata))
                 .WithEvaluator(MergeToTargetObject(LanguageConstants.ParameterMetadataPropertyName, SingleArgumentSelector))

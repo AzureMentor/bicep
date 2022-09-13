@@ -29,7 +29,7 @@ namespace Bicep.LangServer.UnitTests
     {
         private static readonly MockRepository Repository = new MockRepository(MockBehavior.Strict);
         private static readonly ILanguageServerFacade Server = Repository.Create<ILanguageServerFacade>().Object;
-        private static readonly SnippetsProvider snippetsProvider = new(BicepTestConstants.Features, TestTypeHelper.CreateEmptyProvider(), BicepTestConstants.FileResolver, BicepTestConstants.ConfigurationManager, BicepTestConstants.ApiVersionProvider);
+        private static readonly SnippetsProvider snippetsProvider = new(BicepTestConstants.Features, TestTypeHelper.CreateEmptyProvider(), BicepTestConstants.FileResolver, BicepTestConstants.ConfigurationManager, BicepTestConstants.ApiVersionProvider, BicepTestConstants.ModuleDispatcher);
         private static readonly BicepCompletionProvider completionProvider = new(BicepTestConstants.FileResolver, snippetsProvider, new TelemetryProvider(Server), BicepTestConstants.Features, BicepTestConstants.NamespaceProvider);
 
         [TestMethod]
@@ -47,6 +47,15 @@ namespace Bicep.LangServer.UnitTests
                 .ToList();
 
             keywordCompletions.Should().SatisfyRespectively(
+                c =>
+                {
+                    c.Label.Should().Be("metadata");
+                    c.Kind.Should().Be(CompletionItemKind.Keyword);
+                    c.InsertTextFormat.Should().Be(InsertTextFormat.PlainText);
+                    c.InsertText.Should().BeNull();
+                    c.Detail.Should().Be("Metadata keyword");
+                    c.TextEdit!.TextEdit!.NewText.Should().Be("metadata");
+                },
                 c =>
                 {
                     c.Label.Should().Be("module");

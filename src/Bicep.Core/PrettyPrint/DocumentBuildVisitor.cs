@@ -89,6 +89,17 @@ namespace Bicep.Core.PrettyPrint
                 this.Visit(syntax.Config);
             });
 
+        public override void VisitMetadataDeclarationSyntax(MetadataDeclarationSyntax syntax) =>
+            this.BuildStatement(syntax, () =>
+            {
+                this.VisitNodes(syntax.LeadingNodes);
+                this.Visit(syntax.Keyword);
+                this.documentStack.Push(Nil);
+                this.Visit(syntax.Name);
+                this.Visit(syntax.Assignment);
+                this.Visit(syntax.Value);
+            });
+
         public override void VisitParameterDeclarationSyntax(ParameterDeclarationSyntax syntax) =>
             this.BuildStatement(syntax, () =>
             {
@@ -146,6 +157,26 @@ namespace Bicep.Core.PrettyPrint
                 this.Visit(syntax.Type);
                 this.Visit(syntax.Assignment);
                 this.Visit(syntax.Value);
+            });
+
+        public override void VisitParameterAssignmentSyntax(ParameterAssignmentSyntax syntax) =>
+            this.BuildStatement(syntax, () =>
+            {
+                this.VisitNodes(syntax.LeadingNodes);
+                this.Visit(syntax.Keyword);
+                this.documentStack.Push(Nil);
+                this.Visit(syntax.Name);
+                this.Visit(syntax.Assignment);
+                this.Visit(syntax.Value);
+            });
+
+        public override void VisitUsingDeclarationSyntax(UsingDeclarationSyntax syntax) =>
+            this.BuildStatement(syntax, () =>
+            {
+                this.VisitNodes(syntax.LeadingNodes);
+                this.Visit(syntax.Keyword);
+                this.documentStack.Push(Nil);
+                this.Visit(syntax.Path);
             });
 
         public override void VisitTernaryOperationSyntax(TernaryOperationSyntax syntax) =>

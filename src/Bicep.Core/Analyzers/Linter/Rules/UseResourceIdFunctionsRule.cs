@@ -227,9 +227,10 @@ namespace Bicep.Core.Analyzers.Linter.Rules
 
             private static Failure? AnalyzeIdPropertyValue(SemanticModel model, ObjectPropertySyntax propertySyntax, SyntaxBase expression, DeclaredSymbol[] currentPaths)
             {
-                // Does it contain any reference to a resource symbolic name?
+                // Does it contain any reference to a resource or module symbolic name anywhere in the expression?  If so, we assume it's being done correctly
                 if (expression.Any(syntax =>
-                    syntax is VariableAccessSyntax variableAccessSyntax && model.GetSymbolInfo(variableAccessSyntax) is ResourceSymbol))
+                    syntax is VariableAccessSyntax variableAccessSyntax && model.GetSymbolInfo(variableAccessSyntax) is DeclaredSymbol symbol
+                    && (symbol is ResourceSymbol || symbol is ModuleSymbol)))
                 {
                     return null;
                 }
@@ -244,7 +245,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
                             return null;
                         }
                         break;
-                    case VariableAccessSyntax:
+                    case VariableAccessSyntax: // Variable and parameter access
                         if (model.GetSymbolInfo(expression) is DeclaredSymbol symbol)
                         {
                             // Create nested path for recursive call
@@ -260,18 +261,8 @@ namespace Bicep.Core.Analyzers.Linter.Rules
                             }
                             else if (symbol is ParameterSymbol parameter)
                             {
-                                // Analyze the parameter's default value
-                                var defaultValue = SyntaxHelper.TryGetDefaultValue(parameter);
-                                if (defaultValue is null)
-                                {
-                                    // Using a parameter with no default value is acceptable
-                                    return null;
-                                }
-                                else
-                                {
-                                    // Analyze parameter's default value
-                                    return AnalyzeIdPropertyValue(model, propertySyntax, defaultValue, nestedPath);
-                                }
+                                // Parameters are always okay
+                                return null;
                             }
                         }
                         break;

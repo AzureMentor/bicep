@@ -84,6 +84,42 @@ resource blob 'blob' = {
         }
 
         [TestMethod]
+        public void Ambiguous_type_references_return_errors()
+        {
+            var result = CompilationHelper.Compile(GetCompilationContextWithTestExtensibilityProvider(), @"
+import storage as stg {
+  connectionString: 'asdf'
+}
+
+import storage as stg2 {
+  connectionString: 'asdf'
+}
+
+resource container 'container' = {
+  name: 'myblob'
+}
+");
+            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new[] {
+                ("BCP264", DiagnosticLevel.Error, "Resource type \"container\" is declared in multiple imported namespaces (\"stg\", \"stg2\"), and must be fully-qualified."),
+            });
+
+            result = CompilationHelper.Compile(GetCompilationContextWithTestExtensibilityProvider(), @"
+import storage as stg {
+  connectionString: 'asdf'
+}
+
+import storage as stg2 {
+  connectionString: 'asdf'
+}
+
+resource container 'stg2:container' = {
+  name: 'myblob'
+}
+");
+            result.ExcludingLinterDiagnostics().Should().NotHaveAnyDiagnostics();
+        }
+
+        [TestMethod]
         public void Storage_import_basic_test_loops_and_referencing()
         {
             var result = CompilationHelper.Compile(GetCompilationContextWithTestExtensibilityProvider(), @"
@@ -434,11 +470,11 @@ Hello from Bicep!"));
   ""languageVersion"": ""1.9-experimental"",
   ""contentVersion"": ""1.0.0.0"",
   ""metadata"": {
-    ""EXPERIMENTAL_WARNING"": ""Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!"",
+    ""_EXPERIMENTAL_WARNING"": ""Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!"",
     ""_generator"": {
       ""name"": ""bicep"",
       ""version"": ""dev"",
-      ""templateHash"": ""102018899127935696""
+      ""templateHash"": ""6873992617593787355""
     }
   },
   ""parameters"": {
@@ -476,11 +512,11 @@ Hello from Bicep!"));
           ""languageVersion"": ""1.9-experimental"",
           ""contentVersion"": ""1.0.0.0"",
           ""metadata"": {
-            ""EXPERIMENTAL_WARNING"": ""Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!"",
+            ""_EXPERIMENTAL_WARNING"": ""Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!"",
             ""_generator"": {
               ""name"": ""bicep"",
               ""version"": ""dev"",
-              ""templateHash"": ""16652946131126277045""
+              ""templateHash"": ""15105054226010417893""
             }
           },
           ""parameters"": {
