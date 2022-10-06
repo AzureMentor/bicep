@@ -5,8 +5,10 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
+using Bicep.Core.Features;
 using Bicep.Core.FileSystem;
 using Bicep.Core.UnitTests;
+using Bicep.Core.UnitTests.FileSystem;
 using Bicep.Core.UnitTests.Utils;
 using Bicep.Core.Workspaces;
 using FluentAssertions;
@@ -123,15 +125,13 @@ new CompletionItemKind[] { CompletionItemKind.Field, CompletionItemKind.Field }
         {
             var (paramFileTextNoCursor, cursor) = ParserHelper.GetFileWithSingleCursor(paramText);
 
-            var paramUri = DocumentUri.FromFileSystemPath("/path/to/param.bicepparam");
-            var bicepMainUri = DocumentUri.FromFileSystemPath("/path/to/main.bicep");
-
-            var paramFile = SourceFileFactory.CreateBicepFile(paramUri.ToUri(), paramFileTextNoCursor);
+            var paramUri = InMemoryFileResolver.GetFileUri("/path/to/param.bicepparam");
+            var paramFile = SourceFileFactory.CreateBicepFile(paramUri, paramFileTextNoCursor);
 
             var fileTextsByUri = new Dictionary<Uri, string>
             {
-                [paramUri.ToUri()] = paramFileTextNoCursor,
-                [bicepMainUri.ToUri()] = bicepText
+                [paramUri] = paramFileTextNoCursor,
+                [InMemoryFileResolver.GetFileUri("/path/to/main.bicep")] = bicepText
             };
 
             var fileResolver = new InMemoryFileResolver(fileTextsByUri);
@@ -142,7 +142,7 @@ new CompletionItemKind[] { CompletionItemKind.Field, CompletionItemKind.Field }
                 creationOptions: new LanguageServer.Server.CreationOptions(
                     NamespaceProvider: BuiltInTestTypes.Create(),
                     FileResolver: fileResolver,
-                    Features: BicepTestConstants.CreateFeaturesProvider(TestContext, paramsFilesEnabled: true)));
+                    FeatureProviderFactory: IFeatureProviderFactory.WithStaticFeatureProvider(BicepTestConstants.CreateFeatureProvider(TestContext, paramsFilesEnabled: true))));
 
             var file = new FileRequestHelper(helper.Client, paramFile);
 
@@ -225,15 +225,13 @@ new CompletionItemKind[] { CompletionItemKind.EnumMember, CompletionItemKind.Enu
         {
             var (paramFileTextNoCursor, cursor) = ParserHelper.GetFileWithSingleCursor(paramText);
 
-            var paramUri = DocumentUri.FromFileSystemPath("/path/to/param.bicepparam");
-            var bicepMainUri = DocumentUri.FromFileSystemPath("/path/to/main.bicep");
-
-            var paramFile = SourceFileFactory.CreateBicepFile(paramUri.ToUri(), paramFileTextNoCursor);
+            var paramUri = InMemoryFileResolver.GetFileUri("/path/to/param.bicepparam");
+            var paramFile = SourceFileFactory.CreateBicepFile(paramUri, paramFileTextNoCursor);
 
             var fileTextsByUri = new Dictionary<Uri, string>
             {
-                [paramUri.ToUri()] = paramFileTextNoCursor,
-                [bicepMainUri.ToUri()] = bicepText
+                [paramUri] = paramFileTextNoCursor,
+                [InMemoryFileResolver.GetFileUri("/path/to/main.bicep")] = bicepText
             };
 
             var fileResolver = new InMemoryFileResolver(fileTextsByUri);
@@ -242,7 +240,7 @@ new CompletionItemKind[] { CompletionItemKind.EnumMember, CompletionItemKind.Enu
                 paramFileTextNoCursor,
                 paramUri,
                 creationOptions: new LanguageServer.Server.CreationOptions(NamespaceProvider: BuiltInTestTypes.Create(), FileResolver: fileResolver,
-                Features: BicepTestConstants.CreateFeaturesProvider(TestContext, paramsFilesEnabled: true)));
+                FeatureProviderFactory: IFeatureProviderFactory.WithStaticFeatureProvider(BicepTestConstants.CreateFeatureProvider(TestContext, paramsFilesEnabled: true))));
 
             var file = new FileRequestHelper(helper.Client, paramFile);
 
@@ -260,28 +258,21 @@ new CompletionItemKind[] { CompletionItemKind.EnumMember, CompletionItemKind.Enu
         [TestMethod]
         public async Task Request_for_using_declaration_path_completions_should_return_correct_paths_for_file_directories()
         {
-            var paramUri = DocumentUri.FromFileSystemPath("/path/to/param.bicepparam");
-            var bicepMainUri1 = DocumentUri.FromFileSystemPath("/path/to/main1.bicep");
-            var bicepMainUri2 = DocumentUri.FromFileSystemPath("/path/to/main2.txt");
-            var bicepMainUri3 = DocumentUri.FromFileSystemPath("/path/to/nested1/main3.bicep");
-            var bicepModuleUri1 = DocumentUri.FromFileSystemPath("/path/to/module1.bicep");
-            var bicepModuleUri2 = DocumentUri.FromFileSystemPath("/path/to/nested1/module2.bicep");
-            var bicepModuleUri3 = DocumentUri.FromFileSystemPath("/path/to/nested2/module3.bicep");
-
+            var paramUri = InMemoryFileResolver.GetFileUri("/path/to/param.bicepparam");
             var (paramFileTextNoCursor, cursor) = ParserHelper.GetFileWithSingleCursor(@"
 using |
 ");
-            var paramFile = SourceFileFactory.CreateBicepFile(paramUri.ToUri(), paramFileTextNoCursor);
+            var paramFile = SourceFileFactory.CreateBicepFile(paramUri, paramFileTextNoCursor);
 
             var fileTextsByUri = new Dictionary<Uri, string>
             {
-                [paramUri.ToUri()] = paramFileTextNoCursor,
-                [bicepMainUri1.ToUri()] = "param foo int",
-                [bicepMainUri2.ToUri()] = "param bar int",
-                [bicepMainUri3.ToUri()] = "param foo int",
-                [bicepModuleUri1.ToUri()] = "param foo string",
-                [bicepModuleUri2.ToUri()] = "param bar bool",
-                [bicepModuleUri3.ToUri()] = "param bar string"
+                [paramUri] = paramFileTextNoCursor,
+                [InMemoryFileResolver.GetFileUri("/path/to/main1.bicep")] = "param foo int",
+                [InMemoryFileResolver.GetFileUri("/path/to/main2.txt")] = "param bar int",
+                [InMemoryFileResolver.GetFileUri("/path/to/nested1/main3.bicep")] = "param foo int",
+                [InMemoryFileResolver.GetFileUri("/path/to/module1.bicep")] = "param foo string",
+                [InMemoryFileResolver.GetFileUri("/path/to/nested1/module2.bicep")] = "param bar bool",
+                [InMemoryFileResolver.GetFileUri("/path/to/nested2/module3.bicep")] = "param bar string"
             };
 
             var fileResolver = new InMemoryFileResolver(fileTextsByUri);
@@ -290,7 +281,7 @@ using |
                 paramFileTextNoCursor,
                 paramUri,
                 creationOptions: new LanguageServer.Server.CreationOptions(NamespaceProvider: BuiltInTestTypes.Create(), FileResolver: fileResolver,
-                    Features: BicepTestConstants.CreateFeaturesProvider(TestContext, paramsFilesEnabled: true)));
+                    FeatureProviderFactory: IFeatureProviderFactory.WithStaticFeatureProvider(BicepTestConstants.CreateFeatureProvider(TestContext, paramsFilesEnabled: true))));
 
             var file = new FileRequestHelper(helper.Client, paramFile);
 
@@ -298,11 +289,13 @@ using |
             completions.Should().SatisfyRespectively(
                 x => x.Label.Should().Be("main1.bicep"),
                 x => x.Label.Should().Be("module1.bicep"),
-                x => x.Label.Should().Be("nested1"),
-                x => x.Label.Should().Be("nested2"));
+                x => x.Label.Should().Be("nested1/"),
+                x => x.Label.Should().Be("nested2/"),
+                x => x.Label.Should().Be("../"));
             completions.Should().SatisfyRespectively(
                 x => x.Kind.Should().Be(CompletionItemKind.File),
                 x => x.Kind.Should().Be(CompletionItemKind.File),
+                x => x.Kind.Should().Be(CompletionItemKind.Folder),
                 x => x.Kind.Should().Be(CompletionItemKind.Folder),
                 x => x.Kind.Should().Be(CompletionItemKind.Folder));
         }
@@ -310,28 +303,22 @@ using |
         [TestMethod]
         public async Task Request_for_using_declaration_path_completions_should_return_correct_partial_paths()
         {
-            var paramUri = DocumentUri.FromFileSystemPath("/path/to/param.bicepparam");
-            var bicepMainUri1 = DocumentUri.FromFileSystemPath("/path/to/main1.bicep");
-            var bicepMainUri2 = DocumentUri.FromFileSystemPath("/path/to/main2.txt");
-            var bicepMainUri3 = DocumentUri.FromFileSystemPath("/path/to/nested1/main3.bicep");
-            var bicepModuleUri1 = DocumentUri.FromFileSystemPath("/path/to/module1.bicep");
-            var bicepModuleUri2 = DocumentUri.FromFileSystemPath("/path/to/nested1/module2.bicep");
-            var bicepModuleUri3 = DocumentUri.FromFileSystemPath("/path/to/nested2/module3.bicep");
+            var paramUri = InMemoryFileResolver.GetFileUri("/path/to/param.bicepparam");
 
             var (paramFileTextNoCursor, cursor) = ParserHelper.GetFileWithSingleCursor(@"
 using './nested1/|'
 ");
-            var paramFile = SourceFileFactory.CreateBicepFile(paramUri.ToUri(), paramFileTextNoCursor);
+            var paramFile = SourceFileFactory.CreateBicepFile(paramUri, paramFileTextNoCursor);
 
             var fileTextsByUri = new Dictionary<Uri, string>
             {
-                [paramUri.ToUri()] = paramFileTextNoCursor,
-                [bicepMainUri1.ToUri()] = "param foo int",
-                [bicepMainUri2.ToUri()] = "param bar int",
-                [bicepMainUri3.ToUri()] = "param foo int",
-                [bicepModuleUri1.ToUri()] = "param foo string",
-                [bicepModuleUri2.ToUri()] = "param bar bool",
-                [bicepModuleUri3.ToUri()] = "param bar string"
+                [paramUri] = paramFileTextNoCursor,
+                [InMemoryFileResolver.GetFileUri("/path/to/main1.bicep")] = "param foo int",
+                [InMemoryFileResolver.GetFileUri("/path/to/main2.txt")] = "param bar int",
+                [InMemoryFileResolver.GetFileUri("/path/to/nested1/main3.bicep")] = "param foo int",
+                [InMemoryFileResolver.GetFileUri("/path/to/module1.bicep")] = "param foo string",
+                [InMemoryFileResolver.GetFileUri("/path/to/nested1/module2.bicep")] = "param bar bool",
+                [InMemoryFileResolver.GetFileUri("/path/to/nested2/module3.bicep")] = "param bar string"
             };
 
             var fileResolver = new InMemoryFileResolver(fileTextsByUri);
@@ -340,17 +327,19 @@ using './nested1/|'
                 paramFileTextNoCursor,
                 paramUri,
                 creationOptions: new LanguageServer.Server.CreationOptions(NamespaceProvider: BuiltInTestTypes.Create(), FileResolver: fileResolver,
-                    Features: BicepTestConstants.CreateFeaturesProvider(TestContext, paramsFilesEnabled: true)));
+                    FeatureProviderFactory: IFeatureProviderFactory.WithStaticFeatureProvider(BicepTestConstants.CreateFeatureProvider(TestContext, paramsFilesEnabled: true))));
 
             var file = new FileRequestHelper(helper.Client, paramFile);
 
             var completions = await file.RequestCompletion(cursor);
             completions.Should().SatisfyRespectively(
                 x => x.Label.Should().Be("main3.bicep"),
-                x => x.Label.Should().Be("module2.bicep"));
+                x => x.Label.Should().Be("module2.bicep"),
+                x => x.Label.Should().Be("../"));
             completions.Should().SatisfyRespectively(
                 x => x.Kind.Should().Be(CompletionItemKind.File),
-                x => x.Kind.Should().Be(CompletionItemKind.File));
+                x => x.Kind.Should().Be(CompletionItemKind.File),
+                x => x.Kind.Should().Be(CompletionItemKind.Folder));
         }
     }
 }

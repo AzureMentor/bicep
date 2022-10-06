@@ -3,6 +3,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Bicep.Core.Analyzers.Linter;
+using Bicep.Core.Configuration;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Semantics;
 using Bicep.Core.Semantics.Namespaces;
@@ -18,16 +19,17 @@ namespace Bicep.Core.IntegrationTests
     [TestClass]
     public class TypeValidationTests
     {
-        private static SemanticModel GetSemanticModelForTest(string programText, INamespaceProvider nsProvider)
+        private static ServiceBuilder Services => new ServiceBuilder();
+
+        private static SemanticModel GetSemanticModelForTest(string programText, IEnumerable<ResourceTypeComponents> definedTypes)
         {
-            var configuration = BicepTestConstants.BuiltInConfigurationWithAllAnalyzersDisabled;
-            var compilation = new Compilation(BicepTestConstants.Features, nsProvider, SourceFileGroupingFactory.CreateFromText(programText, BicepTestConstants.FileResolver), configuration, BicepTestConstants.ApiVersionProvider, new LinterAnalyzer(configuration));
+            var compilation = Services
+                .WithAzResources(definedTypes)
+                .WithConfigurationManager(IConfigurationManager.WithStaticConfiguration(BicepTestConstants.BuiltInConfigurationWithAllAnalyzersDisabled))
+                .BuildCompilation(programText);
 
             return compilation.GetEntrypointSemanticModel();
         }
-
-        private static SemanticModel GetSemanticModelForTest(string programText, IEnumerable<ResourceTypeComponents> definedTypes)
-            => GetSemanticModelForTest(programText, TestTypeHelper.CreateProviderWithTypes(definedTypes));
 
         [DataTestMethod]
         [DataRow(TypeSymbolValidationFlags.Default, DiagnosticLevel.Error)]
@@ -472,7 +474,7 @@ var singleItemKey = itemsOutput[0].key
 var singleItemValue = itemsOutput[0].value
 ";
 
-            var model = GetSemanticModelForTest(program, BuiltInTestTypes.Create());
+            var model = GetSemanticModelForTest(program, BuiltInTestTypes.Types);
 
             GetTypeForNamedSymbol(model, "itemsOutput").Name.Should().Be("object[]");
             GetTypeForNamedSymbol(model, "singleItemKey").Name.Should().Be("'readonly' | 'readwrite' | 'required'");
@@ -488,7 +490,7 @@ resource testRes 'Test.Rp/readOnlyTests@2020-01-01' = {
 }
 ";
 
-            var model = GetSemanticModelForTest(program, BuiltInTestTypes.Create());
+            var model = GetSemanticModelForTest(program, BuiltInTestTypes.Types);
             model.GetAllDiagnostics().Should().SatisfyRespectively(
                 x => x.Should().HaveCodeAndSeverity("BCP245", DiagnosticLevel.Warning).And.HaveMessage(@"Resource type ""Test.Rp/readOnlyTests@2020-01-01"" can only be used with the 'existing' keyword.")
             );

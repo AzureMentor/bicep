@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
-using Bicep.Core.Analyzers.Linter;
+using Bicep.Core.Configuration;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Emit;
 using Bicep.Core.Features;
@@ -14,8 +14,6 @@ using Bicep.Core.FileSystem;
 using Bicep.Core.PrettyPrint;
 using Bicep.Core.PrettyPrint.Options;
 using Bicep.Core.Registry;
-using Bicep.Core.Semantics;
-using Bicep.Core.Semantics.Namespaces;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.UnitTests.Baselines;
@@ -30,6 +28,8 @@ namespace Bicep.Core.IntegrationTests
     [TestClass]
     public class ExamplesTests
     {
+        private static ServiceBuilder Services => new ServiceBuilder().WithDisabledAnalyzersConfiguration();
+
         [NotNull]
         public TestContext? TestContext { get; set; }
 
@@ -39,11 +39,11 @@ namespace Bicep.Core.IntegrationTests
             var bicepFile = baselineFolder.EntryFile;
             var jsonFile = baselineFolder.GetFileOrEnsureCheckedIn(Path.ChangeExtension(embeddedBicep.FileName, jsonFileExtension));
 
-            var dispatcher = new ModuleDispatcher(BicepTestConstants.RegistryProvider);
-            var configuration = BicepTestConstants.BuiltInConfigurationWithAllAnalyzersDisabled;
-            var sourceFileGrouping = SourceFileGroupingBuilder.Build(BicepTestConstants.FileResolver, dispatcher, new Workspace(), PathHelper.FilePathToFileUrl(bicepFile.OutputFilePath), configuration);
-            var compilation = new Compilation(features, new DefaultNamespaceProvider(BicepTestConstants.AzResourceTypeLoader, features), sourceFileGrouping, configuration,BicepTestConstants.ApiVersionProvider, new LinterAnalyzer(configuration));
-            var emitter = new TemplateEmitter(compilation.GetEntrypointSemanticModel(), new EmitterSettings(features));
+            var configManager = IConfigurationManager.WithStaticConfiguration(BicepTestConstants.BuiltInConfigurationWithAllAnalyzersDisabled);
+            var dispatcher = new ModuleDispatcher(BicepTestConstants.RegistryProvider, configManager);
+            var sourceFileGrouping = SourceFileGroupingBuilder.Build(BicepTestConstants.FileResolver, dispatcher, new Workspace(), PathHelper.FilePathToFileUrl(bicepFile.OutputFilePath));
+            var compilation = Services.WithFeatureProviderFactory(IFeatureProviderFactory.WithStaticFeatureProvider(features)).Build().BuildCompilation(sourceFileGrouping);
+            var emitter = new TemplateEmitter(compilation.GetEntrypointSemanticModel());
 
             foreach (var (file, diagnostics) in compilation.GetAllDiagnosticsByBicepFile())
             {

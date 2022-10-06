@@ -2,11 +2,12 @@
 // Licensed under the MIT License.
 
 using Bicep.Cli.Logging;
-using Bicep.Core.Analyzers.Linter;
+using Bicep.Core.Analyzers.Interfaces;
 using Bicep.Core.Analyzers.Linter.ApiVersions;
 using Bicep.Core.Configuration;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Extensions;
+using Bicep.Core.Features;
 using Bicep.Core.FileSystem;
 using Bicep.Core.Registry;
 using Bicep.Core.Semantics;
@@ -30,7 +31,9 @@ namespace Bicep.Cli.Services
         private readonly InvocationContext invocationContext;
         private readonly Workspace workspace;
         private readonly TemplateDecompiler decompiler;
-        private readonly IApiVersionProvider apiVersionProvider;
+        private readonly IApiVersionProviderFactory apiVersionProviderFactory;
+        private readonly IFeatureProviderFactory featureProviderFactory;
+        private readonly IBicepAnalyzer bicepAnalyzer;
 
         public CompilationService(
             IDiagnosticLogger diagnosticLogger,
@@ -39,7 +42,9 @@ namespace Bicep.Cli.Services
             IModuleDispatcher moduleDispatcher,
             IConfigurationManager configurationManager,
             TemplateDecompiler decompiler,
-            IApiVersionProvider apiVersionProvider)
+            IApiVersionProviderFactory apiVersionProviderFactory,
+            IFeatureProviderFactory featureProviderFactory,
+            IBicepAnalyzer bicepAnalyzer)
         {
             this.diagnosticLogger = diagnosticLogger;
             this.fileResolver = fileResolver;
@@ -48,7 +53,9 @@ namespace Bicep.Cli.Services
             this.invocationContext = invocationContext;
             this.workspace = new Workspace();
             this.decompiler = decompiler;
-            this.apiVersionProvider = apiVersionProvider;
+            this.apiVersionProviderFactory = apiVersionProviderFactory;
+            this.featureProviderFactory = featureProviderFactory;
+            this.bicepAnalyzer = bicepAnalyzer;
         }
 
         public async Task RestoreAsync(string inputPath, bool forceModulesRestore)
@@ -56,19 +63,19 @@ namespace Bicep.Cli.Services
             var inputUri = PathHelper.FilePathToFileUrl(inputPath);
             var configuration = this.configurationManager.GetConfiguration(inputUri);
 
-            var sourceFileGrouping = SourceFileGroupingBuilder.Build(this.fileResolver, this.moduleDispatcher, this.workspace, inputUri, configuration, forceModulesRestore);
+            var sourceFileGrouping = SourceFileGroupingBuilder.Build(this.fileResolver, this.moduleDispatcher, this.workspace, inputUri, forceModulesRestore);
             var originalModulesToRestore = sourceFileGrouping.GetModulesToRestore().ToImmutableHashSet();
 
             // RestoreModules() does a distinct but we'll do it also to prevent duplicates in processing and logging
-            var modulesToRestoreReferences = this.moduleDispatcher.GetValidModuleReferences(originalModulesToRestore, configuration)
+            var modulesToRestoreReferences = this.moduleDispatcher.GetValidModuleReferences(originalModulesToRestore)
                 .Distinct()
                 .OrderBy(key => key.FullyQualifiedReference);
 
             // restore is supposed to only restore the module references that are syntactically valid
-            await moduleDispatcher.RestoreModules(configuration, modulesToRestoreReferences, forceModulesRestore);
+            await moduleDispatcher.RestoreModules(modulesToRestoreReferences, forceModulesRestore);
 
             // update the errors based on restore status
-            sourceFileGrouping = SourceFileGroupingBuilder.Rebuild(this.moduleDispatcher, this.workspace, sourceFileGrouping, configuration);
+            sourceFileGrouping = SourceFileGroupingBuilder.Rebuild(this.moduleDispatcher, this.workspace, sourceFileGrouping);
 
             LogDiagnostics(GetModuleRestoreDiagnosticsByBicepFile(sourceFileGrouping, originalModulesToRestore, forceModulesRestore));
         }
@@ -82,23 +89,21 @@ namespace Bicep.Cli.Services
 
         public async Task<Compilation> CompileAsync(Uri inputUri, bool skipRestore)
         {
-            var configuration = this.configurationManager.GetConfiguration(inputUri);
-
-            var sourceFileGrouping = SourceFileGroupingBuilder.Build(this.fileResolver, this.moduleDispatcher, this.workspace, inputUri, configuration);
+            var sourceFileGrouping = SourceFileGroupingBuilder.Build(this.fileResolver, this.moduleDispatcher, this.workspace, inputUri);
             if (!skipRestore)
             {
                 // module references in the file may be malformed
                 // however we still want to surface as many errors as we can for the module refs that are valid
                 // so we will try to restore modules with valid refs and skip everything else
                 // (the diagnostics will be collected during compilation)
-                if (await moduleDispatcher.RestoreModules(configuration, moduleDispatcher.GetValidModuleReferences(sourceFileGrouping.GetModulesToRestore(), configuration)))
+                if (await moduleDispatcher.RestoreModules(moduleDispatcher.GetValidModuleReferences(sourceFileGrouping.GetModulesToRestore())))
                 {
                     // modules had to be restored - recompile
-                    sourceFileGrouping = SourceFileGroupingBuilder.Rebuild(moduleDispatcher, this.workspace, sourceFileGrouping, configuration);
+                    sourceFileGrouping = SourceFileGroupingBuilder.Rebuild(moduleDispatcher, this.workspace, sourceFileGrouping);
                 }
             }
 
-            var compilation = new Compilation(this.invocationContext.Features, this.invocationContext.NamespaceProvider, sourceFileGrouping, configuration, apiVersionProvider, new LinterAnalyzer(configuration));
+            var compilation = new Compilation(featureProviderFactory, this.invocationContext.NamespaceProvider, sourceFileGrouping, configurationManager, apiVersionProviderFactory, bicepAnalyzer);
             LogDiagnostics(compilation);
 
             return compilation;
@@ -107,27 +112,26 @@ namespace Bicep.Cli.Services
         public async Task<ParamsSemanticModel> CompileParams(string inputPath, bool skipRestore)
         {
             var inputUri = PathHelper.FilePathToFileUrl(inputPath);
-            var configuration = this.configurationManager.GetConfiguration(inputUri);
 
-            var sourceFileGrouping = SourceFileGroupingBuilder.Build(this.fileResolver, this.moduleDispatcher, this.workspace, inputUri, configuration);
+            var sourceFileGrouping = SourceFileGroupingBuilder.Build(this.fileResolver, this.moduleDispatcher, this.workspace, inputUri);
             if (!skipRestore)
             {
                 // module references in the file may be malformed
                 // however we still want to surface as many errors as we can for the module refs that are valid
                 // so we will try to restore modules with valid refs and skip everything else
                 // (the diagnostics will be collected during compilation)
-                if (await moduleDispatcher.RestoreModules(configuration, moduleDispatcher.GetValidModuleReferences(sourceFileGrouping.GetModulesToRestore(), configuration)))
+                if (await moduleDispatcher.RestoreModules(moduleDispatcher.GetValidModuleReferences(sourceFileGrouping.GetModulesToRestore())))
                 {
                     // modules had to be restored - recompile
-                    sourceFileGrouping = SourceFileGroupingBuilder.Rebuild(moduleDispatcher, this.workspace, sourceFileGrouping, configuration);
+                    sourceFileGrouping = SourceFileGroupingBuilder.Rebuild(moduleDispatcher, this.workspace, sourceFileGrouping);
                 }
             }
 
-            var model = new ParamsSemanticModel(sourceFileGrouping, file => {
+            var model = new ParamsSemanticModel(sourceFileGrouping, configurationManager.GetConfiguration(inputUri), featureProviderFactory.GetFeatureProvider(inputUri), file => {
                 var compilationGrouping = new SourceFileGrouping(fileResolver, file.FileUri, sourceFileGrouping.FileResultByUri, sourceFileGrouping.UriResultByModule, sourceFileGrouping.SourceFileParentLookup);
 
 
-                return new Compilation(this.invocationContext.Features, this.invocationContext.NamespaceProvider, compilationGrouping, configuration, apiVersionProvider, new LinterAnalyzer(configuration));
+                return new Compilation(featureProviderFactory, this.invocationContext.NamespaceProvider, compilationGrouping, configurationManager, apiVersionProviderFactory, bicepAnalyzer);
             });
             LogParamDiagnostics(model);
 
@@ -149,32 +153,46 @@ namespace Bicep.Cli.Services
             }
 
             // to verify success we recompile and check for syntax errors.
-            await CompileAsync(decompilation.entrypointUri.AbsolutePath, skipRestore: true);
+            await CompileAsync(decompilation.entrypointUri.LocalPath, skipRestore: true);
 
             return decompilation;
         }
 
-        private static ImmutableDictionary<BicepFile, ImmutableArray<IDiagnostic>> GetModuleRestoreDiagnosticsByBicepFile(SourceFileGrouping sourceFileGrouping, ImmutableHashSet<ModuleDeclarationSyntax> originalModulesToRestore, bool forceModulesRestore)
+        private static ImmutableDictionary<BicepFile, ImmutableArray<IDiagnostic>> GetModuleRestoreDiagnosticsByBicepFile(SourceFileGrouping sourceFileGrouping, ImmutableHashSet<ModuleSourceResolutionInfo> originalModulesToRestore, bool forceModulesRestore)
         {
-            static IEnumerable<IDiagnostic> GetModuleDiagnosticsPerFile(SourceFileGrouping grouping, BicepFile bicepFile, ImmutableHashSet<ModuleDeclarationSyntax> originalModulesToRestore, bool forceModulesRestore)
-            {
-                foreach (var module in bicepFile.ProgramSyntax.Declarations.OfType<ModuleDeclarationSyntax>())
-                {
-                    if (!forceModulesRestore && !originalModulesToRestore.Contains(module))
-                    {
-                        continue;
-                    }
+            static IDiagnostic? DiagnosticForModule(SourceFileGrouping grouping, ModuleDeclarationSyntax module)
+                => grouping.TryGetErrorDiagnostic(module) is {} errorBuilder ? errorBuilder(DiagnosticBuilder.ForPosition(module.Path)) : null;
 
-                    if (grouping.TryGetErrorDiagnostic(module) is {} errorBuilder)
+            static IEnumerable<(BicepFile, IDiagnostic)> GetDiagnosticsForModulesToRestore(SourceFileGrouping grouping, ImmutableHashSet<ModuleSourceResolutionInfo> originalModulesToRestore)
+            {
+                foreach (var (module, sourceFile) in originalModulesToRestore)
+                {
+                    if (sourceFile is BicepFile bicepFile && DiagnosticForModule(grouping, module) is {} diagnostic)
                     {
-                        yield return errorBuilder(DiagnosticBuilder.ForPosition(module.Path));
+                        yield return (bicepFile, diagnostic);
                     }
                 }
             }
 
-            return sourceFileGrouping.SourceFiles
-                .OfType<BicepFile>()
-                .ToImmutableDictionary(bicepFile => bicepFile, bicepFile => GetModuleDiagnosticsPerFile(sourceFileGrouping, bicepFile, originalModulesToRestore, forceModulesRestore).ToImmutableArray());
+            static IEnumerable<(BicepFile, IDiagnostic)> GetDiagnosticsForAllModules(SourceFileGrouping grouping)
+            {
+                foreach (var bicepFile in grouping.SourceFiles.OfType<BicepFile>())
+                {
+                    foreach (var module in bicepFile.ProgramSyntax.Declarations.OfType<ModuleDeclarationSyntax>())
+                    {
+                        if (DiagnosticForModule(grouping, module) is {} diagnostic)
+                        {
+                            yield return (bicepFile, diagnostic);
+                        }
+                    }
+                }
+            }
+
+            var diagnosticsByFile = forceModulesRestore ? GetDiagnosticsForAllModules(sourceFileGrouping) : GetDiagnosticsForModulesToRestore(sourceFileGrouping, originalModulesToRestore);
+
+            return diagnosticsByFile
+                .ToLookup(t => t.Item1, t => t.Item2)
+                .ToImmutableDictionary(g => g.Key, g => g.ToImmutableArray());
         }
 
         private void LogDiagnostics(Compilation compilation)

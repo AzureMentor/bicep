@@ -17,6 +17,7 @@ using Bicep.Core.Registry;
 using Bicep.Core.Semantics;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
+using Bicep.Core.UnitTests.FileSystem;
 using Bicep.Core.UnitTests.Utils;
 using Bicep.Core.Workspaces;
 using FluentAssertions;
@@ -30,13 +31,12 @@ namespace Bicep.Core.IntegrationTests
     [TestClass]
     public class ModuleTests
     {
+        private static ServiceBuilder Services => new ServiceBuilder().WithEmptyAzResources();
+
         private static readonly MockRepository Repository = new MockRepository(MockBehavior.Strict);
-        private static readonly LinterAnalyzer LinterAnalyzer = BicepTestConstants.LinterAnalyzer;
-        private static readonly RootConfiguration Configuration = BicepTestConstants.BuiltInConfigurationWithAllAnalyzersDisabled;
+        private static readonly IConfigurationManager ConfigurationManager = IConfigurationManager.WithStaticConfiguration(BicepTestConstants.BuiltInConfigurationWithAllAnalyzersDisabled);
 
-        private IFeatureProvider ResourceTypedFeatures => BicepTestConstants.CreateFeaturesProvider(TestContext, resourceTypedParamsAndOutputsEnabled: true);
-
-        private CompilationHelper.CompilationHelperContext ResourceTypedFeatureContext => new CompilationHelper.CompilationHelperContext(Features: ResourceTypedFeatures);
+        private ServiceBuilder ServicesWithResourceTyped => new ServiceBuilder().WithFeatureProvider(BicepTestConstants.CreateFeatureProvider(TestContext, resourceTypedParamsAndOutputsEnabled: true));
 
         [NotNull]
         public TestContext? TestContext { get; set; }
@@ -87,8 +87,7 @@ output outputb string = '${inputa}-${inputb}'
 ",
             };
 
-
-            var compilation = new Compilation(BicepTestConstants.Features, TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateForFiles(files, mainUri, BicepTestConstants.FileResolver, Configuration), Configuration, BicepTestConstants.ApiVersionProvider, LinterAnalyzer);
+            var compilation = Services.BuildCompilation(files, mainUri);
 
             var (success, diagnosticsByFile) = GetSuccessAndDiagnosticsByFile(compilation);
             diagnosticsByFile.Values.SelectMany(x => x).Should().BeEmpty();
@@ -117,8 +116,7 @@ module mainRecursive 'main.bicep' = {
 ",
             };
 
-
-            var compilation = new Compilation(BicepTestConstants.Features, TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateForFiles(files, mainUri, BicepTestConstants.FileResolver, Configuration), Configuration, BicepTestConstants.ApiVersionProvider, LinterAnalyzer);
+            var compilation = Services.BuildCompilation(files, mainUri);
 
             var (success, diagnosticsByFile) = GetSuccessAndDiagnosticsByFile(compilation);
             diagnosticsByFile[mainUri].Should().HaveDiagnostics(new[] {
@@ -172,8 +170,7 @@ module main 'main.bicep' = {
 ",
             };
 
-
-            var compilation = new Compilation(BicepTestConstants.Features, TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateForFiles(files, mainUri, BicepTestConstants.FileResolver, Configuration), Configuration, BicepTestConstants.ApiVersionProvider, LinterAnalyzer);
+            var compilation = Services.BuildCompilation(files, mainUri);
 
             var (success, diagnosticsByFile) = GetSuccessAndDiagnosticsByFile(compilation);
             diagnosticsByFile[mainUri].Should().HaveDiagnostics(new[] {
@@ -212,7 +209,7 @@ module main 'main.bicep' = {
             var mockDispatcher = Repository.Create<IModuleDispatcher>();
             SetupFileReaderMock(mockFileResolver, fileUri, null, x => x.ErrorOccurredReadingFile("Mock read failure!"));
 
-            Action buildAction = () => SourceFileGroupingBuilder.Build(mockFileResolver.Object, mockDispatcher.Object, new Workspace(), fileUri, Configuration);
+            Action buildAction = () => SourceFileGroupingBuilder.Build(mockFileResolver.Object, mockDispatcher.Object, new Workspace(), fileUri);
             buildAction.Should().Throw<ErrorDiagnosticException>()
                 .And.Diagnostic.Should().HaveCodeAndSeverity("BCP091", DiagnosticLevel.Error).And.HaveMessage("An error occurred reading file. Mock read failure!");
         }
@@ -238,9 +235,9 @@ module modulea 'modulea.bicep' = {
             SetupFileReaderMock(mockFileResolver, mainFileUri, mainFileContents, null);
             mockFileResolver.Setup(x => x.TryResolveFilePath(mainFileUri, "modulea.bicep")).Returns((Uri?)null);
 
-            var dispatcher = new ModuleDispatcher(new DefaultModuleRegistryProvider(mockFileResolver.Object, BicepTestConstants.ClientFactory, BicepTestConstants.TemplateSpecRepositoryFactory, BicepTestConstants.Features));
+            var dispatcher = new ModuleDispatcher(new DefaultModuleRegistryProvider(mockFileResolver.Object, BicepTestConstants.ClientFactory, BicepTestConstants.TemplateSpecRepositoryFactory, BicepTestConstants.FeatureProviderFactory, ConfigurationManager), ConfigurationManager);
 
-            var compilation = new Compilation(BicepTestConstants.Features, TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingBuilder.Build(mockFileResolver.Object, dispatcher, new Workspace(), mainFileUri, Configuration), Configuration, BicepTestConstants.ApiVersionProvider, LinterAnalyzer);
+            var compilation = Services.Build().BuildCompilation(SourceFileGroupingBuilder.Build(mockFileResolver.Object, dispatcher, new Workspace(), mainFileUri));
 
             var (success, diagnosticsByFile) = GetSuccessAndDiagnosticsByFile(compilation);
             diagnosticsByFile[mainFileUri].Should().HaveDiagnostics(new[] {
@@ -312,8 +309,7 @@ output outputc2 int = inputb + 1
 "
             };
 
-
-            var compilation = new Compilation(BicepTestConstants.Features, TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateForFiles(files, mainUri, BicepTestConstants.FileResolver, Configuration), Configuration, BicepTestConstants.ApiVersionProvider, LinterAnalyzer);
+            var compilation = Services.BuildCompilation(files, mainUri);
 
             var (success, diagnosticsByFile) = GetSuccessAndDiagnosticsByFile(compilation);
             diagnosticsByFile.Values.SelectMany(x => x).Should().BeEmpty();
@@ -337,26 +333,26 @@ output outputc2 int = inputb + 1
 
             // Confirming hashes equal individual template hashes
             ModuleTemplateHashValidator(
-              new Compilation(BicepTestConstants.Features, TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateForFiles(new Dictionary<Uri, string>
+              Services.BuildCompilation(new Dictionary<Uri, string>
               {
                   [moduleAUri] = files[moduleAUri]
               },
-              moduleAUri, BicepTestConstants.FileResolver, Configuration), Configuration, BicepTestConstants.ApiVersionProvider, LinterAnalyzer), moduleATemplateHash);
+              moduleAUri), moduleATemplateHash);
 
             ModuleTemplateHashValidator(
-              new Compilation(BicepTestConstants.Features, TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateForFiles(new Dictionary<Uri, string>
+              Services.BuildCompilation(new Dictionary<Uri, string>
               {
                   [moduleBUri] = files[moduleBUri],
                   [moduleCUri] = files[moduleCUri]
               },
-              moduleBUri, BicepTestConstants.FileResolver, Configuration), Configuration, BicepTestConstants.ApiVersionProvider, LinterAnalyzer), moduleBTemplateHash);
+              moduleBUri), moduleBTemplateHash);
 
             ModuleTemplateHashValidator(
-              new Compilation(BicepTestConstants.Features, TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingFactory.CreateForFiles(new Dictionary<Uri, string>
+              Services.BuildCompilation(new Dictionary<Uri, string>
               {
                   [moduleCUri] = files[moduleCUri]
               },
-              moduleCUri, BicepTestConstants.FileResolver, Configuration), Configuration, BicepTestConstants.ApiVersionProvider, LinterAnalyzer), moduleCTemplateHash);
+              moduleCUri), moduleCTemplateHash);
         }
 
         [TestMethod]
@@ -382,9 +378,9 @@ module modulea 'modulea.bicep' = {
             SetupFileReaderMock(mockFileResolver, moduleAUri, null, x => x.ErrorOccurredReadingFile("Mock read failure!"));
             mockFileResolver.Setup(x => x.TryResolveFilePath(mainUri, "modulea.bicep")).Returns(moduleAUri);
 
-            var dispatcher = new ModuleDispatcher(new DefaultModuleRegistryProvider(mockFileResolver.Object, BicepTestConstants.ClientFactory, BicepTestConstants.TemplateSpecRepositoryFactory, BicepTestConstants.Features));
+            var dispatcher = new ModuleDispatcher(new DefaultModuleRegistryProvider(mockFileResolver.Object, BicepTestConstants.ClientFactory, BicepTestConstants.TemplateSpecRepositoryFactory, BicepTestConstants.FeatureProviderFactory, ConfigurationManager), ConfigurationManager);
 
-            var compilation = new Compilation(BicepTestConstants.Features, TestTypeHelper.CreateEmptyProvider(), SourceFileGroupingBuilder.Build(mockFileResolver.Object, dispatcher, new Workspace(), mainUri, Configuration), Configuration, BicepTestConstants.ApiVersionProvider, LinterAnalyzer);
+            var compilation = Services.Build().BuildCompilation(SourceFileGroupingBuilder.Build(mockFileResolver.Object, dispatcher, new Workspace(), mainUri));
 
             var (success, diagnosticsByFile) = GetSuccessAndDiagnosticsByFile(compilation);
             diagnosticsByFile[mainUri].Should().HaveDiagnostics(new[] {
@@ -395,8 +391,8 @@ module modulea 'modulea.bicep' = {
         [TestMethod]
         public void External_module_reference_with_unknown_scheme_should_be_rejected()
         {
-            var context = new CompilationHelper.CompilationHelperContext(Features: BicepTestConstants.CreateFeaturesProvider(TestContext, registryEnabled: true));
-            var result = CompilationHelper.Compile(context, @"module test 'fake:totally-fake' = {}");
+            var services = new ServiceBuilder().WithFeatureProvider(BicepTestConstants.CreateFeatureProvider(TestContext, registryEnabled: true));
+            var result = CompilationHelper.Compile(services, @"module test 'fake:totally-fake' = {}");
 
             result.Should().HaveDiagnostics(new[]
             {
@@ -407,8 +403,8 @@ module modulea 'modulea.bicep' = {
         [TestMethod]
         public void External_module_reference_with_oci_scheme_should_be_rejected_if_registry_disabled()
         {
-            var context = new CompilationHelper.CompilationHelperContext(Features: BicepTestConstants.CreateFeaturesProvider(TestContext, registryEnabled: false));
-            var result = CompilationHelper.Compile(context, @"module test 'br:totally-fake' = {}");
+            var services = new ServiceBuilder().WithFeatureProvider(BicepTestConstants.CreateFeatureProvider(TestContext, registryEnabled: false));
+            var result = CompilationHelper.Compile(services, @"module test 'br:totally-fake' = {}");
 
             result.Should().HaveDiagnostics(new[]
             {
@@ -473,7 +469,7 @@ output storage resource = storage
         public void Module_can_pass_correct_resource_type_as_parameter()
         {
             var result = CompilationHelper.Compile(
-                ResourceTypedFeatureContext,
+                ServicesWithResourceTyped,
 ("main.bicep", @"
 resource resource 'Microsoft.Storage/storageAccounts@2019-06-01' existing = {
   name: 'test'
@@ -502,7 +498,7 @@ output out string = p.properties.accessTier
         public void Module_can_pass_correct_resource_type_with_different_api_version_as_parameter()
         {
             var result = CompilationHelper.Compile(
-                ResourceTypedFeatureContext,
+                ServicesWithResourceTyped,
 ("main.bicep", @"
 resource resource 'Microsoft.Storage/storageAccounts@2019-06-01' existing = {
   name: 'test'
@@ -535,9 +531,9 @@ output out string = p.properties.accessTier
         [DataRow(false)]
         public void Module_can_pass_resource_body_as_object_typed_parameter(bool enableResourceTypeParameters)
         {
-            var context = enableResourceTypeParameters ? ResourceTypedFeatureContext : new CompilationHelper.CompilationHelperContext();
+            var services = enableResourceTypeParameters ? ServicesWithResourceTyped : new ServiceBuilder();
             var result = CompilationHelper.Compile(
-                context,
+                services,
 ("main.bicep", @"
 resource resource 'Microsoft.Storage/storageAccounts@2019-06-01' existing = {
   name: 'test'
@@ -566,7 +562,7 @@ output out string = p.properties.accessTier
         public void Module_with_resource_type_output_can_be_evaluated()
         {
             var result = CompilationHelper.Compile(
-                ResourceTypedFeatureContext,
+                ServicesWithResourceTyped,
 ("main.bicep", @"
 module mod './module.bicep' = {
     name: 'test'
@@ -619,7 +615,7 @@ output storage resource = storage
         public void Module_array_with_resource_type_output_can_be_evaluated()
         {
             var result = CompilationHelper.Compile(
-                ResourceTypedFeatureContext,
+                ServicesWithResourceTyped,
 ("main.bicep", @"
 module mod './module.bicep' = [for (item, i) in []:  {
     name: 'test-${i}'
@@ -672,7 +668,7 @@ output storage resource = storage
         public void Module_with_unknown_resourcetype_as_parameter_and_output_has_diagnostics()
         {
             var result = CompilationHelper.Compile(
-                ResourceTypedFeatureContext,
+                ServicesWithResourceTyped,
 ("main.bicep", @"
 module mod './module.bicep' = {
     name: 'test'
@@ -696,16 +692,16 @@ resource fake 'Another.Fake/Type@2019-06-01' = {
 
 output storage resource 'Another.Fake/Type@2019-06-01' = fake
 "));
-            var diagnosticsMap = result.Compilation.GetAllDiagnosticsByBicepFile().ToDictionary(kvp => kvp.Key.FileUri.AbsolutePath, kvp => kvp.Value);
+            var diagnosticsMap = result.Compilation.GetAllDiagnosticsByBicepFile().ToDictionary(kvp => kvp.Key.FileUri, kvp => kvp.Value);
             using (new AssertionScope())
             {
-                diagnosticsMap["/path/to/module.bicep"].Should().HaveDiagnostics(new[]
+                diagnosticsMap[InMemoryFileResolver.GetFileUri("/path/to/module.bicep")].Should().HaveDiagnostics(new[]
                 {
                     ("BCP081", DiagnosticLevel.Warning, "Resource type \"Some.Fake/Type@2019-06-01\" does not have types available."),
                     ("BCP081", DiagnosticLevel.Warning, "Resource type \"Another.Fake/Type@2019-06-01\" does not have types available."),
                     ("BCP081", DiagnosticLevel.Warning, "Resource type \"Another.Fake/Type@2019-06-01\" does not have types available."),
                 });
-                diagnosticsMap["/path/to/main.bicep"].Should().HaveDiagnostics(new[]
+                diagnosticsMap[InMemoryFileResolver.GetFileUri("/path/to/main.bicep")].Should().HaveDiagnostics(new[]
                 {
                     ("BCP230", DiagnosticLevel.Warning, "The referenced module uses resource type \"Some.Fake/Type@2019-06-01\" which does not have types available."),
                     ("BCP230", DiagnosticLevel.Warning, "The referenced module uses resource type \"Another.Fake/Type@2019-06-01\" which does not have types available."),
@@ -718,7 +714,7 @@ output storage resource 'Another.Fake/Type@2019-06-01' = fake
         public void Module_cannot_pass_incorrect_resource_type_as_parameter()
         {
             var result = CompilationHelper.Compile(
-                ResourceTypedFeatureContext,
+                ServicesWithResourceTyped,
 ("main.bicep", @"
 resource resource 'Microsoft.Storage/storageAccounts@2019-06-01' existing = {
   name: 'test'
@@ -748,7 +744,7 @@ output out string = p.properties.minimalTlsVersion
             var stringBuilder = new StringBuilder();
             var stringWriter = new StringWriter(stringBuilder);
 
-            var emitter = new TemplateEmitter(compilation.GetEntrypointSemanticModel(), BicepTestConstants.EmitterSettings);
+            var emitter = new TemplateEmitter(compilation.GetEntrypointSemanticModel());
             emitter.Emit(stringWriter);
 
             return stringBuilder.ToString();

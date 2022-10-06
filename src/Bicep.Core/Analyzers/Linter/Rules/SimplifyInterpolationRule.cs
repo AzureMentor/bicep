@@ -30,7 +30,8 @@ namespace Bicep.Core.Analyzers.Linter.Rules
             var visitor = new Visitor(spanFixes, model);
             visitor.Visit(model.SourceFile.ProgramSyntax);
 
-            return spanFixes.Select(kvp => CreateFixableDiagnosticForSpan(kvp.Key, kvp.Value));
+            var diagnosticLevel = GetDiagnosticLevel(model);
+            return spanFixes.Select(kvp => CreateFixableDiagnosticForSpan(diagnosticLevel, kvp.Key, kvp.Value));
         }
 
         private sealed class Visitor : SyntaxVisitor
@@ -88,7 +89,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
                     // We only want to trigger if the expression is of type string (because interpolation
                     // using non-string types can be a perfectly valid way to convert to string, e.g. '${intVar}')
                     var type = model.GetTypeInfo(expression);
-                    if (type.IsStrictlyAssignableToString())
+                    if (type.IsString())
                     {
                         AddCodeFix(valueSyntax.Span, expression.ToText());
                     }

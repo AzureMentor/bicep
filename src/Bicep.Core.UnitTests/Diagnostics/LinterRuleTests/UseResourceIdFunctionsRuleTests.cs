@@ -68,8 +68,8 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             }",
             new object[]
             {
-                // TTK result:      
-                // Property: "id" must use one of the following expressions for an resourceId property:                            
+                // TTK result:
+                // Property: "id" must use one of the following expressions for an resourceId property:
                 //  extensionResourceId,resourceId,subscriptionResourceId,tenantResourceId.,if,parameters,reference,variables,subscription,guid
                 "[39:25] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
             },
@@ -170,7 +170,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             DisplayName = "'id' should not be analyzed in vars"
         )]
         [DataRow(@"
-                module m1 'module.bicep' = {
+                module m1 'main.bicep' = {
                   name: 'm1'
                   params: {
                     id: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroup().name}/providers/Microsoft.Network/networkSecurityGroups/${'NSGName'}'
@@ -179,7 +179,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             new object[]
             {
                  // pass
-                 "[2:27] An error occurred reading file. Could not find file \"/path/to/module.bicep\""
+                 "[2:27] This module references itself, which is not allowed."
             },
             DisplayName = "'id' should not be analyzed in modules"
         )]
@@ -284,7 +284,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             new object[]
             {
                 // TTK result:
-                // Property: "resourceId" must use one of the following expressions for an resourceId property:                    
+                // Property: "resourceId" must use one of the following expressions for an resourceId property:
                 // extensionResourceId,resourceId,subscriptionResourceId,tenantResourceId.,if,parameters,reference,variables,subscription,guid
                 "[8:23] If property \"resourceId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
             },
@@ -307,7 +307,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             new object[]
             {
                 // TTK result:
-                // Property: "id" must use one of the following expressions for an resourceId property:                            
+                // Property: "id" must use one of the following expressions for an resourceId property:
                 //   extensionResourceId,resourceId,subscriptionResourceId,tenantResourceId.,if,parameters,reference,variables,subscription,guid
                 "[11:21] If property \"failId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId.",
             },
@@ -330,7 +330,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 //    [-] IDs Should Be Derived From ResourceIDs(52 ms)
                 //        Blank ID Property found:
                 //id ParentObject       PropertyName JSONPath
-                //----------------------------------                                                                             
+                //----------------------------------
                 //   {@{fail0 =}, $null}
                 //id fail0.id
 
@@ -839,7 +839,20 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 url: 'https://${reference(resourceId('Microsoft.Web/sites', 'web'), '2020-09-01').defaultHostName}'
                 protocol: 'http'
               }
-            }",
+            }
+
+            // https://github.com/Azure/bicep/issues/8382
+            resource keys 'Microsoft.ApiManagement/service/subscriptions@2021-08-01' = {
+              name: 'apimName/testSubscription'
+              properties: {
+                ownerId: '/users/1' // in form /users/{userId}, so this property should be ignored
+                scope: '/products/testProduct'
+                displayName: 'Test Name'
+                state: 'active'
+                allowTracing: true
+              }
+            }
+",
             new object[]
             {
                 // pass
@@ -1074,7 +1087,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                   properties: {
                       id: whatever ? concat('', '') : concat('', '')
                   }
-                }     
+                }
                ",
             new object[]
             {
@@ -1255,8 +1268,8 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             new object[]
             {
                 // TTK results:
-                // [-] IDs Should Be Derived From ResourceIDs                                                                 
-                // Property: "id" must use one of the following expressions for an resourceId property:                            
+                // [-] IDs Should Be Derived From ResourceIDs
+                // Property: "id" must use one of the following expressions for an resourceId property:
                 //   extensionResourceId,resourceId,subscriptionResourceId,tenantResourceId,if,parameters,reference,variables,subscription,guid
                 "[86:23] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId.",
             },
@@ -1605,6 +1618,27 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 // pass
             },
             DisplayName = "subnets")]
+        [DataRow(@"
+                param cosmosName string
+                param cosmosAccountDatabaseScope string
+
+                var devAadGroupIds = [
+                  '25f41063-9986-4445-b0d5-e24b1a370d5e'
+                  '621dc9d5-008d-4b72-bfdb-bed87e2a039a'
+                ]
+
+                @batchSize(1)
+                resource developerRoleAssignments 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2022-05-15' = [for devId in devAadGroupIds: {
+                  name: '${cosmosName}/${devId}'
+                  properties: {
+                    roleDefinitionId: '00000000-0000-0000-0000-000000000001' // Read Access
+                    principalId: devId
+                    scope: cosmosAccountDatabaseScope
+                  }
+                }]
+            ",
+            DisplayName = "Regress #8424"
+        )]
         [DataTestMethod]
         public void Test(string text, params string[] expectedMessages)
         {
@@ -1798,7 +1832,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     name:      vmssImgSku
                     publisher: vmssImgPublisher
                     product:   vmssImgProduct
-                  }  
+                  }
                   properties: {
                     singlePlacementGroup: false
                     upgradePolicy: {
@@ -1850,7 +1884,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
 	                customData:         base64(customData)
 	                windowsConfiguration: {
                           provisionVMAgent: true
-                        }	
+                        }
                       }
                       priority: 'Regular'
                     }
@@ -1884,6 +1918,39 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 expectedMessages: new string[]
                 {
                     // pass
+                });
+        }
+
+        [TestMethod]
+        public void Regress8410()
+        {
+            CompileAndTest(
+                @"
+                    targetScope = 'tenant'
+
+                    param parTopLevelManagementGroupPrefix string
+                    param parTopLevelManagementGroupDisplayName string
+                    param parTopLevelManagementGroupParentId string
+
+                    resource resTopLevelMg 'Microsoft.Management/managementGroups@2021-04-01' = {
+                      name: parTopLevelManagementGroupPrefix
+                      properties: {
+                        displayName: parTopLevelManagementGroupDisplayName
+                        details: {
+                          parent: {
+                    #disable-next-line BCP037
+                            oneId: (empty(parTopLevelManagementGroupParentId) ? '/providers/Microsoft.Management/managementGroups/${tenant().tenantId}' : parTopLevelManagementGroupParentId)
+
+                    #disable-next-line BCP037
+                            twoId: empty(parTopLevelManagementGroupParentId) ? '/providers/Microsoft.Management/managementGroups/${tenant().tenantId}' : parTopLevelManagementGroupParentId
+                          }
+                        }
+                      }
+                    }
+",
+                expectedMessages: new string[]
+                {
+                    // asdfg
                 });
         }
     }

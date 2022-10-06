@@ -1426,7 +1426,7 @@ ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ---------------------------------------------------------
 
-cytoscape 3.22.1 - MIT
+cytoscape 3.23.0 - MIT
 http://js.cytoscape.org
 
 copyright Koen Bok
@@ -2129,10 +2129,10 @@ SOFTWARE.
 
 ---------------------------------------------------------
 
-cytoscape-elk 2.0.2 - MIT
+cytoscape-elk 2.1.0 - MIT
 https://github.com/cytoscape/cytoscape.js-elk
 
-Copyright (c) 2016-2018, 2020, The Cytoscape Consortium.
+Copyright (c) 2016-2018, 2020, The Cytoscape Consortium
 
 
 
@@ -6538,215 +6538,274 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ---------------------------------------------------------
 
-elkjs 0.7.1 - EPL-1.0
+elkjs 0.8.2 - EPL-2.0
 https://github.com/kieler/elkjs#readme
 
-Copyright (c) 2019 TypeFox and others.
-Copyright (c) 2017 Kiel University and others.
 
-Eclipse Public License - v 1.0
+# Eclipse Public License - v 2.0
 
-THE ACCOMPANYING PROGRAM IS PROVIDED UNDER THE TERMS OF THIS ECLIPSE PUBLIC
-LICENSE ("AGREEMENT"). ANY USE, REPRODUCTION OR DISTRIBUTION OF THE PROGRAM
-CONSTITUTES RECIPIENT'S ACCEPTANCE OF THIS AGREEMENT.
+THE ACCOMPANYING PROGRAM IS PROVIDED UNDER THE TERMS OF THIS ECLIPSE
+PUBLIC LICENSE (“AGREEMENT”). ANY USE, REPRODUCTION OR DISTRIBUTION OF
+THE PROGRAM CONSTITUTES RECIPIENT'S ACCEPTANCE OF THIS AGREEMENT.
 
-1. DEFINITIONS
+## 1. DEFINITIONS
 
-"Contribution" means:
+“Contribution” means:
 
-a) in the case of the initial Contributor, the initial code and documentation
-   distributed under this Agreement, and
-b) in the case of each subsequent Contributor:
-    i) changes to the Program, and
-   ii) additions to the Program;
+-   a\) in the case of the initial Contributor, the initial content
+    Distributed under this Agreement, and
+-   b\) in the case of each subsequent Contributor:
+    -   i\) changes to the Program, and
+    -   ii\) additions to the Program;
 
-   where such changes and/or additions to the Program originate from and are
-   distributed by that particular Contributor. A Contribution 'originates'
-   from a Contributor if it was added to the Program by such Contributor
-   itself or anyone acting on such Contributor's behalf. Contributions do not
-   include additions to the Program which: (i) are separate modules of
-   software distributed in conjunction with the Program under their own
-   license agreement, and (ii) are not derivative works of the Program.
+    where such changes and/or additions to the Program originate from
+    and are Distributed by that particular Contributor. A Contribution
+    “originates” from a Contributor if it was added to the Program by
+    such Contributor itself or anyone acting on such Contributor's
+    behalf. Contributions do not include changes or additions to the
+    Program that are not Modified Works.
 
-"Contributor" means any person or entity that distributes the Program.
+“Contributor” means any person or entity that Distributes the Program.
 
-"Licensed Patents" mean patent claims licensable by a Contributor which are
-necessarily infringed by the use or sale of its Contribution alone or when
-combined with the Program.
+“Licensed Patents” mean patent claims licensable by a Contributor which
+are necessarily infringed by the use or sale of its Contribution alone
+or when combined with the Program.
 
-"Program" means the Contributions distributed in accordance with this
+“Program” means the Contributions Distributed in accordance with this
 Agreement.
 
-"Recipient" means anyone who receives the Program under this Agreement,
-including all Contributors.
+“Recipient” means anyone who receives the Program under this Agreement
+or any Secondary License (as applicable), including Contributors.
 
-2. GRANT OF RIGHTS
-  a) Subject to the terms of this Agreement, each Contributor hereby grants
-     Recipient a non-exclusive, worldwide, royalty-free copyright license to
-     reproduce, prepare derivative works of, publicly display, publicly
-     perform, distribute and sublicense the Contribution of such Contributor,
-     if any, and such derivative works, in source code and object code form.
-  b) Subject to the terms of this Agreement, each Contributor hereby grants
-     Recipient a non-exclusive, worldwide, royalty-free patent license under
-     Licensed Patents to make, use, sell, offer to sell, import and otherwise
-     transfer the Contribution of such Contributor, if any, in source code and
-     object code form. This patent license shall apply to the combination of
-     the Contribution and the Program if, at the time the Contribution is
-     added by the Contributor, such addition of the Contribution causes such
-     combination to be covered by the Licensed Patents. The patent license
-     shall not apply to any other combinations which include the Contribution.
-     No hardware per se is licensed hereunder.
-  c) Recipient understands that although each Contributor grants the licenses
-     to its Contributions set forth herein, no assurances are provided by any
-     Contributor that the Program does not infringe the patent or other
-     intellectual property rights of any other entity. Each Contributor
-     disclaims any liability to Recipient for claims brought by any other
-     entity based on infringement of intellectual property rights or
-     otherwise. As a condition to exercising the rights and licenses granted
-     hereunder, each Recipient hereby assumes sole responsibility to secure
-     any other intellectual property rights needed, if any. For example, if a
-     third party patent license is required to allow Recipient to distribute
-     the Program, it is Recipient's responsibility to acquire that license
-     before distributing the Program.
-  d) Each Contributor represents that to its knowledge it has sufficient
-     copyright rights in its Contribution, if any, to grant the copyright
-     license set forth in this Agreement.
+“Derivative Works” shall mean any work, whether in Source Code or other
+form, that is based on (or derived from) the Program and for which the
+editorial revisions, annotations, elaborations, or other modifications
+represent, as a whole, an original work of authorship.
 
-3. REQUIREMENTS
+“Modified Works” shall mean any work in Source Code or other form that
+results from an addition to, deletion from, or modification of the
+contents of the Program, including, for purposes of clarity any new file
+in Source Code form that contains any contents of the Program. Modified
+Works shall not include works that contain only declarations,
+interfaces, types, classes, structures, or files of the Program solely
+in each case in order to link to, bind by name, or subclass the Program
+or Modified Works thereof.
 
-A Contributor may choose to distribute the Program in object code form under
-its own license agreement, provided that:
+“Distribute” means the acts of a) distributing or b) making available in
+any manner that enables the transfer of a copy.
 
-  a) it complies with the terms and conditions of this Agreement; and
-  b) its license agreement:
-      i) effectively disclaims on behalf of all Contributors all warranties
-         and conditions, express and implied, including warranties or
-         conditions of title and non-infringement, and implied warranties or
-         conditions of merchantability and fitness for a particular purpose;
-     ii) effectively excludes on behalf of all Contributors all liability for
-         damages, including direct, indirect, special, incidental and
-         consequential damages, such as lost profits;
-    iii) states that any provisions which differ from this Agreement are
-         offered by that Contributor alone and not by any other party; and
-     iv) states that source code for the Program is available from such
-         Contributor, and informs licensees how to obtain it in a reasonable
-         manner on or through a medium customarily used for software exchange.
+“Source Code” means the form of a Program preferred for making
+modifications, including but not limited to software source code,
+documentation source, and configuration files.
 
-When the Program is made available in source code form:
+“Secondary License” means either the GNU General Public License, Version
+2.0, or any later versions of that license, including any exceptions or
+additional permissions as identified by the initial Contributor.
 
-  a) it must be made available under this Agreement; and
-  b) a copy of this Agreement must be included with each copy of the Program.
-     Contributors may not remove or alter any copyright notices contained
-     within the Program.
+## 2. GRANT OF RIGHTS
 
-Each Contributor must identify itself as the originator of its Contribution,
-if
-any, in a manner that reasonably allows subsequent Recipients to identify the
-originator of the Contribution.
+-   a\) Subject to the terms of this Agreement, each Contributor hereby
+    grants Recipient a non-exclusive, worldwide, royalty-free copyright
+    license to reproduce, prepare Derivative Works of, publicly display,
+    publicly perform, Distribute and sublicense the Contribution of such
+    Contributor, if any, and such Derivative Works.
+-   b\) Subject to the terms of this Agreement, each Contributor hereby
+    grants Recipient a non-exclusive, worldwide, royalty-free patent license
+    under Licensed Patents to make, use, sell, offer to sell, import and
+    otherwise transfer the Contribution of such Contributor, if any, in
+    Source Code or other form. This patent license shall apply to the
+    combination of the Contribution and the Program if, at the time the
+    Contribution is added by the Contributor, such addition of the
+    Contribution causes such combination to be covered by the
+    Licensed Patents. The patent license shall not apply to any other
+    combinations which include the Contribution. No hardware per se is
+    licensed hereunder.
+-   c\) Recipient understands that although each Contributor grants the
+    licenses to its Contributions set forth herein, no assurances are
+    provided by any Contributor that the Program does not infringe the
+    patent or other intellectual property rights of any other entity. Each
+    Contributor disclaims any liability to Recipient for claims brought by
+    any other entity based on infringement of intellectual property rights
+    or otherwise. As a condition to exercising the rights and licenses
+    granted hereunder, each Recipient hereby assumes sole responsibility to
+    secure any other intellectual property rights needed, if any. For
+    example, if a third party patent license is required to allow Recipient
+    to Distribute the Program, it is Recipient's responsibility to acquire
+    that license before distributing the Program.
+-   d\) Each Contributor represents that to its knowledge it has sufficient
+    copyright rights in its Contribution, if any, to grant the copyright
+    license set forth in this Agreement.
+-   e\) Notwithstanding the terms of any Secondary License, no Contributor
+    makes additional grants to any Recipient (other than those set forth in
+    this Agreement) as a result of such Recipient's receipt of the Program
+    under the terms of a Secondary License (if permitted under the terms of
+    Section 3).
 
-4. COMMERCIAL DISTRIBUTION
+## 3. REQUIREMENTS
 
-Commercial distributors of software may accept certain responsibilities with
-respect to end users, business partners and the like. While this license is
-intended to facilitate the commercial use of the Program, the Contributor who
-includes the Program in a commercial product offering should do so in a manner
-which does not create potential liability for other Contributors. Therefore,
-if a Contributor includes the Program in a commercial product offering, such
-Contributor ("Commercial Contributor") hereby agrees to defend and indemnify
-every other Contributor ("Indemnified Contributor") against any losses,
-damages and costs (collectively "Losses") arising from claims, lawsuits and
-other legal actions brought by a third party against the Indemnified
-Contributor to the extent caused by the acts or omissions of such Commercial
-Contributor in connection with its distribution of the Program in a commercial
-product offering. The obligations in this section do not apply to any claims
-or Losses relating to any actual or alleged intellectual property
-infringement. In order to qualify, an Indemnified Contributor must:
-a) promptly notify the Commercial Contributor in writing of such claim, and
-b) allow the Commercial Contributor to control, and cooperate with the
-Commercial Contributor in, the defense and any related settlement
-negotiations. The Indemnified Contributor may participate in any such claim at
-its own expense.
+3.1 If a Contributor Distributes the Program in any form, then:
 
-For example, a Contributor might include the Program in a commercial product
-offering, Product X. That Contributor is then a Commercial Contributor. If
-that Commercial Contributor then makes performance claims, or offers
-warranties related to Product X, those performance claims and warranties are
-such Commercial Contributor's responsibility alone. Under this section, the
-Commercial Contributor would have to defend claims against the other
-Contributors related to those performance claims and warranties, and if a
-court requires any other Contributor to pay any damages as a result, the
-Commercial Contributor must pay those damages.
+-   a\) the Program must also be made available as Source Code, in accordance
+    with section 3.2, and the Contributor must accompany the Program with a
+    statement that the Source Code for the Program is available under this
+    Agreement, and informs Recipients how to obtain it in a reasonable
+    manner on or through a medium customarily used for software exchange;
+    and
+-   b\) the Contributor may Distribute the Program under a license different
+    than this Agreement, provided that such license:
+    -   i\) effectively disclaims on behalf of all other Contributors all
+        warranties and conditions, express and implied, including warranties or
+        conditions of title and non-infringement, and implied warranties or
+        conditions of merchantability and fitness for a particular purpose;
+    -   ii\) effectively excludes on behalf of all other Contributors all
+        liability for damages, including direct, indirect, special, incidental
+        and consequential damages, such as lost profits;
+    -   iii\) does not attempt to limit or alter the recipients' rights in the
+        Source Code under section 3.2; and
+    -   iv\) requires any subsequent distribution of the Program by any party to
+        be under a license that satisfies the requirements of this section 3.
 
-5. NO WARRANTY
+3.2 When the Program is Distributed as Source Code:
 
-EXCEPT AS EXPRESSLY SET FORTH IN THIS AGREEMENT, THE PROGRAM IS PROVIDED ON AN
-"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR
-IMPLIED INCLUDING, WITHOUT LIMITATION, ANY WARRANTIES OR CONDITIONS OF TITLE,
-NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. Each
-Recipient is solely responsible for determining the appropriateness of using
-and distributing the Program and assumes all risks associated with its
-exercise of rights under this Agreement , including but not limited to the
-risks and costs of program errors, compliance with applicable laws, damage to
-or loss of data, programs or equipment, and unavailability or interruption of
-operations.
+-   a\) it must be made available under this Agreement, or if the Program (i)
+    is combined with other material in a separate file or files made
+    available under a Secondary License, and (ii) the initial Contributor
+    attached to the Source Code the notice described in Exhibit A of this
+    Agreement, then the Program may be made available under the terms of
+    such Secondary Licenses, and
+-   b\) a copy of this Agreement must be included with each copy of
+    the Program.
 
-6. DISCLAIMER OF LIABILITY
+3.3 Contributors may not remove or alter any copyright, patent,
+trademark, attribution notices, disclaimers of warranty, or limitations
+of liability (‘notices’) contained within the Program from any copy of
+the Program which they Distribute, provided that Contributors may add
+their own appropriate notices.
 
-EXCEPT AS EXPRESSLY SET FORTH IN THIS AGREEMENT, NEITHER RECIPIENT NOR ANY
-CONTRIBUTORS SHALL HAVE ANY LIABILITY FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING WITHOUT LIMITATION
-LOST PROFITS), HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+## 4. COMMERCIAL DISTRIBUTION
+
+Commercial distributors of software may accept certain responsibilities
+with respect to end users, business partners and the like. While this
+license is intended to facilitate the commercial use of the Program, the
+Contributor who includes the Program in a commercial product offering
+should do so in a manner which does not create potential liability for
+other Contributors. Therefore, if a Contributor includes the Program in
+a commercial product offering, such Contributor (“Commercial
+Contributor”) hereby agrees to defend and indemnify every other
+Contributor (“Indemnified Contributor”) against any losses, damages and
+costs (collectively “Losses”) arising from claims, lawsuits and other
+legal actions brought by a third party against the Indemnified
+Contributor to the extent caused by the acts or omissions of such
+Commercial Contributor in connection with its distribution of the
+Program in a commercial product offering. The obligations in this
+section do not apply to any claims or Losses relating to any actual or
+alleged intellectual property infringement. In order to qualify, an
+Indemnified Contributor must: a) promptly notify the Commercial
+Contributor in writing of such claim, and b) allow the Commercial
+Contributor to control, and cooperate with the Commercial Contributor
+in, the defense and any related settlement negotiations. The Indemnified
+Contributor may participate in any such claim at its own expense.
+
+For example, a Contributor might include the Program in a commercial
+product offering, Product X. That Contributor is then a Commercial
+Contributor. If that Commercial Contributor then makes performance
+claims, or offers warranties related to Product X, those performance
+claims and warranties are such Commercial Contributor's responsibility
+alone. Under this section, the Commercial Contributor would have to
+defend claims against the other Contributors related to those
+performance claims and warranties, and if a court requires any other
+Contributor to pay any damages as a result, the Commercial Contributor
+must pay those damages.
+
+## 5. NO WARRANTY {#warranty}
+
+EXCEPT AS EXPRESSLY SET FORTH IN THIS AGREEMENT, AND TO THE EXTENT
+PERMITTED BY APPLICABLE LAW, THE PROGRAM IS PROVIDED ON AN “AS IS”
+BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR
+IMPLIED INCLUDING, WITHOUT LIMITATION, ANY WARRANTIES OR CONDITIONS OF
+TITLE, NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR
+PURPOSE. Each Recipient is solely responsible for determining the
+appropriateness of using and distributing the Program and assumes all
+risks associated with its exercise of rights under this Agreement,
+including but not limited to the risks and costs of program errors,
+compliance with applicable laws, damage to or loss of data, programs or
+equipment, and unavailability or interruption of operations.
+
+## 6. DISCLAIMER OF LIABILITY {#disclaimer}
+
+EXCEPT AS EXPRESSLY SET FORTH IN THIS AGREEMENT, AND TO THE EXTENT
+PERMITTED BY APPLICABLE LAW, NEITHER RECIPIENT NOR ANY CONTRIBUTORS
+SHALL HAVE ANY LIABILITY FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING WITHOUT LIMITATION LOST
+PROFITS), HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
 CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OR DISTRIBUTION OF THE PROGRAM OR THE
-EXERCISE OF ANY RIGHTS GRANTED HEREUNDER, EVEN IF ADVISED OF THE POSSIBILITY
-OF SUCH DAMAGES.
+EXERCISE OF ANY RIGHTS GRANTED HEREUNDER, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGES.
 
-7. GENERAL
+## 7. GENERAL
 
 If any provision of this Agreement is invalid or unenforceable under
-applicable law, it shall not affect the validity or enforceability of the
-remainder of the terms of this Agreement, and without further action by the
-parties hereto, such provision shall be reformed to the minimum extent
-necessary to make such provision valid and enforceable.
+applicable law, it shall not affect the validity or enforceability of
+the remainder of the terms of this Agreement, and without further action
+by the parties hereto, such provision shall be reformed to the minimum
+extent necessary to make such provision valid and enforceable.
 
-If Recipient institutes patent litigation against any entity (including a
-cross-claim or counterclaim in a lawsuit) alleging that the Program itself
-(excluding combinations of the Program with other software or hardware)
-infringes such Recipient's patent(s), then such Recipient's rights granted
-under Section 2(b) shall terminate as of the date such litigation is filed.
+If Recipient institutes patent litigation against any entity (including
+a cross-claim or counterclaim in a lawsuit) alleging that the Program
+itself (excluding combinations of the Program with other software or
+hardware) infringes such Recipient's patent(s), then such Recipient's
+rights granted under Section 2(b) shall terminate as of the date such
+litigation is filed.
 
-All Recipient's rights under this Agreement shall terminate if it fails to
-comply with any of the material terms or conditions of this Agreement and does
-not cure such failure in a reasonable period of time after becoming aware of
-such noncompliance. If all Recipient's rights under this Agreement terminate,
-Recipient agrees to cease use and distribution of the Program as soon as
-reasonably practicable. However, Recipient's obligations under this Agreement
-and any licenses granted by Recipient relating to the Program shall continue
-and survive.
+All Recipient's rights under this Agreement shall terminate if it fails
+to comply with any of the material terms or conditions of this Agreement
+and does not cure such failure in a reasonable period of time after
+becoming aware of such noncompliance. If all Recipient's rights under
+this Agreement terminate, Recipient agrees to cease use and distribution
+of the Program as soon as reasonably practicable. However, Recipient's
+obligations under this Agreement and any licenses granted by Recipient
+relating to the Program shall continue and survive.
 
-Everyone is permitted to copy and distribute copies of this Agreement, but in
-order to avoid inconsistency the Agreement is copyrighted and may only be
-modified in the following manner. The Agreement Steward reserves the right to
-publish new versions (including revisions) of this Agreement from time to
-time. No one other than the Agreement Steward has the right to modify this
-Agreement. The Eclipse Foundation is the initial Agreement Steward. The
-Eclipse Foundation may assign the responsibility to serve as the Agreement
-Steward to a suitable separate entity. Each new version of the Agreement will
-be given a distinguishing version number. The Program (including
-Contributions) may always be distributed subject to the version of the
-Agreement under which it was received. In addition, after a new version of the
-Agreement is published, Contributor may elect to distribute the Program
-(including its Contributions) under the new version. Except as expressly
-stated in Sections 2(a) and 2(b) above, Recipient receives no rights or
-licenses to the intellectual property of any Contributor under this Agreement,
-whether expressly, by implication, estoppel or otherwise. All rights in the
-Program not expressly granted under this Agreement are reserved.
+Everyone is permitted to copy and distribute copies of this Agreement,
+but in order to avoid inconsistency the Agreement is copyrighted and may
+only be modified in the following manner. The Agreement Steward reserves
+the right to publish new versions (including revisions) of this
+Agreement from time to time. No one other than the Agreement Steward has
+the right to modify this Agreement. The Eclipse Foundation is the
+initial Agreement Steward. The Eclipse Foundation may assign the
+responsibility to serve as the Agreement Steward to a suitable separate
+entity. Each new version of the Agreement will be given a distinguishing
+version number. The Program (including Contributions) may always be
+Distributed subject to the version of the Agreement under which it was
+received. In addition, after a new version of the Agreement is
+published, Contributor may elect to Distribute the Program (including
+its Contributions) under the new version.
 
-This Agreement is governed by the laws of the State of New York and the
-intellectual property laws of the United States of America. No party to this
-Agreement will bring a legal action under this Agreement more than one year
-after the cause of action arose. Each party waives its rights to a jury trial in
-any resulting litigation.
+Except as expressly stated in Sections 2(a) and 2(b) above, Recipient
+receives no rights or licenses to the intellectual property of any
+Contributor under this Agreement, whether expressly, by implication,
+estoppel or otherwise. All rights in the Program not expressly granted
+under this Agreement are reserved. Nothing in this Agreement is intended
+to be enforceable by any entity that is not a Contributor or Recipient.
+No third-party beneficiary rights are created under this Agreement.
+
+## Exhibit A – Form of Secondary Licenses Notice {#exhibit-a}
+
+“This Source Code may also be made available under the following
+Secondary Licenses when the conditions for such availability set forth
+in the Eclipse Public License, v. 2.0 are satisfied: {name license(s),
+version(s), and exceptions or additional permissions here}.”
+
+> Simply including a copy of this Agreement, including this Exhibit A is
+> not sufficient to license the Source Code under Secondary Licenses.
+>
+> If it is not possible or desirable to put the notice in a particular
+> file, then You may include the notice in a location (such as a LICENSE
+> file in a relevant directory) where a recipient would be likely to
+> look for such a notice.
+>
+> You may add additional accurate notices of copyright ownership.
 
 
 ---------------------------------------------------------
@@ -6913,7 +6972,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---------------------------------------------------------
 
-eslint-plugin-jest 27.0.2 - MIT
+eslint-plugin-jest 27.0.4 - MIT
 https://github.com/jest-community/eslint-plugin-jest#readme
 
 Copyright (c) 2018 Jonathan Kim
@@ -7234,11 +7293,9 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ---------------------------------------------------------
 
-eslint 8.23.0 - MIT
+eslint 8.24.0 - MIT
 https://eslint.org
 
-Copyright 2013-2016 Dulin Marat and other contributors
-Copyright OpenJS Foundation and other contributors, <www.openjsf.org>
 
 Copyright OpenJS Foundation and other contributors, <www.openjsf.org>
 
@@ -7875,7 +7932,7 @@ SOFTWARE.
 
 ---------------------------------------------------------
 
-eslint-plugin-react 7.31.7 - MIT
+eslint-plugin-react 7.31.8 - MIT
 https://github.com/jsx-eslint/eslint-plugin-react
 
 copyright 2015 Vitaly Puzrin
@@ -8000,7 +8057,7 @@ THE SOFTWARE.
 
 ---------------------------------------------------------
 
-esbuild-android-64 0.15.7 - MIT
+esbuild-android-64 0.15.9 - MIT
 https://github.com/evanw/esbuild#readme
 
 Copyright 2018 The Go Authors
@@ -8218,7 +8275,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---------------------------------------------------------
 
-esbuild-linux-riscv64 0.15.7 - MIT
+esbuild-linux-riscv64 0.15.9 - MIT
 https://github.com/evanw/esbuild#readme
 
 
@@ -8236,7 +8293,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---------------------------------------------------------
 
-esbuild-linux-s390x 0.15.7 - MIT
+esbuild-linux-s390x 0.15.9 - MIT
 https://github.com/evanw/esbuild#readme
 
 
@@ -8254,7 +8311,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---------------------------------------------------------
 
-esbuild-netbsd-64 0.15.7 - MIT
+esbuild-netbsd-64 0.15.9 - MIT
 https://github.com/evanw/esbuild#readme
 
 
@@ -8272,7 +8329,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---------------------------------------------------------
 
-esbuild-openbsd-64 0.15.7 - MIT
+esbuild-openbsd-64 0.15.9 - MIT
 https://github.com/evanw/esbuild#readme
 
 
@@ -8290,7 +8347,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---------------------------------------------------------
 
-esbuild-sunos-64 0.15.7 - MIT
+esbuild-sunos-64 0.15.9 - MIT
 https://github.com/evanw/esbuild#readme
 
 
@@ -8344,7 +8401,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---------------------------------------------------------
 
-esbuild-windows-arm64 0.15.7 - MIT
+esbuild-windows-arm64 0.15.9 - MIT
 https://github.com/evanw/esbuild#readme
 
 
@@ -10494,40 +10551,6 @@ SOFTWARE.
 
 ---------------------------------------------------------
 
-functional-red-black-tree 1.0.1 - MIT
-https://github.com/mikolalysenko/functional-red-black-tree
-
-(c) 2013 Mikola Lysenko
-Copyright (c) 2013 Mikola Lysenko
-
-
-The MIT License (MIT)
-
-Copyright (c) 2013 Mikola Lysenko
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-
-
----------------------------------------------------------
-
----------------------------------------------------------
-
 file-entry-cache 6.0.1 - MIT
 https://github.com/royriojas/file-entry-cache#readme
 
@@ -10760,6 +10783,39 @@ SOFTWARE.
 
 is-string 1.0.7 - MIT
 https://github.com/ljharb/is-string#readme
+
+Copyright (c) 2015 Jordan Harband
+
+The MIT License (MIT)
+
+Copyright (c) 2015 Jordan Harband
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+
+---------------------------------------------------------
+
+---------------------------------------------------------
+
+is-symbol 1.0.4 - MIT
+https://github.com/inspect-js/is-symbol#readme
 
 Copyright (c) 2015 Jordan Harband
 
@@ -12989,39 +13045,6 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 ---------------------------------------------------------
 
-is-symbol 1.0.4 - MIT
-https://github.com/inspect-js/is-symbol#readme
-
-Copyright (c) 2015 Jordan Harband
-
-The MIT License (MIT)
-
-Copyright (c) 2015 Jordan Harband
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-
-
----------------------------------------------------------
-
----------------------------------------------------------
-
 jsx-ast-utils 3.2.1 - MIT
 https://github.com/jsx-eslint/jsx-ast-utils#readme
 
@@ -14258,6 +14281,37 @@ Copyright (c) 2020 Inspect JS
 MIT License
 
 Copyright (c) 2020 Inspect JS
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+---------------------------------------------------------
+
+---------------------------------------------------------
+
+js-sdsl 4.1.4 - MIT
+https://js-sdsl.github.io/
+
+
+MIT License
+
+Copyright (c) 2021 Zilong Yao
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -17796,7 +17850,7 @@ THE SOFTWARE.
 
 ---------------------------------------------------------
 
-nerdbank-gitversioning 3.5.109 - MIT
+nerdbank-gitversioning 3.5.113 - MIT
 https://github.com/dotnet/Nerdbank.GitVersioning
 
 Copyright (c) by P.J. Plauger
@@ -26482,7 +26536,7 @@ THE SOFTWARE.
 
 ---------------------------------------------------------
 
-styled-components 5.3.5 - MIT
+styled-components 5.3.6 - MIT
 https://styled-components.com/
 
 Copyright 2015, Yahoo! Inc.
@@ -27559,7 +27613,7 @@ END OF TERMS AND CONDITIONS
 
 ---------------------------------------------------------
 
-typescript 4.8.2 - Apache-2.0
+typescript 4.8.4 - Apache-2.0
 https://www.typescriptlang.org/
 
 (c) by W3C
@@ -29668,7 +29722,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ---------------------------------------------------------
 
-Azure.Bicep.Types 0.2.115 - MIT
+Azure.Bicep.Types 0.3.4 - MIT
 
 
 (c) Microsoft Corporation
@@ -29687,7 +29741,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---------------------------------------------------------
 
-Azure.Bicep.Types.Az 0.2.115 - MIT
+Azure.Bicep.Types.Az 0.2.148 - MIT
 
 
 (c) Microsoft Corporation
@@ -29761,64 +29815,138 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---------------------------------------------------------
 
-Azure.Deployments.Core 1.0.676 - MIT
-
-
-
-MIT License
-
-Copyright (c) <year> <copyright holders>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
----------------------------------------------------------
-
----------------------------------------------------------
-
-Azure.Deployments.Expression 1.0.676 - MIT
-
-
-
-MIT License
-
-Copyright (c) <year> <copyright holders>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
----------------------------------------------------------
-
----------------------------------------------------------
-
-Azure.Deployments.Templates 1.0.676 - MIT
-
-
-
-MIT License
-
-Copyright (c) <year> <copyright holders>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
----------------------------------------------------------
-
----------------------------------------------------------
-
-Azure.Identity 1.6.1 - MIT
+Azure.Deployments.Core 1.0.694 - MIT
 
 
 (c) Microsoft Corporation
+
+MIT License
+
+Copyright (c) <year> <copyright holders>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+---------------------------------------------------------
+
+---------------------------------------------------------
+
+Azure.Deployments.Expression 1.0.694 - MIT
+
+
+(c) Microsoft Corporation
+
+MIT License
+
+Copyright (c) <year> <copyright holders>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+---------------------------------------------------------
+
+---------------------------------------------------------
+
+Azure.Deployments.Internal.GenerateNotice 0.1.13 - MIT
+
+
+Copyright (c) 2019, App
+Copyright (c) 2022, App
+(c) Microsoft Corporation
+Copyright (c) Andrew Arnott
+Copyright 2019 LLVM Project
+Copyright 2018 Daniel Lemire
+Copyright (c) .NET Foundation
+Copyright 2012 the V8 project
+Copyright 1995-2017 Mark Adler
+Copyright (c) 2011, Google Inc.
+Copyright (c) 2020 Dan Shechter
+(c) 1997-2005 Sean Eron Anderson
+Copyright (c) 1998 Microsoft. To
+Copyright James Newton-King 2008
+Copyright (c) 2017 Yoshifumi Kawai
+Copyright (c) 2005-2020 Rich Felker
+Copyright (c) 2022, App vNext Polly
+Copyright (c) Microsoft Corporation
+Copyright LibGit2Sharp contributors
+Copyright (c) 2007 James Newton-King
+Copyright (c) 2012-2014, Yann Collet
+Copyright (c) 1991-2020 Unicode, Inc.
+Copyright (c) 2013-2017, Alfred Klomp
+Copyright (c) 2011-2020 Microsoft Corp
+Copyright (c) 2015-2017, Wojciech Mula
+Copyright (c) 2005-2007, Nick Galbreath
+Copyright (c) 2015 The Chromium Authors
+Copyright (c) 2018 Alexander Chermyanin
+Copyright (c) The Internet Society 1997
+Portions (c) International Organization
+Copyright (c) 2004-2006 Intel Corporation
+Copyright (c) 2013-2017, Milosz Krajewski
+Copyright (c) 2016-2017, Matthieu Darbois
+Copyright (c) The Internet Society (2003)
+Copyright James Newton-King 2008 Json.NET
+Copyright (c) .NET Foundation Contributors
+Copyright 1995-2017 Mark Adler +3 CScs DEFG
+Copyright (c) .NET Foundation and Contributors
+Copyright AssemblyCompany AssemblyConfiguration
+Copyright 1995-2017 Jean-loup Gailly and Mark Adler
+Copyright (c) 2019 Microsoft Corporation, Daan Leijen
+Copyright (c) 2011 Novell, Inc (http://www.novell.com)
+Copyright (c) 1995-2017 Jean-loup Gailly and Mark Adler
+Copyright (c) 2015 Xamarin, Inc (http://www.xamarin.com)
+Copyright (c) 2009, 2010, 2013-2016 by the Brotli Authors
+Copyright (c) 2014 Ryan Juckett http://www.ryanjuckett.com
+Copyright (c) 2019, App vNext HttpClient HttpClientFactory
+(c) 2008 VeriSign, Inc. https://api.clearlydefined.io/notices
+Copyright (c) 1990- 1993, 1996 Open Software Foundation, Inc.
+Copyright (c) YEAR W3C(r) (MIT, ERCIM, Keio, Beihang). Disclaimers
+Copyright (c) 2015 THL A29 Limited, a Tencent company, and Milo Yip
+Copyright 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018 The Regents of the University of California
+Copyright (c) 1989 by Hewlett-Packard Company, Palo Alto, Ca. & Digital Equipment Corporation, Maynard, Mass
+Copyright (c) 1989 by Hewlett-Packard Company, Palo Alto, Ca. & Digital Equipment Corporation, Maynard, Mass. To
+
+MIT License
+
+Copyright (c) <year> <copyright holders>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+---------------------------------------------------------
+
+---------------------------------------------------------
+
+Azure.Deployments.Templates 1.0.694 - MIT
+
+
+(c) Microsoft Corporation
+
+MIT License
+
+Copyright (c) <year> <copyright holders>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+---------------------------------------------------------
+
+---------------------------------------------------------
+
+Azure.Identity 1.7.0 - MIT
+
+
 
 MIT License
 
@@ -32826,7 +32954,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---------------------------------------------------------
 
-Nerdbank.GitVersioning 3.5.109 - MIT
+Nerdbank.GitVersioning 3.5.113 - MIT
 
 
 Copyright 1995-2017 Mark Adler
@@ -35825,7 +35953,7 @@ SOFTWARE.
 
 ---------------------------------------------------------
 
-System.Text.Json 6.0.5 - MIT
+System.Text.Json 6.0.6 - MIT
 
 
 (c) Microsoft Corporation
@@ -36106,9 +36234,11 @@ SOFTWARE.
 
 ---------------------------------------------------------
 
-System.IO.Abstractions 17.1.1 - MIT
+System.IO.Abstractions 17.2.3 - MIT
 
 
+Copyright Tatham Oddie
+Copyright (c) Tatham Oddie
 
 MIT License
 

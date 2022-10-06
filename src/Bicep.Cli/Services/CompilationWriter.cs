@@ -24,25 +24,27 @@ namespace Bicep.Cli.Services
             var fileStream = CreateFileStream(outputPath);
             using (fileStream)
             {
-                return new TemplateEmitter(compilation.GetEntrypointSemanticModel(), invocationContext.EmitterSettings).Emit(fileStream);
+                var semanticModel = compilation.GetEntrypointSemanticModel();
+                return new TemplateEmitter(semanticModel).Emit(fileStream);
             }
         }
 
         public EmitResult ToStream(Compilation compilation, Stream stream)
         {
-            return new TemplateEmitter(compilation.GetEntrypointSemanticModel(), invocationContext.EmitterSettings).Emit(stream);
+            var semanticModel = compilation.GetEntrypointSemanticModel();
+            return new TemplateEmitter(semanticModel).Emit(stream);
         }
 
         public EmitResult ToStdout(Compilation compilation)
         {
             var semanticModel = compilation.GetEntrypointSemanticModel();
-            var sourceFileToTrack = this.invocationContext.Features.SourceMappingEnabled ? semanticModel.SourceFile : default;
-            using var writer = new SourceAwareJsonTextWriter(invocationContext.OutputWriter, sourceFileToTrack)
+            var sourceFileToTrack = semanticModel.Features.SourceMappingEnabled ? semanticModel.SourceFile : null;
+            using var writer = new SourceAwareJsonTextWriter(semanticModel.FileResolver, invocationContext.OutputWriter, sourceFileToTrack)
             {
                 Formatting = Formatting.Indented
             };
 
-            var emitter = new TemplateEmitter(semanticModel, invocationContext.EmitterSettings);
+            var emitter = new TemplateEmitter(semanticModel);
 
             return emitter.Emit(writer);
         }

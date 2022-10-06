@@ -6,6 +6,8 @@ using Bicep.Cli.Commands;
 using Bicep.Cli.Helpers;
 using Bicep.Cli.Logging;
 using Bicep.Cli.Services;
+using Bicep.Core.Analyzers.Interfaces;
+using Bicep.Core.Analyzers.Linter;
 using Bicep.Core.Analyzers.Linter.ApiVersions;
 using Bicep.Core.Configuration;
 using Bicep.Core.Emit;
@@ -58,7 +60,6 @@ namespace Bicep.Cli
                     new AzResourceTypeLoader(),
                     Console.Out,
                     Console.Error,
-                    features: null,
                     clientFactory: null));
 
                 // this must be awaited so dispose of the listener occurs in the continuation
@@ -127,7 +128,8 @@ namespace Bicep.Cli
                 .AddSingleton<IFileSystem, FileSystem>()
                 .AddSingleton<IConfigurationManager, ConfigurationManager>()
                 .AddSingleton<ITokenCredentialFactory, TokenCredentialFactory>()
-                .AddSingleton<IApiVersionProvider, ApiVersionProvider>()
+                .AddSingleton<IApiVersionProviderFactory, ApiVersionProviderFactory>()
+                .AddSingleton<IBicepAnalyzer, LinterAnalyzer>()
                 .AddSingleton<TemplateDecompiler>()
                 .AddSingleton<DecompilationWriter>()
                 .AddSingleton<CompilationWriter>()
