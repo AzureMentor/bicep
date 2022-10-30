@@ -11,6 +11,7 @@ using Bicep.Core.Features;
 using Bicep.Core.FileSystem;
 using Bicep.Core.Registry;
 using Bicep.Core.Semantics;
+using Bicep.Core.Semantics.Namespaces;
 using Bicep.Core.Syntax;
 using Bicep.Core.Workspaces;
 using Bicep.Decompiler;
@@ -28,34 +29,37 @@ namespace Bicep.Cli.Services
         private readonly IFileResolver fileResolver;
         private readonly IModuleDispatcher moduleDispatcher;
         private readonly IConfigurationManager configurationManager;
-        private readonly InvocationContext invocationContext;
+        private readonly IOContext io;
         private readonly Workspace workspace;
         private readonly TemplateDecompiler decompiler;
         private readonly IApiVersionProviderFactory apiVersionProviderFactory;
         private readonly IFeatureProviderFactory featureProviderFactory;
         private readonly IBicepAnalyzer bicepAnalyzer;
+        private readonly INamespaceProvider namespaceProvider;
 
         public CompilationService(
             IDiagnosticLogger diagnosticLogger,
             IFileResolver fileResolver,
-            InvocationContext invocationContext,
+            IOContext io,
             IModuleDispatcher moduleDispatcher,
             IConfigurationManager configurationManager,
             TemplateDecompiler decompiler,
             IApiVersionProviderFactory apiVersionProviderFactory,
             IFeatureProviderFactory featureProviderFactory,
-            IBicepAnalyzer bicepAnalyzer)
+            IBicepAnalyzer bicepAnalyzer,
+            INamespaceProvider namespaceProvider)
         {
             this.diagnosticLogger = diagnosticLogger;
             this.fileResolver = fileResolver;
             this.moduleDispatcher = moduleDispatcher;
             this.configurationManager = configurationManager;
-            this.invocationContext = invocationContext;
+            this.io = io;
             this.workspace = new Workspace();
             this.decompiler = decompiler;
             this.apiVersionProviderFactory = apiVersionProviderFactory;
             this.featureProviderFactory = featureProviderFactory;
             this.bicepAnalyzer = bicepAnalyzer;
+            this.namespaceProvider = namespaceProvider;
         }
 
         public async Task RestoreAsync(string inputPath, bool forceModulesRestore)
@@ -103,39 +107,10 @@ namespace Bicep.Cli.Services
                 }
             }
 
-            var compilation = new Compilation(featureProviderFactory, this.invocationContext.NamespaceProvider, sourceFileGrouping, configurationManager, apiVersionProviderFactory, bicepAnalyzer);
+            var compilation = new Compilation(featureProviderFactory, namespaceProvider, sourceFileGrouping, configurationManager, apiVersionProviderFactory, bicepAnalyzer);
             LogDiagnostics(compilation);
 
             return compilation;
-        }
-
-        public async Task<ParamsSemanticModel> CompileParams(string inputPath, bool skipRestore)
-        {
-            var inputUri = PathHelper.FilePathToFileUrl(inputPath);
-
-            var sourceFileGrouping = SourceFileGroupingBuilder.Build(this.fileResolver, this.moduleDispatcher, this.workspace, inputUri);
-            if (!skipRestore)
-            {
-                // module references in the file may be malformed
-                // however we still want to surface as many errors as we can for the module refs that are valid
-                // so we will try to restore modules with valid refs and skip everything else
-                // (the diagnostics will be collected during compilation)
-                if (await moduleDispatcher.RestoreModules(moduleDispatcher.GetValidModuleReferences(sourceFileGrouping.GetModulesToRestore())))
-                {
-                    // modules had to be restored - recompile
-                    sourceFileGrouping = SourceFileGroupingBuilder.Rebuild(moduleDispatcher, this.workspace, sourceFileGrouping);
-                }
-            }
-
-            var model = new ParamsSemanticModel(sourceFileGrouping, configurationManager.GetConfiguration(inputUri), featureProviderFactory.GetFeatureProvider(inputUri), file => {
-                var compilationGrouping = new SourceFileGrouping(fileResolver, file.FileUri, sourceFileGrouping.FileResultByUri, sourceFileGrouping.UriResultByModule, sourceFileGrouping.SourceFileParentLookup);
-
-
-                return new Compilation(featureProviderFactory, this.invocationContext.NamespaceProvider, compilationGrouping, configurationManager, apiVersionProviderFactory, bicepAnalyzer);
-            });
-            LogParamDiagnostics(model);
-
-            return model;
         }
 
         public async Task<(Uri, ImmutableDictionary<Uri, string>)> DecompileAsync(string inputPath, string outputPath)
@@ -158,7 +133,7 @@ namespace Bicep.Cli.Services
             return decompilation;
         }
 
-        private static ImmutableDictionary<BicepFile, ImmutableArray<IDiagnostic>> GetModuleRestoreDiagnosticsByBicepFile(SourceFileGrouping sourceFileGrouping, ImmutableHashSet<ModuleSourceResolutionInfo> originalModulesToRestore, bool forceModulesRestore)
+        private static ImmutableDictionary<BicepSourceFile, ImmutableArray<IDiagnostic>> GetModuleRestoreDiagnosticsByBicepFile(SourceFileGrouping sourceFileGrouping, ImmutableHashSet<ModuleSourceResolutionInfo> originalModulesToRestore, bool forceModulesRestore)
         {
             static IDiagnostic? DiagnosticForModule(SourceFileGrouping grouping, ModuleDeclarationSyntax module)
                 => grouping.TryGetErrorDiagnostic(module) is {} errorBuilder ? errorBuilder(DiagnosticBuilder.ForPosition(module.Path)) : null;
@@ -192,7 +167,7 @@ namespace Bicep.Cli.Services
 
             return diagnosticsByFile
                 .ToLookup(t => t.Item1, t => t.Item2)
-                .ToImmutableDictionary(g => g.Key, g => g.ToImmutableArray());
+                .ToImmutableDictionary(g => (BicepSourceFile)g.Key, g => g.ToImmutableArray());
         }
 
         private void LogDiagnostics(Compilation compilation)
@@ -205,7 +180,7 @@ namespace Bicep.Cli.Services
             LogDiagnostics(compilation.GetAllDiagnosticsByBicepFile());
         }
 
-        private void LogDiagnostics(ImmutableDictionary<BicepFile, ImmutableArray<IDiagnostic>> diagnosticsByBicepFile)
+        private void LogDiagnostics(ImmutableDictionary<BicepSourceFile, ImmutableArray<IDiagnostic>> diagnosticsByBicepFile)
         {
             foreach (var (bicepFile, diagnostics) in diagnosticsByBicepFile)
             {
@@ -214,14 +189,6 @@ namespace Bicep.Cli.Services
                     diagnosticLogger.LogDiagnostic(bicepFile.FileUri, diagnostic, bicepFile.LineStarts);
                 }
             }
-        }
-
-        private void LogParamDiagnostics(ParamsSemanticModel paramSemanticModel)
-        {
-            foreach (var diagnostic in paramSemanticModel.GetAllDiagnostics())
-            {
-                diagnosticLogger.LogDiagnostic(paramSemanticModel.BicepParamFile.FileUri, diagnostic, paramSemanticModel.BicepParamFile.LineStarts);
-            };
         }
     }
 }

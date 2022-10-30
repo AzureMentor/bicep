@@ -26,15 +26,15 @@ namespace Bicep.Core.UnitTests.Utils
             IEnumerable<IDiagnostic> Diagnostics,
             Compilation Compilation)
         {
-            public BicepFile BicepFile => Compilation.SourceFileGrouping.EntryPoint;
+            public BicepFile BicepFile => (BicepFile)Compilation.SourceFileGrouping.EntryPoint;
         }
 
         public record ParamsCompilationResult(
             JToken? Parameters,
             IEnumerable<IDiagnostic> Diagnostics,
-            ParamsSemanticModel SemanticModel)
+            Compilation Compilation)
         {
-            public BicepParamFile ParamsFile => SemanticModel.BicepParamFile;
+            public BicepParamFile ParamsFile => (BicepParamFile)Compilation.SourceFileGrouping.EntryPoint;
         }
 
         public record CursorLookupResult(
@@ -63,10 +63,10 @@ namespace Bicep.Core.UnitTests.Utils
         }
 
         public static CompilationResult Compile(IAzResourceTypeLoader resourceTypeLoader, params (string fileName, string fileContents)[] files)
-            => Compile(new ServiceBuilder().WithFeatureProvider(BicepTestConstants.Features).WithAzResourceTypeLoader(resourceTypeLoader), files);
+            => Compile(new ServiceBuilder().WithFeatureOverrides(BicepTestConstants.FeatureOverrides).WithAzResourceTypeLoader(resourceTypeLoader), files);
 
         public static CompilationResult Compile(params (string fileName, string fileContents)[] files)
-            => Compile(new ServiceBuilder().WithFeatureProvider(BicepTestConstants.Features), files);
+            => Compile(new ServiceBuilder().WithFeatureOverrides(BicepTestConstants.FeatureOverrides), files);
 
         public static CompilationResult Compile(string fileContents)
             => Compile(("main.bicep", fileContents));
@@ -76,9 +76,9 @@ namespace Bicep.Core.UnitTests.Utils
 
         public static ParamsCompilationResult CompileParams(params (string fileName, string fileContents)[] files)
         {
-            var features = BicepTestConstants.Features;
+            var features = BicepTestConstants.FeatureOverrides;
             var configuration = BicepTestConstants.BuiltInConfiguration;
-            var services = new ServiceBuilder().WithFeatureProvider(features).WithConfiguration(configuration);
+            var services = new ServiceBuilder().WithFeatureOverrides(features).WithConfigurationPatch(c => configuration);
 
             files.Select(x => x.fileName).Should().Contain("parameters.bicepparam");
 
@@ -90,14 +90,9 @@ namespace Bicep.Core.UnitTests.Utils
                 .ToDictionary(x => x.Key, x => x.Value);
 
             var sourceFileGrouping = services.BuildSourceFileGrouping(sourceFiles, entryUri);
+            var compilation = services.WithFeatureOverrides(features).Build().BuildCompilation(sourceFileGrouping);
 
-            var model = new ParamsSemanticModel(sourceFileGrouping, configuration, features, file => {
-                var compilationGrouping = new SourceFileGrouping(fileResolver, file.FileUri, sourceFileGrouping.FileResultByUri, sourceFileGrouping.UriResultByModule, sourceFileGrouping.SourceFileParentLookup);
-
-                return services.Build().BuildCompilation(sourceFileGrouping);
-            });
-
-            return CompileParams(model);
+            return CompileParams(compilation);
         }
 
         public static ParamsCompilationResult CompileParams(string fileContents)
@@ -114,12 +109,13 @@ namespace Bicep.Core.UnitTests.Utils
 
         public static CompilationResult Compile(Compilation compilation)
         {
+            SemanticModel semanticModel = compilation.GetEntrypointSemanticModel();
             var emitter = new TemplateEmitter(compilation.GetEntrypointSemanticModel());
 
-            var diagnostics = compilation.GetEntrypointSemanticModel().GetAllDiagnostics();
+            var diagnostics = semanticModel.GetAllDiagnostics();
 
             JToken? template = null;
-            if (!compilation.GetEntrypointSemanticModel().HasErrors())
+            if (!semanticModel.HasErrors())
             {
                 using var stream = new MemoryStream();
                 var emitResult = emitter.Emit(stream);
@@ -136,13 +132,14 @@ namespace Bicep.Core.UnitTests.Utils
             return new(template, diagnostics, compilation);
         }
 
-        private static ParamsCompilationResult CompileParams(ParamsSemanticModel semanticModel)
+        private static ParamsCompilationResult CompileParams(Compilation compilation)
         {
+            var semanticModel = compilation.GetEntrypointSemanticModel();
             var emitter = new ParametersEmitter(semanticModel);
 
             var diagnostics = semanticModel.GetAllDiagnostics();
 
-            JToken? template = null;
+            JToken? parameters = null;
             if (!semanticModel.HasErrors())
             {
                 using var stream = new MemoryStream();
@@ -153,11 +150,11 @@ namespace Bicep.Core.UnitTests.Utils
                     stream.Position = 0;
                     var jsonOutput = new StreamReader(stream).ReadToEnd();
 
-                    template = JToken.Parse(jsonOutput);
+                    parameters = JToken.Parse(jsonOutput);
                 }
             }
 
-            return new(template, diagnostics, semanticModel);
+            return new(parameters, diagnostics, compilation);
         }
     }
 }

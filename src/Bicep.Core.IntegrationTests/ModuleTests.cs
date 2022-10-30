@@ -36,7 +36,7 @@ namespace Bicep.Core.IntegrationTests
         private static readonly MockRepository Repository = new MockRepository(MockBehavior.Strict);
         private static readonly IConfigurationManager ConfigurationManager = IConfigurationManager.WithStaticConfiguration(BicepTestConstants.BuiltInConfigurationWithAllAnalyzersDisabled);
 
-        private ServiceBuilder ServicesWithResourceTyped => new ServiceBuilder().WithFeatureProvider(BicepTestConstants.CreateFeatureProvider(TestContext, resourceTypedParamsAndOutputsEnabled: true));
+        private ServiceBuilder ServicesWithResourceTyped => new ServiceBuilder().WithFeatureOverrides(new(TestContext, ResourceTypedParamsAndOutputsEnabled: true));
 
         [NotNull]
         public TestContext? TestContext { get; set; }
@@ -174,13 +174,13 @@ module main 'main.bicep' = {
 
             var (success, diagnosticsByFile) = GetSuccessAndDiagnosticsByFile(compilation);
             diagnosticsByFile[mainUri].Should().HaveDiagnostics(new[] {
-                ("BCP095", DiagnosticLevel.Error, "The module is involved in a cycle (\"/modulea.bicep\" -> \"/moduleb.bicep\" -> \"/main.bicep\")."),
+                ("BCP095", DiagnosticLevel.Error, "The file is involved in a cycle (\"/modulea.bicep\" -> \"/moduleb.bicep\" -> \"/main.bicep\")."),
             });
             diagnosticsByFile[moduleAUri].Should().HaveDiagnostics(new[] {
-                ("BCP095", DiagnosticLevel.Error, "The module is involved in a cycle (\"/moduleb.bicep\" -> \"/main.bicep\" -> \"/modulea.bicep\")."),
+                ("BCP095", DiagnosticLevel.Error, "The file is involved in a cycle (\"/moduleb.bicep\" -> \"/main.bicep\" -> \"/modulea.bicep\")."),
             });
             diagnosticsByFile[moduleBUri].Should().HaveDiagnostics(new[] {
-                ("BCP095", DiagnosticLevel.Error, "The module is involved in a cycle (\"/main.bicep\" -> \"/modulea.bicep\" -> \"/moduleb.bicep\")."),
+                ("BCP095", DiagnosticLevel.Error, "The file is involved in a cycle (\"/main.bicep\" -> \"/modulea.bicep\" -> \"/moduleb.bicep\")."),
             });
             success.Should().BeFalse();
         }
@@ -391,7 +391,7 @@ module modulea 'modulea.bicep' = {
         [TestMethod]
         public void External_module_reference_with_unknown_scheme_should_be_rejected()
         {
-            var services = new ServiceBuilder().WithFeatureProvider(BicepTestConstants.CreateFeatureProvider(TestContext, registryEnabled: true));
+            var services = new ServiceBuilder().WithFeatureOverrides(new(TestContext, RegistryEnabled: true));
             var result = CompilationHelper.Compile(services, @"module test 'fake:totally-fake' = {}");
 
             result.Should().HaveDiagnostics(new[]
@@ -403,7 +403,7 @@ module modulea 'modulea.bicep' = {
         [TestMethod]
         public void External_module_reference_with_oci_scheme_should_be_rejected_if_registry_disabled()
         {
-            var services = new ServiceBuilder().WithFeatureProvider(BicepTestConstants.CreateFeatureProvider(TestContext, registryEnabled: false));
+            var services = new ServiceBuilder().WithFeatureOverrides(new(TestContext, RegistryEnabled: false));
             var result = CompilationHelper.Compile(services, @"module test 'br:totally-fake' = {}");
 
             result.Should().HaveDiagnostics(new[]
@@ -587,12 +587,12 @@ output storage resource = storage
             result.Template.Should().HaveValueAtPath("$.outputs.id", new JObject()
             {
                 ["type"] = new JValue("string"),
-                ["value"] = new JValue("[reference(resourceId('Microsoft.Resources/deployments', 'test')).outputs.storage.value]"),
+                ["value"] = new JValue("[reference(resourceId('Microsoft.Resources/deployments', 'test'), '2020-10-01').outputs.storage.value]"),
             });
             result.Template.Should().HaveValueAtPath("$.outputs.name", new JObject()
             {
                 ["type"] = new JValue("string"),
-                ["value"] = new JValue("[last(split(reference(resourceId('Microsoft.Resources/deployments', 'test')).outputs.storage.value, '/'))]"),
+                ["value"] = new JValue("[last(split(reference(resourceId('Microsoft.Resources/deployments', 'test'), '2020-10-01').outputs.storage.value, '/'))]"),
             });
             result.Template.Should().HaveValueAtPath("$.outputs.type", new JObject()
             {
@@ -607,7 +607,7 @@ output storage resource = storage
             result.Template.Should().HaveValueAtPath("$.outputs.accessTier", new JObject()
             {
                 ["type"] = new JValue("string"),
-                ["value"] = new JValue("[reference(reference(resourceId('Microsoft.Resources/deployments', 'test')).outputs.storage.value, '2019-06-01').accessTier]"),
+                ["value"] = new JValue("[reference(reference(resourceId('Microsoft.Resources/deployments', 'test'), '2020-10-01').outputs.storage.value, '2019-06-01').accessTier]"),
             });
         }
 
@@ -640,12 +640,12 @@ output storage resource = storage
             result.Template.Should().HaveValueAtPath("$.outputs.id", new JObject()
             {
                 ["type"] = new JValue("string"),
-                ["value"] = new JValue("[reference(resourceId('Microsoft.Resources/deployments', format('test-{0}', 0))).outputs.storage.value]"),
+                ["value"] = new JValue("[reference(resourceId('Microsoft.Resources/deployments', format('test-{0}', 0)), '2020-10-01').outputs.storage.value]"),
             });
             result.Template.Should().HaveValueAtPath("$.outputs.name", new JObject()
             {
                 ["type"] = new JValue("string"),
-                ["value"] = new JValue("[last(split(reference(resourceId('Microsoft.Resources/deployments', format('test-{0}', 0))).outputs.storage.value, '/'))]"),
+                ["value"] = new JValue("[last(split(reference(resourceId('Microsoft.Resources/deployments', format('test-{0}', 0)), '2020-10-01').outputs.storage.value, '/'))]"),
             });
             result.Template.Should().HaveValueAtPath("$.outputs.type", new JObject()
             {
@@ -660,7 +660,7 @@ output storage resource = storage
             result.Template.Should().HaveValueAtPath("$.outputs.accessTier", new JObject()
             {
                 ["type"] = new JValue("string"),
-                ["value"] = new JValue("[reference(reference(resourceId('Microsoft.Resources/deployments', format('test-{0}', 0))).outputs.storage.value, '2019-06-01').accessTier]"),
+                ["value"] = new JValue("[reference(reference(resourceId('Microsoft.Resources/deployments', format('test-{0}', 0)), '2020-10-01').outputs.storage.value, '2019-06-01').accessTier]"),
             });
         }
 
@@ -737,6 +737,20 @@ output out string = p.properties.minimalTlsVersion
             {
                 ("BCP036", DiagnosticLevel.Error, "The property \"p\" expected a value of type \"Microsoft.Sql/servers\" but the provided value is of type \"Microsoft.Storage/storageAccounts@2019-06-01\"."),
             });
+        }
+
+        [TestMethod]
+        public void Module_cannot_reference_bicep_params_file()
+        {
+            var result = CompilationHelper.Compile(
+                Services,
+("main.bicep", @"
+module mod './foo.bicepparam' = {
+  name: 'hello'
+}
+"),
+("foo.bicepparam", @""));
+            result.Should().OnlyContainDiagnostic("BCP277", DiagnosticLevel.Error, "A module declaration can only reference a Bicep File, an ARM template, a registry reference or a template spec reference.");
         }
 
         private static string GetTemplate(Compilation compilation)

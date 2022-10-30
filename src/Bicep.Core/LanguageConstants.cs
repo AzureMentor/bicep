@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -16,8 +17,14 @@ namespace Bicep.Core
         public const string LanguageId = "bicep";
         public const string LanguageFileExtension = ".bicep";
 
+        public static bool IsBicepLanguage(string? languageId) => string.Equals(LanguageId, languageId, StringComparison.OrdinalIgnoreCase);
+
         public const string ParamsLanguageId = "bicep-params";
         public const string ParamsFileExtension = ".bicepparam";
+
+        public static bool IsParamsLanguage(string? languageId) => string.Equals(ParamsLanguageId, languageId, StringComparison.OrdinalIgnoreCase);
+
+        public static bool IsBicepOrParamsLanguage([NotNullWhen(true)] string? languageId) => IsBicepLanguage(languageId) || IsParamsLanguage(languageId);
 
         public const string JsonLanguageId = "json";
         public const string JsoncLanguageId = "jsonc";
@@ -119,6 +126,8 @@ namespace Bicep.Core
 
         // types
         public const string TypeNameString = "string";
+        public const string TypeNameBool = "bool";
+        public const string TypeNameInt = "int";
         public const string TypeNameModule = "module";
 
         public static readonly StringComparer IdentifierComparer = StringComparer.Ordinal;
@@ -148,13 +157,17 @@ namespace Bicep.Core
 
         public static readonly TypeSymbol String = new PrimitiveType(TypeNameString, TypeSymbolValidationFlags.Default);
         // LooseString should be regarded as equal to the 'string' type, but with different validation behavior
-        public static readonly TypeSymbol LooseString = new PrimitiveType(TypeNameString, TypeSymbolValidationFlags.AllowLooseStringAssignment);
+        public static readonly TypeSymbol LooseString = new PrimitiveType(TypeNameString, TypeSymbolValidationFlags.AllowLooseAssignment);
         // SecureString should be regarded as equal to the 'string' type, but with different validation behavior
-        public static readonly TypeSymbol SecureString = new PrimitiveType(TypeNameString, TypeSymbolValidationFlags.AllowLooseStringAssignment | TypeSymbolValidationFlags.IsSecure);
+        public static readonly TypeSymbol SecureString = new PrimitiveType(TypeNameString, TypeSymbolValidationFlags.AllowLooseAssignment | TypeSymbolValidationFlags.IsSecure);
         public static readonly TypeSymbol Object = new ObjectType(ObjectType, TypeSymbolValidationFlags.Default, Enumerable.Empty<TypeProperty>(), LanguageConstants.Any);
         public static readonly TypeSymbol SecureObject = new ObjectType(ObjectType, TypeSymbolValidationFlags.Default | TypeSymbolValidationFlags.IsSecure, Enumerable.Empty<TypeProperty>(), LanguageConstants.Any);
-        public static readonly TypeSymbol Int = new PrimitiveType("int", TypeSymbolValidationFlags.Default);
-        public static readonly TypeSymbol Bool = new PrimitiveType("bool", TypeSymbolValidationFlags.Default);
+        public static readonly TypeSymbol Int = new PrimitiveType(TypeNameInt, TypeSymbolValidationFlags.Default);
+        // LooseInt should be regarded as equal to the 'int' type, but with different validation behavior
+        public static readonly TypeSymbol LooseInt = new PrimitiveType(TypeNameInt, TypeSymbolValidationFlags.AllowLooseAssignment);
+        public static readonly TypeSymbol Bool = new PrimitiveType(TypeNameBool, TypeSymbolValidationFlags.Default);
+        // LooseBool should be regarded as equal to the 'bool' type, but with different validation behavior
+        public static readonly TypeSymbol LooseBool = new PrimitiveType(TypeNameBool, TypeSymbolValidationFlags.AllowLooseAssignment);
         public static readonly TypeSymbol Null = new PrimitiveType(NullKeyword, TypeSymbolValidationFlags.Default);
         public static readonly TypeSymbol Array = new ArrayType(ArrayType);
 
