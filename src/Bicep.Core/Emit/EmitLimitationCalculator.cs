@@ -26,8 +26,10 @@ namespace Bicep.Core.Emit
 
             var moduleScopeData = ScopeHelper.GetModuleScopeInfo(model, diagnostics);
             var resourceScopeData = ScopeHelper.GetResourceScopeInfo(model, diagnostics);
+            var resourceTypeResolver = ResourceTypeResolver.Create(model);
 
-            DeployTimeConstantValidator.Validate(model, diagnostics);
+            NestedRuntimeMemberAccessValidator.Validate(model, resourceTypeResolver, diagnostics);
+            DeployTimeConstantValidator.Validate(model, resourceTypeResolver, diagnostics);
             ForSyntaxValidatorVisitor.Validate(model, diagnostics);
             FunctionPlacementValidatorVisitor.Validate(model, diagnostics);
             IntegerValidatorVisitor.Validate(model, diagnostics);
@@ -244,7 +246,7 @@ namespace Bicep.Core.Emit
                 var indexVariable = @for.IndexVariable;
                 if (propertyMap.All(pair => IsInvariant(semanticModel, itemVariable, indexVariable, pair.Value)))
                 {
-                    diagnosticWriter.Write(DiagnosticBuilder.ForPosition(resource.Symbol.NameSyntax).ForExpressionContainsLoopInvariants(itemVariable.Name.IdentifierName, indexVariable?.Name.IdentifierName, expectedVariantPropertiesForType.Select(p => p.Name)));
+                    diagnosticWriter.Write(DiagnosticBuilder.ForPosition(resource.Symbol.NameSource).ForExpressionContainsLoopInvariants(itemVariable.Name.IdentifierName, indexVariable?.Name.IdentifierName, expectedVariantPropertiesForType.Select(p => p.Name)));
                 }
             }
         }
@@ -289,7 +291,7 @@ namespace Bicep.Core.Emit
                 if (propertyMap.All(pair => IsInvariant(semanticModel, itemVariable, indexVariable, pair.Value)))
                 {
                     // all the expected variant properties are loop invariant
-                    diagnosticWriter.Write(DiagnosticBuilder.ForPosition(module.NameSyntax).ForExpressionContainsLoopInvariants(itemVariable.Name.IdentifierName, indexVariable?.Name.IdentifierName, expectedVariantPropertiesForType.Select(p => p.Name)));
+                    diagnosticWriter.Write(DiagnosticBuilder.ForPosition(module.NameSource).ForExpressionContainsLoopInvariants(itemVariable.Name.IdentifierName, indexVariable?.Name.IdentifierName, expectedVariantPropertiesForType.Select(p => p.Name)));
                 }
             }
         }
@@ -329,7 +331,7 @@ namespace Bicep.Core.Emit
             var copyVariableSymbol = semanticModel.Root.VariableDeclarations.FirstOrDefault(x => x.Name.Equals(LanguageConstants.CopyLoopIdentifier, StringComparison.OrdinalIgnoreCase));
             if (copyVariableSymbol is not null)
             {
-                diagnosticWriter.Write(DiagnosticBuilder.ForPosition(copyVariableSymbol.NameSyntax).ReservedIdentifier(LanguageConstants.CopyLoopIdentifier));
+                diagnosticWriter.Write(DiagnosticBuilder.ForPosition(copyVariableSymbol.NameSource).ReservedIdentifier(LanguageConstants.CopyLoopIdentifier));
             }
         }
 

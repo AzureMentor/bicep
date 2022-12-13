@@ -23,7 +23,7 @@ namespace Bicep.Core.IntegrationTests.Extensibility
             BicepProviderName: BuiltInName,
             ConfigurationType: GetConfigurationType(),
             ArmTemplateProviderName: "AzureStorage",
-            ArmTemplateProviderVersion: "1.0");
+            ArmTemplateProviderVersion: "1.0.0");
 
         private static ObjectType GetConfigurationType()
         {
@@ -67,7 +67,7 @@ namespace Bicep.Core.IntegrationTests.Extensibility
                         new TypeProperty("name", LanguageConstants.String, TypePropertyFlags.Required),
                         new TypeProperty("base64Content", LanguageConstants.String, TypePropertyFlags.Required),
                     }, null)),
-            }.ToImmutableDictionary(x => x.TypeReference, ResourceTypeReferenceComparer.Instance);
+            }.ToImmutableDictionary(x => x.TypeReference);
 
             public ResourceType? TryGenerateFallbackType(NamespaceType declaringNamespace, ResourceTypeReference reference, ResourceTypeGenerationFlags flags)
                 => null;
@@ -101,7 +101,7 @@ namespace Bicep.Core.IntegrationTests.Extensibility
             return new NamespaceType(
                 aliasName,
                 Settings,
-                ImmutableArray<TypeProperty>.Empty,
+                ImmutableArray<TypeTypeProperty>.Empty,
                 ImmutableArray<FunctionOverload>.Empty,
                 ImmutableArray<BannedFunction>.Empty,
                 ImmutableArray<Decorator>.Empty,

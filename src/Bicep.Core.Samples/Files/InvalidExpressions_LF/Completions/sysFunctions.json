@@ -22,6 +22,27 @@
   },
   {
     "label": "array",
+    "kind": "property",
+    "detail": "array",
+    "documentation": {
+      "kind": "markdown",
+      "value": "Type: `Type<array>`  \n"
+    },
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_array",
+    "insertTextFormat": "plainText",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "array"
+    },
+    "commitCharacters": [
+      "."
+    ]
+  },
+  {
+    "label": "array",
     "kind": "function",
     "documentation": {
       "kind": "markdown",
@@ -103,6 +124,27 @@
       "title": "signature help",
       "command": "editor.action.triggerParameterHints"
     }
+  },
+  {
+    "label": "bool",
+    "kind": "property",
+    "detail": "bool",
+    "documentation": {
+      "kind": "markdown",
+      "value": "Type: `Type<bool>`  \n"
+    },
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_bool",
+    "insertTextFormat": "plainText",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "bool"
+    },
+    "commitCharacters": [
+      "."
+    ]
   },
   {
     "label": "bool",
@@ -382,7 +424,7 @@
     "kind": "function",
     "documentation": {
       "kind": "markdown",
-      "value": "```bicep\nflatten(... : array[]): array\n\n```\nTakes an array of arrays, and returns an array of sub-array elements, in the original order. Sub-arrays are only flattened once, not recursively.\n"
+      "value": "```bicep\nflatten(array: array[]): array\n\n```\nTakes an array of arrays, and returns an array of sub-array elements, in the original order. Sub-arrays are only flattened once, not recursively.\n"
     },
     "deprecated": false,
     "preselect": false,
@@ -391,7 +433,11 @@
     "insertTextMode": "adjustIndentation",
     "textEdit": {
       "range": {},
-      "newText": "flatten()$0"
+      "newText": "flatten($0)"
+    },
+    "command": {
+      "title": "signature help",
+      "command": "editor.action.triggerParameterHints"
     }
   },
   {
@@ -456,6 +502,27 @@
       "title": "signature help",
       "command": "editor.action.triggerParameterHints"
     }
+  },
+  {
+    "label": "int",
+    "kind": "property",
+    "detail": "int",
+    "documentation": {
+      "kind": "markdown",
+      "value": "Type: `Type<int>`  \n"
+    },
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_int",
+    "insertTextFormat": "plainText",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "int"
+    },
+    "commitCharacters": [
+      "."
+    ]
   },
   {
     "label": "int",
@@ -769,6 +836,27 @@
     }
   },
   {
+    "label": "object",
+    "kind": "property",
+    "detail": "object",
+    "documentation": {
+      "kind": "markdown",
+      "value": "Type: `Type<object>`  \n"
+    },
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_object",
+    "insertTextFormat": "plainText",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "object"
+    },
+    "commitCharacters": [
+      "."
+    ]
+  },
+  {
     "label": "padLeft",
     "kind": "function",
     "documentation": {
@@ -938,6 +1026,27 @@
   },
   {
     "label": "string",
+    "kind": "property",
+    "detail": "string",
+    "documentation": {
+      "kind": "markdown",
+      "value": "Type: `Type<string>`  \n"
+    },
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_string",
+    "insertTextFormat": "plainText",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "string"
+    },
+    "commitCharacters": [
+      "."
+    ]
+  },
+  {
+    "label": "string",
     "kind": "function",
     "documentation": {
       "kind": "markdown",
@@ -1014,6 +1123,27 @@
     "textEdit": {
       "range": {},
       "newText": "toLower($0)"
+    },
+    "command": {
+      "title": "signature help",
+      "command": "editor.action.triggerParameterHints"
+    }
+  },
+  {
+    "label": "toObject",
+    "kind": "function",
+    "documentation": {
+      "kind": "markdown",
+      "value": "```bicep\ntoObject(array: array, keyPredicate: any => string, [valuePredicate: any => any]): object\n\n```\nConverts an array to an object with a custom key function and optional custom value function.\n"
+    },
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "3_toObject",
+    "insertTextFormat": "snippet",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "toObject($0)"
     },
     "command": {
       "title": "signature help",

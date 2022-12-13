@@ -311,7 +311,6 @@ namespace Bicep.Core.Parsing
                 else if (textWindow.Peek() == '/' && textWindow.Peek(1) == '*')
                 {
                     yield return ScanMultiLineComment();
-                    yield break;
                 }
                 else if (textWindow.Peek() == '#' &&
                     CheckAdjacentText(LanguageConstants.DisableNextLineDiagnosticsKeyword) &&
@@ -979,7 +978,7 @@ namespace Bicep.Core.Parsing
                                 return TokenType.LogicalOr;
                         }
                     }
-                    return TokenType.Unrecognized;
+                    return TokenType.Pipe;
                 case '\'':
                     // "'''" means we're starting a multiline string.
                     if (textWindow.Peek(0) == '\'' && textWindow.Peek(1) == '\'')

@@ -23,7 +23,7 @@ namespace Bicep.Core.IntegrationTests.Extensibility
             BicepProviderName: BuiltInName,
             ConfigurationType: null,
             ArmTemplateProviderName: "AAD",
-            ArmTemplateProviderVersion: "1.0");
+            ArmTemplateProviderVersion: "1.0.0");
 
         private class AadTypeProvider : IResourceTypeProvider
         {
@@ -38,7 +38,7 @@ namespace Bicep.Core.IntegrationTests.Extensibility
                         new TypeProperty("uniqueName", LanguageConstants.String, TypePropertyFlags.Required | TypePropertyFlags.SystemProperty),
                         new TypeProperty("appId", LanguageConstants.String, TypePropertyFlags.ReadOnly),
                     }, null)),
-            }.ToImmutableDictionary(x => x.TypeReference, ResourceTypeReferenceComparer.Instance);
+            }.ToImmutableDictionary(x => x.TypeReference);
 
             public ResourceType? TryGenerateFallbackType(NamespaceType declaringNamespace, ResourceTypeReference reference, ResourceTypeGenerationFlags flags)
                 => null;
@@ -72,7 +72,7 @@ namespace Bicep.Core.IntegrationTests.Extensibility
             return new NamespaceType(
                 aliasName,
                 Settings,
-                ImmutableArray<TypeProperty>.Empty,
+                ImmutableArray<TypeTypeProperty>.Empty,
                 ImmutableArray<FunctionOverload>.Empty,
                 ImmutableArray<BannedFunction>.Empty,
                 ImmutableArray<Decorator>.Empty,

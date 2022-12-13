@@ -12,7 +12,7 @@ using Bicep.Core.Syntax;
 
 namespace Bicep.Core.PrettyPrint
 {
-    public class DocumentBuildVisitor : SyntaxVisitor
+    public class DocumentBuildVisitor : CstVisitor
     {
         private static readonly ILinkedDocument Nil = new NilDocument();
 
@@ -83,10 +83,9 @@ namespace Bicep.Core.PrettyPrint
                 this.VisitNodes(syntax.LeadingNodes);
                 this.Visit(syntax.Keyword);
                 this.documentStack.Push(Nil);
-                this.Visit(syntax.ProviderName);
-                this.Visit(syntax.AsKeyword);
-                this.Visit(syntax.AliasName);
-                this.Visit(syntax.Config);
+                this.Visit(syntax.SpecificationString);
+                this.Visit(syntax.WithClause);
+                this.Visit(syntax.AsClause);
             });
 
         public override void VisitMetadataDeclarationSyntax(MetadataDeclarationSyntax syntax) =>
@@ -444,6 +443,45 @@ namespace Bicep.Core.PrettyPrint
                 this.VisitCommaAndNewLineSeparated(syntax.Children, leadingAndTrailingSpace: true);
                 this.Visit(syntax.CloseBracket);
             });
+
+        public override void VisitTypeDeclarationSyntax(TypeDeclarationSyntax syntax) =>
+            this.BuildStatement(syntax, () =>
+            {
+                this.VisitNodes(syntax.LeadingNodes);
+                this.Visit(syntax.Keyword);
+                this.documentStack.Push(Nil);
+                this.Visit(syntax.Name);
+                this.Visit(syntax.Assignment);
+                this.Visit(syntax.Value);
+            });
+
+        public override void VisitArrayTypeSyntax(ArrayTypeSyntax syntax) =>
+            this.BuildWithConcat(() => {
+                this.Visit(syntax.Item);
+                this.Visit(syntax.OpenBracket);
+                this.Visit(syntax.CloseBracket);
+            });
+
+        public override void VisitObjectTypeSyntax(ObjectTypeSyntax syntax) =>
+            this.BuildWithConcat(() => {
+                this.Visit(syntax.OpenBrace);
+                this.VisitCommaAndNewLineSeparated(syntax.Children, leadingAndTrailingSpace: true);
+                this.Visit(syntax.CloseBrace);
+            });
+
+        public override void VisitObjectTypePropertySyntax(ObjectTypePropertySyntax syntax) =>
+            this.BuildWithConcat(() =>
+            {
+                this.VisitNodes(syntax.LeadingNodes);
+                this.Visit(syntax.Key);
+                this.Visit(syntax.OptionalityMarker);
+                this.Visit(syntax.Colon);
+                this.documentStack.Push(Space);
+                this.Visit(syntax.Value);
+            });
+
+        public override void VisitUnionTypeSyntax(UnionTypeSyntax syntax) =>
+            this.Build(() => base.VisitUnionTypeSyntax(syntax), Spread);
 
         private static ILinkedDocument Text(string text) =>
             CommonTextCache.TryGetValue(text, out var cached) ? cached : new TextDocument(text);

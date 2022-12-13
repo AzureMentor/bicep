@@ -470,6 +470,13 @@ var reduceObjectUnion = reduce([
   { baz: 789 }
 ], {}, (cur, next) => union(cur, next))
 var reduceEmpty = reduce([], 0, (cur, next) => cur)
+
+var objectMap = toObject([123, 456, 789], i => '${i / 100}')
+var objectMap2 = toObject(numbers, i => '${i}', i => {
+  isEven: (i % 2) == 0
+  isGreaterThan2: (i > 2)
+})
+var objectMap3 = toObject(sortByObjectKey, x => x.name)
 ");
 
             using (new AssertionScope())
@@ -598,7 +605,227 @@ var reduceEmpty = reduce([], 0, (cur, next) => cur)
                     ["baz"] = 789
                 });
                 evaluated.Should().HaveValueAtPath("$.variables['reduceEmpty']", 0);
+                evaluated.Should().HaveValueAtPath("$.variables['objectMap']", JToken.Parse(@"{
+  ""1"": 123,
+  ""4"": 456,
+  ""7"": 789
+}"));
+                evaluated.Should().HaveValueAtPath("$.variables['objectMap2']", JToken.Parse(@"{
+  ""0"": {
+    ""isEven"": true,
+    ""isGreaterThan2"": false
+  },
+  ""1"": {
+    ""isEven"": false,
+    ""isGreaterThan2"": false
+  },
+  ""2"": {
+    ""isEven"": true,
+    ""isGreaterThan2"": false
+  },
+  ""3"": {
+    ""isEven"": false,
+    ""isGreaterThan2"": true
+  }
+}"));
+                evaluated.Should().HaveValueAtPath("$.variables['objectMap3']", JToken.Parse(@"{
+  ""First"": {
+    ""key"": 24,
+    ""name"": ""First""
+  },
+  ""Second"": {
+    ""key"": 124,
+    ""name"": ""Second""
+  },
+  ""Third"": {
+    ""key"": 298,
+    ""name"": ""Third""
+  },
+  ""Fourth"": {
+    ""key"": 1232,
+    ""name"": ""Fourth""
+  }
+}"));
             }
+        }
+
+        /// <summary>
+        /// https://github.com/Azure/bicep/issues/8782
+        /// </summary>
+        [TestMethod]
+        public void Issue8782()
+        {
+            var result = CompilationHelper.Compile(@"
+var testArray = [
+  {
+    property1: 'test'
+    property2: 1
+  }
+  {
+    property1: 'dev'
+    property2: 2
+  }
+  {
+    property1: 'test'
+    property2: 0
+  }
+  {
+    property1: 'prod'
+    property2: 1
+  }
+  {
+    property1: 'prod'
+    property2: 0
+  }
+  {
+    property1: 'dev'
+    property2: 0
+  }
+  {
+    property1: 'test'
+    property2: 0
+  }
+]
+
+output testMap array = map(testArray, record => {
+  result: record.property2 > 0 ? record.property1 : record.property1 =~ 'test' ? 'test!' : 'notTest!'
+})
+
+output testFor array = [for record in testArray: {
+  result: record.property2 > 0 ? record.property1 : record.property1 =~ 'test' ? 'test!' : 'notTest!'
+}]
+");
+
+            var evaluated = TemplateEvaluator.Evaluate(result.Template);
+            evaluated.Should().HaveValueAtPath("$.outputs['testMap'].value", JToken.Parse(@"
+[
+  {
+    ""result"": ""test""
+  },
+  {
+    ""result"": ""dev""
+  },
+  {
+    ""result"": ""test!""
+  },
+  {
+    ""result"": ""prod""
+  },
+  {
+    ""result"": ""notTest!""
+  },
+  {
+    ""result"": ""notTest!""
+  },
+  {
+    ""result"": ""test!""
+  }
+]
+"));
+        }
+
+        /// <summary>
+        /// https://github.com/Azure/bicep/issues/8782
+        /// </summary>
+        [TestMethod]
+        public void Issue8782_2()
+        {
+            var (parameters, _, _) = CompilationHelper.CompileParams(@"
+param testObject = {
+  a: true
+  b: false
+}
+");
+            var result = CompilationHelper.Compile(@"
+param testObject object
+output output1 array = map(
+  items(testObject),
+  subObject => 1 == 2 ? [ 'yes' ] : [ 'no' ]
+)
+output output2 array = map(
+  items(testObject),
+  subObject => subObject.key == 'a' ? [ 'yes' ] : [ 'no' ]
+)");
+
+            var evaluated = TemplateEvaluator.Evaluate(result.Template, parameters);
+            evaluated.Should().HaveValueAtPath("$.outputs['output1'].value", JToken.Parse(@"[
+  [
+    ""no""
+  ],
+  [
+    ""no""
+  ]
+]"));
+            evaluated.Should().HaveValueAtPath("$.outputs['output2'].value", JToken.Parse(@"[
+  [
+    ""yes""
+  ],
+  [
+    ""no""
+  ]
+]"));
+        }
+
+        /// <summary>
+        /// https://github.com/Azure/bicep/issues/8798
+        /// </summary>
+        [TestMethod]
+        public void Issue8798()
+        {
+            var result = CompilationHelper.Compile(@"
+var dogs = [
+  {
+    name: 'Evie'
+    age: 5
+    interests: ['Ball', 'Frisbee']
+  }
+  {
+    name: 'Casper'
+    age: 3
+    interests: ['Other dogs']
+  }
+  {
+    name: 'Indy'
+    age: 2
+    interests: ['Butter']
+  }
+  {
+    name: 'Kira'
+    age: 8
+    interests: ['Rubs']
+  }
+]
+
+output iDogs array = filter(dogs, dog =>  (contains(dog.name, 'C') || contains(dog.name, 'i')))
+");
+
+            var evaluated = TemplateEvaluator.Evaluate(result.Template);
+            evaluated.Should().HaveValueAtPath("$.outputs['iDogs'].value", JToken.Parse(@"
+[
+  {
+    ""name"": ""Evie"",
+    ""age"": 5,
+    ""interests"": [
+      ""Ball"",
+      ""Frisbee""
+    ]
+  },
+  {
+    ""name"": ""Casper"",
+    ""age"": 3,
+    ""interests"": [
+      ""Other dogs""
+    ]
+  },
+  {
+    ""name"": ""Kira"",
+    ""age"": 8,
+    ""interests"": [
+      ""Rubs""
+    ]
+  }
+]
+"));
         }
     }
 }

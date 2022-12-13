@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Resources;
 using Bicep.Core.TypeSystem;
+using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.UnitTests.Utils;
 using FluentAssertions;
@@ -78,7 +79,7 @@ param l
                 ("BCP028", DiagnosticLevel.Error, "Identifier \"l\" is declared multiple times. Remove or rename the duplicates."),
                 ("BCP079", DiagnosticLevel.Error, "This expression is referencing its own declaration, which is not allowed."),
                 ("BCP028", DiagnosticLevel.Error, "Identifier \"l\" is declared multiple times. Remove or rename the duplicates."),
-                ("BCP014", DiagnosticLevel.Error, "Expected a parameter type at this location. Please specify one of the following types: \"array\", \"bool\", \"int\", \"object\", \"string\"."),
+                ("BCP279", DiagnosticLevel.Error, "Expected a type at this location. Please specify a valid type expression or one of the following types: \"array\", \"bool\", \"int\", \"object\", \"string\"."),
             });
         }
 
@@ -1818,7 +1819,7 @@ param foo string = 'peach'
 
             result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new[]
             {
-                ("BCP027", DiagnosticLevel.Error, "The parameter expects a default value of type \"'apple' | 'banana'\" but provided value is of type \"'peach'\"."),
+                ("BCP033", DiagnosticLevel.Error, "Expected a value of type \"'apple' | 'banana'\" but the provided value is of type \"'peach'\"."),
             });
         }
 
@@ -3970,6 +3971,139 @@ resource queueAuthorizationRules 'Microsoft.ServiceBus/namespaces/queues/authori
             result.Template.Should().HaveValueAtPath("$.resources[2].copy.name", "queueAuthorizationRules");
             result.Template.Should().HaveValueAtPath("$.resources[2].name", "[format('{0}/{1}/{2}', variables('Names')[0], variables('Service_Bus_Queues')[copyIndex()], 'Listen')]");
             result.Template.Should().HaveValueAtPath("$.resources[2].dependsOn", new JArray("[resourceId('Microsoft.ServiceBus/namespaces/queues', variables('Names')[0], variables('Service_Bus_Queues')[copyIndex()])]"));
+        }
+
+        /// <summary>
+        /// https://github.com/Azure/bicep/issues/8890
+        /// </summary>
+        [TestMethod]
+        public void Test_Issue8890()
+        {
+            var result = CompilationHelper.Compile(@"
+param location string = resourceGroup().location
+
+@description('Optional. Enables system assigned managed identity on the resource.')
+param systemAssignedIdentity bool = false
+
+@description('Optional. The ID(s) to assign to the resource.')
+param userAssignedIdentities object = {}
+
+var identityType = systemAssignedIdentity ? (!empty(userAssignedIdentities) ? 'SystemAssigned,UserAssigned' : 'SystemAssigned') : (!empty(userAssignedIdentities) ? 'UserAssigned' : 'None')
+
+var identity = identityType != 'None' ? {
+  type: identityType
+  userAssignedIdentities: !empty(userAssignedIdentities) ? userAssignedIdentities : null
+} : null
+
+resource vm 'Microsoft.Compute/virtualMachines@2021-07-01' = {
+  name: 'name'
+  location: location
+  identity: identity
+}
+
+output vmPrincipalId string = vm.identity.principalId
+
+param usePython bool
+
+resource functionApp 'Microsoft.Web/sites@2022-03-01' = {
+  name: 'fa'
+  location: location
+  kind: 'functionApp'
+  identity: identity
+  properties: {
+    siteConfig: {
+      pythonVersion: usePython ? '~3.10' : null
+      nodeVersion: !usePython ? '18' : null
+    }
+  }
+}
+");
+
+            result.Should().NotHaveAnyDiagnostics();
+        }
+
+        /// <summary>
+        /// https://github.com/Azure/bicep/issues/8884
+        /// </summary>
+        [TestMethod]
+        public void Test_Issue8884()
+        {
+            var result = CompilationHelper.Compile(@"
+@minLength(1)
+@allowed(['fizz'])
+param fizzArray array
+
+@minLength(1)
+@allowed([true])
+param trueArray array
+
+@minLength(1)
+@allowed([1])
+param oneArray array
+
+@minLength(1)
+@allowed(['fizz', 'buzz', 'pop'])
+param permittedSubsetArray array
+
+output fizz string = fizzArray[0]
+output trueVal bool = trueArray[0]
+output one int = oneArray[0]
+output fizzBuzzOrPop string = permittedSubsetArray[0]
+");
+
+            result.Should().NotHaveAnyDiagnostics();
+
+            result.Template.Should().HaveValueAtPath("$.parameters.fizzArray.allowedValues", new JArray("fizz"));
+            result.Template.Should().NotHaveValueAtPath("$.parameters.fizzArray.items");
+
+            result.Template.Should().HaveValueAtPath("$.parameters.trueArray.allowedValues", new JArray(true));
+            result.Template.Should().NotHaveValueAtPath("$.parameters.trueArray.items");
+
+            result.Template.Should().HaveValueAtPath("$.parameters.oneArray.allowedValues", new JArray(1));
+            result.Template.Should().NotHaveValueAtPath("$.parameters.oneArray.items");
+
+            result.Template.Should().HaveValueAtPath("$.parameters.permittedSubsetArray.allowedValues", new JArray("fizz", "buzz", "pop"));
+            result.Template.Should().NotHaveValueAtPath("$.parameters.permittedSubsetArray.items");
+        }
+
+        /// <summary>
+        /// https://github.com/Azure/bicep/issues/8950
+        /// </summary>
+        [TestMethod]
+        public void Test_Issue8950()
+        {
+            var result = CompilationHelper.Compile(@"
+@description('App Service Plan sku')
+@allowed([
+  {
+    name: 'S1'
+    capacity: 1
+  }
+  {
+    name: 'P1v3'
+    capacity: 1
+  }
+])
+param appServicePlanSku object
+
+output sku string = appServicePlanSku.name
+");
+
+            result.Should().NotHaveAnyDiagnostics();
+        }
+
+        /// <summary>
+        /// https://github.com/Azure/bicep/issues/8950
+        /// </summary>
+        [TestMethod]
+        public void Test_Issue8960()
+        {
+            var result = CompilationHelper.Compile(@"
+param string sys.string = 'hello'
+output message sys.string = string
+");
+
+            result.Should().NotHaveAnyDiagnostics();
         }
     }
 }

@@ -56,6 +56,7 @@ namespace Bicep.Core.Emit
             LanguageConstants.ParameterMaxLengthPropertyName,
             LanguageConstants.ParameterMetadataPropertyName,
             LanguageConstants.MetadataDescriptionPropertyName,
+            LanguageConstants.ParameterSealedPropertyName,
         }.ToImmutableHashSet();
 
         private static ISemanticModel GetModuleSemanticModel(ModuleSymbol moduleSymbol)
@@ -128,6 +129,8 @@ namespace Bicep.Core.Emit
 
             this.EmitMetadata(jsonWriter, emitter);
 
+            this.EmitTypeDefinitionsIfPresent(jsonWriter, emitter);
+
             this.EmitParametersIfPresent(jsonWriter, emitter);
 
             this.EmitVariablesIfPresent(jsonWriter, emitter);
@@ -142,6 +145,27 @@ namespace Bicep.Core.Emit
 
             var content = jsonWriter.ToString();
             return (Template.FromJson<Template>(content), content.FromJson<JToken>());
+        }
+
+        private void EmitTypeDefinitionsIfPresent(PositionTrackingJsonTextWriter jsonWriter, ExpressionEmitter emitter)
+        {
+            if (context.SemanticModel.Root.TypeDeclarations.Length == 0)
+            {
+                return;
+            }
+
+            jsonWriter.WritePropertyName("definitions");
+            jsonWriter.WriteStartObject();
+
+            foreach (var declaredTypeSymbol in context.SemanticModel.Root.TypeDeclarations)
+            {
+                jsonWriter.WritePropertyWithPosition(
+                    declaredTypeSymbol.DeclaringType,
+                    declaredTypeSymbol.Name,
+                    () => EmitTypeDeclaration(jsonWriter, declaredTypeSymbol, emitter));
+            }
+
+            jsonWriter.WriteEndObject();
         }
 
         private void EmitParametersIfPresent(PositionTrackingJsonTextWriter jsonWriter, ExpressionEmitter emitter)
@@ -165,10 +189,10 @@ namespace Bicep.Core.Emit
             jsonWriter.WriteEndObject();
         }
 
-        private ObjectSyntax AddDecoratorsToBody(StatementSyntax statement, ObjectSyntax input, TypeSymbol targetType)
+        private ObjectSyntax AddDecoratorsToBody(DecorableSyntax decorated, ObjectSyntax input, TypeSymbol targetType)
         {
             var result = input;
-            foreach (var decoratorSyntax in statement.Decorators.Reverse())
+            foreach (var decoratorSyntax in decorated.Decorators.Reverse())
             {
                 var symbol = this.context.SemanticModel.GetSymbolInfo(decoratorSyntax.Expression);
 
@@ -198,40 +222,16 @@ namespace Bicep.Core.Emit
         {
             var declaringParameter = parameterSymbol.DeclaringParameter;
 
-            var properties = new List<ObjectPropertySyntax>();
-            if (parameterSymbol.Type is ResourceType resourceType)
-            {
-                // Encode a resource type as a string parameter with a metadata for the resource type.
-                properties.Add(SyntaxFactory.CreateObjectProperty("type", SyntaxFactory.CreateStringLiteral(LanguageConstants.String.Name)));
-                properties.Add(SyntaxFactory.CreateObjectProperty(
-                    LanguageConstants.ParameterMetadataPropertyName,
-                    SyntaxFactory.CreateObject(new[]
-                    {
-                        SyntaxFactory.CreateObjectProperty(
-                            LanguageConstants.MetadataResourceTypePropertyName,
-                            SyntaxFactory.CreateStringLiteral(resourceType.TypeReference.FormatName())),
-                    })));
-            }
-            else if (SyntaxHelper.TryGetPrimitiveType(declaringParameter) is TypeSymbol primitiveType)
-            {
-                properties.Add(SyntaxFactory.CreateObjectProperty("type", SyntaxFactory.CreateStringLiteral(primitiveType.Name)));
-            }
-            else
-            {
-                // this should have been caught by the type checker long ago
-                throw new ArgumentException($"Unable to find primitive type for parameter {parameterSymbol.Name}");
-            }
-
             jsonWriter.WriteStartObject();
 
-            var parameterObject = SyntaxFactory.CreateObject(properties);
+            var parameterObject = TypePropertiesForTypeExpression(parameterSymbol.DeclaringParameter.Type);
 
             if (declaringParameter.Modifier is ParameterDefaultValueSyntax defaultValueSyntax)
             {
                 parameterObject = parameterObject.MergeProperty("defaultValue", defaultValueSyntax.DefaultValue);
             }
 
-            parameterObject = AddDecoratorsToBody(declaringParameter, parameterObject, SyntaxHelper.TryGetPrimitiveType(declaringParameter) ?? parameterSymbol.Type);
+            parameterObject = AddDecoratorsToBody(declaringParameter, parameterObject, parameterSymbol.Type);
 
             foreach (var property in parameterObject.Properties)
             {
@@ -243,6 +243,245 @@ namespace Bicep.Core.Emit
 
             jsonWriter.WriteEndObject();
         }
+
+        private void EmitTypeDeclaration(JsonTextWriter jsonWriter, TypeAliasSymbol declaredTypeSymbol, ExpressionEmitter emitter)
+        {
+            jsonWriter.WriteStartObject();
+
+            var typeDefinitionObject = TypePropertiesForTypeExpression(declaredTypeSymbol.DeclaringType.Value);
+
+            typeDefinitionObject = AddDecoratorsToBody(declaredTypeSymbol.DeclaringType, typeDefinitionObject, declaredTypeSymbol.Type);
+
+            foreach (var property in typeDefinitionObject.Properties)
+            {
+                if (property.TryGetKeyText() is string propertyName)
+                {
+                    emitter.EmitProperty(propertyName, property.Value);
+                }
+            }
+
+            jsonWriter.WriteEndObject();
+        }
+
+        private ObjectSyntax TypePropertiesForTypeExpression(SyntaxBase typeExpressionSyntax) => typeExpressionSyntax switch
+        {
+            VariableAccessSyntax variableAccess => TypePropertiesForUnqualifedReference(variableAccess),
+            PropertyAccessSyntax propertyAccess => TypePropertiesForQualifiedReference(propertyAccess),
+            ResourceTypeSyntax resourceType => GetTypePropertiesForResourceType(resourceType),
+            ArrayTypeSyntax arrayType => GetTypePropertiesForArrayType(arrayType),
+            ObjectTypeSyntax objectType => GetTypePropertiesForObjectType(objectType),
+            StringSyntax @string => GetTypePropertiesForStringSyntax(@string),
+            IntegerLiteralSyntax integerLiteral => GetTypePropertiesForIntegerLiteralSyntax(integerLiteral),
+            BooleanLiteralSyntax booleanLiteral => GetTypePropertiesForBooleanLiteralSyntax(booleanLiteral),
+            UnaryOperationSyntax unaryOperation => GetTypePropertiesForUnaryOperationSyntax(unaryOperation),
+            UnionTypeSyntax unionType => GetTypePropertiesForUnionTypeSyntax(unionType),
+            ParenthesizedExpressionSyntax parenthesizedExpression => TypePropertiesForTypeExpression(parenthesizedExpression.Expression),
+            // this should have been caught by the parser
+            _ => throw new ArgumentException("Invalid type syntax encountered."),
+        };
+
+        private ObjectSyntax TypePropertiesForUnqualifedReference(VariableAccessSyntax variableAccess) => context.SemanticModel.GetSymbolInfo(variableAccess) switch
+        {
+            AmbientTypeSymbol ambientType => SyntaxFactory.CreateObject(TypeProperty(ambientType.Name).AsEnumerable()),
+            TypeAliasSymbol typeAlias => SyntaxFactory.CreateObject(SyntaxFactory.CreateObjectProperty("$ref", SyntaxFactory.CreateStringLiteral($"#/definitions/{typeAlias.Name}")).AsEnumerable()),
+            // should have been caught long ago by the type manager
+            _ => throw new ArgumentException($"The symbolic name \"{variableAccess.Name.IdentifierName}\" does not refer to a type"),
+        };
+
+        private ObjectSyntax TypePropertiesForQualifiedReference(PropertyAccessSyntax propertyAccess)
+        {
+            // The only property access scenario supported at the moment is dereferencing types from a namespace
+            if (context.SemanticModel.GetSymbolInfo(propertyAccess.BaseExpression) is not BuiltInNamespaceSymbol builtInNamespace || builtInNamespace.Type.ProviderName != SystemNamespaceType.BuiltInName)
+            {
+                throw new ArgumentException("Property access base expression did not resolve to the 'sys' namespace.");
+            }
+
+            return SyntaxFactory.CreateObject(TypeProperty(propertyAccess.PropertyName.IdentifierName).AsEnumerable());
+        }
+
+        private ObjectPropertySyntax TypeProperty(string typeName) => SyntaxFactory.CreateObjectProperty("type", SyntaxFactory.CreateStringLiteral(typeName));
+
+        private ObjectSyntax GetTypePropertiesForResourceType(ResourceTypeSyntax syntax)
+        {
+            var typeString = syntax.TypeString?.TryGetLiteralValue() ?? GetResourceTypeString(syntax);
+
+            return SyntaxFactory.CreateObject(new[]
+            {
+                TypeProperty(LanguageConstants.TypeNameString),
+                SyntaxFactory.CreateObjectProperty(LanguageConstants.ParameterMetadataPropertyName,
+                    SyntaxFactory.CreateObject(
+                        SyntaxFactory.CreateObjectProperty(LanguageConstants.MetadataResourceTypePropertyName,
+                            SyntaxFactory.CreateStringLiteral(typeString)).AsEnumerable())),
+            });
+        }
+
+        private string GetResourceTypeString(ResourceTypeSyntax syntax)
+        {
+            if (context.SemanticModel.GetTypeInfo(syntax) is not ResourceType resourceType)
+            {
+                // This should have been caught during type checking
+                throw new ArgumentException($"Unable to locate resource type.");
+            }
+
+            return resourceType.TypeReference.FormatName();
+        }
+
+        private ObjectSyntax GetTypePropertiesForArrayType(ArrayTypeSyntax syntax)
+        {
+            var properties = new List<ObjectPropertySyntax> { TypeProperty(LanguageConstants.ArrayType) };
+
+            if (TryGetAllowedValues(syntax.Item.Value) is {} allowedValues)
+            {
+                properties.Add(SyntaxFactory.CreateObjectProperty("allowedValues", allowedValues));
+            }
+            else
+            {
+                properties.Add(SyntaxFactory.CreateObjectProperty("items", TypePropertiesForTypeExpression(syntax.Item.Value)));
+            }
+
+            return SyntaxFactory.CreateObject(properties);
+        }
+
+        private ArraySyntax? TryGetAllowedValues(SyntaxBase syntax) => syntax switch
+        {
+            StringSyntax or
+            IntegerLiteralSyntax or
+            BooleanLiteralSyntax or
+            UnaryOperationSyntax or
+            NullLiteralSyntax => SingleElementArray(syntax),
+            ObjectTypeSyntax objectType when context.SemanticModel.GetDeclaredType(objectType) is {} type && TypeHelper.IsLiteralType(type) => SingleElementArray(ToLiteralValue(type)),
+            UnionTypeSyntax unionType => GetAllowedValuesForUnionType(unionType),
+            ParenthesizedExpressionSyntax parenthesized => TryGetAllowedValues(parenthesized.Expression),
+            _ => null,
+        };
+
+        private ArraySyntax SingleElementArray(SyntaxBase syntax) => SyntaxFactory.CreateArray(syntax.AsEnumerable());
+
+        private ArraySyntax GetAllowedValuesForUnionType(UnionTypeSyntax syntax)
+        {
+            if (context.SemanticModel.GetDeclaredType(syntax) is not UnionType unionType)
+            {
+                // This should have been caught during type checking
+                throw new ArgumentException("Invalid union encountered during template serialization");
+            }
+
+            return GetAllowedValuesForUnionType(unionType);
+        }
+
+        private ArraySyntax GetAllowedValuesForUnionType(UnionType unionType)
+            => SyntaxFactory.CreateArray(unionType.Members.Select(ToLiteralValue));
+
+        private ObjectSyntax GetTypePropertiesForObjectType(ObjectTypeSyntax syntax)
+        {
+            var properties = new List<ObjectPropertySyntax> { TypeProperty(LanguageConstants.ObjectType) };
+            List<SyntaxBase> required = new();
+            List<ObjectPropertySyntax> propertySchemata = new();
+
+            foreach (var property in syntax.Properties)
+            {
+                if (property.TryGetKeyText() is not string keyText)
+                {
+                    // This should have been caught during type checking
+                    throw new ArgumentException("Invalid object type key encountered during serialization.");
+                }
+
+                if (property.OptionalityMarker is null)
+                {
+                    required.Add(SyntaxFactory.CreateStringLiteral(keyText));
+                }
+
+                var propertySchema = TypePropertiesForTypeExpression(property.Value);
+                propertySchema = AddDecoratorsToBody(property, propertySchema, context.SemanticModel.GetDeclaredType(property) ?? ErrorType.Empty());
+
+                propertySchemata.Add(SyntaxFactory.CreateObjectProperty(keyText, propertySchema));
+            }
+
+            if (required.Any())
+            {
+                properties.Add(SyntaxFactory.CreateObjectProperty("required", SyntaxFactory.CreateArray(required)));
+            }
+
+            if (propertySchemata.Any())
+            {
+                properties.Add(SyntaxFactory.CreateObjectProperty("properties", SyntaxFactory.CreateObject(propertySchemata)));
+            }
+
+            return SyntaxFactory.CreateObject(properties);
+        }
+
+        private ObjectSyntax GetTypePropertiesForStringSyntax(StringSyntax syntax) => SyntaxFactory.CreateObject(new[]
+        {
+            TypeProperty(LanguageConstants.TypeNameString),
+            AllowedValuesForTypeExpression(syntax),
+        });
+
+        private ObjectSyntax GetTypePropertiesForIntegerLiteralSyntax(IntegerLiteralSyntax syntax) => SyntaxFactory.CreateObject(new[]
+        {
+            TypeProperty(LanguageConstants.TypeNameInt),
+            AllowedValuesForTypeExpression(syntax),
+        });
+
+        private ObjectSyntax GetTypePropertiesForBooleanLiteralSyntax(BooleanLiteralSyntax syntax) => SyntaxFactory.CreateObject(new[]
+        {
+            TypeProperty(LanguageConstants.TypeNameBool),
+            AllowedValuesForTypeExpression(syntax),
+        });
+
+        private ObjectSyntax GetTypePropertiesForUnaryOperationSyntax(UnaryOperationSyntax syntax)
+        {
+            // Within type syntax, unary operations are only permitted if they are resolvable to a literal type at compile-time
+            if (context.SemanticModel.GetDeclaredType(syntax) is not {} type || !TypeHelper.IsLiteralType(type))
+            {
+                throw new ArgumentException("Unary operator applied to unresolvable type symbol.");
+            }
+
+            return SyntaxFactory.CreateObject(new[]
+            {
+                TypeProperty(GetNonLiteralTypeName(type)),
+                AllowedValuesForTypeExpression(syntax),
+            });
+        }
+
+        private ObjectSyntax GetTypePropertiesForUnionTypeSyntax(UnionTypeSyntax syntax)
+        {
+            // Union types permit symbolic references, unary operations, and literals, so long as the whole expression embodied in the UnionTypeSyntax can be
+            // reduced to a flat union of literal types. If this didn't happen during type checking, the syntax will resolve to an ErrorType instead of a UnionType
+            if (context.SemanticModel.GetDeclaredType(syntax) is not UnionType unionType)
+            {
+                throw new ArgumentException("Invalid union encountered during template serialization");
+            }
+
+            return SyntaxFactory.CreateObject(new[]
+            {
+                TypeProperty(GetNonLiteralTypeName(unionType.Members.First().Type)),
+                SyntaxFactory.CreateObjectProperty("allowedValues", GetAllowedValuesForUnionType(unionType)),
+            });
+        }
+
+        private ObjectPropertySyntax AllowedValuesForTypeExpression(SyntaxBase syntax) => SyntaxFactory.CreateObjectProperty("allowedValues",
+            TryGetAllowedValues(syntax) ?? throw new ArgumentException("Unable to resolve allowed values during template serialization."));
+
+        private SyntaxBase ToLiteralValue(ITypeReference literalType) => literalType.Type switch
+        {
+            StringLiteralType @string => SyntaxFactory.CreateStringLiteral(@string.RawStringValue),
+            IntegerLiteralType @int => @int.Value < 0 ? SyntaxFactory.CreateNegativeIntegerLiteral((ulong) Math.Abs(@int.Value)) : SyntaxFactory.CreateIntegerLiteral((ulong) @int.Value),
+            BooleanLiteralType @bool => SyntaxFactory.CreateBooleanLiteral(@bool.Value),
+            PrimitiveType pt when pt.Name == LanguageConstants.NullKeyword => SyntaxFactory.CreateNullLiteral(),
+            ObjectType @object => SyntaxFactory.CreateObject(@object.Properties.Select(kvp => SyntaxFactory.CreateObjectProperty(kvp.Key, ToLiteralValue(kvp.Value.TypeReference)))),
+            // This would have been caught by the DeclaredTypeManager during initial type assignment
+            _ => throw new ArgumentException("Union types used in ARM type checks must be composed entirely of literal types"),
+        };
+
+        private string GetNonLiteralTypeName(TypeSymbol? type) => type switch {
+            StringLiteralType => "string",
+            IntegerLiteralType => "int",
+            BooleanLiteralType => "bool",
+            ObjectType => "object",
+            ArrayType => "array",
+            PrimitiveType pt when pt.Name != LanguageConstants.NullKeyword => pt.Name,
+            // This would have been caught by the DeclaredTypeManager during initial type assignment
+            _ => throw new ArgumentException("Unresolvable type name"),
+        };
 
         private void EmitVariablesIfPresent(PositionTrackingJsonTextWriter jsonWriter, ExpressionEmitter emitter)
         {
@@ -314,13 +553,13 @@ namespace Bicep.Core.Emit
                 var namespaceType = context.SemanticModel.GetTypeInfo(import.DeclaringSyntax) as NamespaceType
                     ?? throw new ArgumentException("Imported namespace does not have namespace type");
 
-                jsonWriter.WritePropertyWithPosition(import.DeclaringSyntax, import.DeclaringImport.AliasName.IdentifierName, () =>
+                jsonWriter.WritePropertyWithPosition(import.DeclaringSyntax, import.Name, () =>
                 {
                     jsonWriter.WriteObjectWithPosition(import.DeclaringSyntax, () =>
                     {
                         emitter.EmitProperty("provider", namespaceType.Settings.ArmTemplateProviderName);
                         emitter.EmitProperty("version", namespaceType.Settings.ArmTemplateProviderVersion);
-                        if (import.DeclaringImport.Config is not SkippedTriviaSyntax)
+                        if (import.DeclaringImport.Config is not null)
                         {
                             emitter.EmitProperty("config", import.DeclaringImport.Config);
                         }
@@ -562,9 +801,9 @@ namespace Bicep.Core.Emit
                 // we can't just call EmitObjectProperties here because the ObjectSyntax is flatter than the structure we're generating
                 // because nested deployment parameters are objects with a single value property
                 jsonWriter.WritePropertyName(keyName);
-                jsonWriter.WriteStartObject();
                 if (propertySyntax.Value is ForSyntax @for)
                 {
+                    jsonWriter.WriteStartObject();
                     // the value is a for-expression
                     // write a single property copy loop
                     emitter.EmitCopyProperty(() =>
@@ -573,15 +812,18 @@ namespace Bicep.Core.Emit
                         emitter.EmitCopyObject("value", @for, @for.Body, "value");
                         jsonWriter.WriteEndArray();
                     });
+                    jsonWriter.WriteEndObject();
                 }
                 else if (
                     this.context.SemanticModel.ResourceMetadata.TryLookup(propertySyntax.Value) is { } resourceMetadata &&
                     moduleSymbol.TryGetModuleType() is ModuleType moduleType &&
                     moduleType.TryGetParameterType(keyName) is ResourceParameterType parameterType)
                 {
+                    jsonWriter.WriteStartObject();
                     // This is a resource being passed into a module, we actually want to pass in its id
                     // rather than the whole resource.
                     emitter.EmitProperty("value", new PropertyAccessSyntax(propertySyntax.Value, SyntaxFactory.DotToken, SyntaxFactory.CreateIdentifier("id")));
+                    jsonWriter.WriteEndObject();
                 }
                 else
                 {
@@ -589,7 +831,6 @@ namespace Bicep.Core.Emit
                     emitter.EmitModuleParameterValue(propertySyntax.Value);
                 }
 
-                jsonWriter.WriteEndObject();
             }
 
             jsonWriter.WriteEndObject();

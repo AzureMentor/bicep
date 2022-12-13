@@ -11,7 +11,7 @@ using Bicep.Core.Utils;
 
 namespace Bicep.Core.TypeSystem
 {
-    public sealed class CyclicCheckVisitor : SyntaxVisitor
+    public sealed class CyclicCheckVisitor : AstVisitor
     {
         private readonly IReadOnlyDictionary<SyntaxBase, Symbol> bindings;
 
@@ -110,6 +110,9 @@ namespace Bicep.Core.TypeSystem
             }
         }
 
+        public override void VisitTypeDeclarationSyntax(TypeDeclarationSyntax syntax)
+            => VisitDeclaration(syntax, base.VisitTypeDeclarationSyntax);
+
         public override void VisitVariableAccessSyntax(VariableAccessSyntax syntax)
         {
             if (!currentDeclarations.TryPeek(out var currentDeclaration))
@@ -145,6 +148,16 @@ namespace Bicep.Core.TypeSystem
             declarationAccessDict[currentDeclaration].Add(syntax);
             base.VisitFunctionCallSyntax(syntax);
         }
+
+        public override void VisitObjectTypePropertySyntax(ObjectTypePropertySyntax syntax)
+        {
+            if (syntax.OptionalityMarker is not null)
+            {
+                // Optionally recursive types are not considered cyclic, so stop visiting.
+                return;
+            }
+
+            base.VisitObjectTypePropertySyntax(syntax);
+        }
     }
 }
-

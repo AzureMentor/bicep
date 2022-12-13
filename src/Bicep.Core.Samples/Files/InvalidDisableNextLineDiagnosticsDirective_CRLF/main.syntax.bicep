@@ -6,8 +6,9 @@ param storageAccount1 string = 'testStorageAccount'
 //@[00:005) | ├─Token(Identifier) |param|
 //@[06:021) | ├─IdentifierSyntax
 //@[06:021) | | └─Token(Identifier) |storageAccount1|
-//@[22:028) | ├─SimpleTypeSyntax
-//@[22:028) | | └─Token(Identifier) |string|
+//@[22:028) | ├─VariableAccessSyntax
+//@[22:028) | | └─IdentifierSyntax
+//@[22:028) | |   └─Token(Identifier) |string|
 //@[29:051) | └─ParameterDefaultValueSyntax
 //@[29:030) |   ├─Token(Assignment) |=|
 //@[31:051) |   └─StringSyntax
@@ -33,8 +34,9 @@ param storageAccount2 string = 'testStorageAccount'
 //@[00:005) | ├─Token(Identifier) |param|
 //@[06:021) | ├─IdentifierSyntax
 //@[06:021) | | └─Token(Identifier) |storageAccount2|
-//@[22:028) | ├─SimpleTypeSyntax
-//@[22:028) | | └─Token(Identifier) |string|
+//@[22:028) | ├─VariableAccessSyntax
+//@[22:028) | | └─IdentifierSyntax
+//@[22:028) | |   └─Token(Identifier) |string|
 //@[29:051) | └─ParameterDefaultValueSyntax
 //@[29:030) |   ├─Token(Assignment) |=|
 //@[31:051) |   └─StringSyntax
@@ -60,8 +62,9 @@ param storageAccount3 string = 'testStorageAccount'
 //@[00:005) | ├─Token(Identifier) |param|
 //@[06:021) | ├─IdentifierSyntax
 //@[06:021) | | └─Token(Identifier) |storageAccount3|
-//@[22:028) | ├─SimpleTypeSyntax
-//@[22:028) | | └─Token(Identifier) |string|
+//@[22:028) | ├─VariableAccessSyntax
+//@[22:028) | | └─IdentifierSyntax
+//@[22:028) | |   └─Token(Identifier) |string|
 //@[29:051) | └─ParameterDefaultValueSyntax
 //@[29:030) |   ├─Token(Assignment) |=|
 //@[31:051) |   └─StringSyntax
@@ -69,8 +72,7 @@ param storageAccount3 string = 'testStorageAccount'
 //@[51:055) ├─Token(NewLine) |\r\n\r\n|
 
 #disable-next-line/* comment between */ no-unused-params
-//@[39:056) ├─SkippedTriviaSyntax
-//@[39:040) | ├─Token(Unrecognized) | |
+//@[40:056) ├─SkippedTriviaSyntax
 //@[40:042) | ├─Token(Identifier) |no|
 //@[42:043) | ├─Token(Minus) |-|
 //@[43:049) | ├─Token(Identifier) |unused|
@@ -82,8 +84,9 @@ param storageAccount4 string = 'testStorageAccount'
 //@[00:005) | ├─Token(Identifier) |param|
 //@[06:021) | ├─IdentifierSyntax
 //@[06:021) | | └─Token(Identifier) |storageAccount4|
-//@[22:028) | ├─SimpleTypeSyntax
-//@[22:028) | | └─Token(Identifier) |string|
+//@[22:028) | ├─VariableAccessSyntax
+//@[22:028) | | └─IdentifierSyntax
+//@[22:028) | |   └─Token(Identifier) |string|
 //@[29:051) | └─ParameterDefaultValueSyntax
 //@[29:030) |   ├─Token(Assignment) |=|
 //@[31:051) |   └─StringSyntax
@@ -97,8 +100,9 @@ param storageAccount5 string = 'testStorageAccount'
 //@[00:005) | ├─Token(Identifier) |param|
 //@[06:021) | ├─IdentifierSyntax
 //@[06:021) | | └─Token(Identifier) |storageAccount5|
-//@[22:028) | ├─SimpleTypeSyntax
-//@[22:028) | | └─Token(Identifier) |string|
+//@[22:028) | ├─VariableAccessSyntax
+//@[22:028) | | └─IdentifierSyntax
+//@[22:028) | |   └─Token(Identifier) |string|
 //@[29:051) | └─ParameterDefaultValueSyntax
 //@[29:030) |   ├─Token(Assignment) |=|
 //@[31:051) |   └─StringSyntax
@@ -120,8 +124,9 @@ param storageAccount6 string = 'testStorageAccount'
 //@[00:005) | ├─Token(Identifier) |param|
 //@[06:021) | ├─IdentifierSyntax
 //@[06:021) | | └─Token(Identifier) |storageAccount6|
-//@[22:028) | ├─SimpleTypeSyntax
-//@[22:028) | | └─Token(Identifier) |string|
+//@[22:028) | ├─VariableAccessSyntax
+//@[22:028) | | └─IdentifierSyntax
+//@[22:028) | |   └─Token(Identifier) |string|
 //@[29:051) | └─ParameterDefaultValueSyntax
 //@[29:030) |   ├─Token(Assignment) |=|
 //@[31:051) |   └─StringSyntax
@@ -140,8 +145,9 @@ param storageAccount7 string = 'testStorageAccount'
 //@[00:005) | ├─Token(Identifier) |param|
 //@[06:021) | ├─IdentifierSyntax
 //@[06:021) | | └─Token(Identifier) |storageAccount7|
-//@[22:028) | ├─SimpleTypeSyntax
-//@[22:028) | | └─Token(Identifier) |string|
+//@[22:028) | ├─VariableAccessSyntax
+//@[22:028) | | └─IdentifierSyntax
+//@[22:028) | |   └─Token(Identifier) |string|
 //@[29:051) | └─ParameterDefaultValueSyntax
 //@[29:030) |   ├─Token(Assignment) |=|
 //@[31:051) |   └─StringSyntax
@@ -174,8 +180,9 @@ param storageAccount8 string = 'testStorageAccount'
 //@[00:005) | ├─Token(Identifier) |param|
 //@[06:021) | ├─IdentifierSyntax
 //@[06:021) | | └─Token(Identifier) |storageAccount8|
-//@[22:028) | ├─SimpleTypeSyntax
-//@[22:028) | | └─Token(Identifier) |string|
+//@[22:028) | ├─VariableAccessSyntax
+//@[22:028) | | └─IdentifierSyntax
+//@[22:028) | |   └─Token(Identifier) |string|
 //@[29:051) | └─ParameterDefaultValueSyntax
 //@[29:030) |   ├─Token(Assignment) |=|
 //@[31:051) |   └─StringSyntax

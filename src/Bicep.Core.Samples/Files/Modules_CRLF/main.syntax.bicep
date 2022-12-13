@@ -1,5 +1,5 @@
 
-//@[000:8594) ProgramSyntax
+//@[000:8881) ProgramSyntax
 //@[000:0002) ├─Token(NewLine) |\r\n|
 @sys.description('this is deployTimeSuffix param')
 //@[000:0093) ├─ParameterDeclarationSyntax
@@ -22,8 +22,9 @@ param deployTimeSuffix string = newGuid()
 //@[000:0005) | ├─Token(Identifier) |param|
 //@[006:0022) | ├─IdentifierSyntax
 //@[006:0022) | | └─Token(Identifier) |deployTimeSuffix|
-//@[023:0029) | ├─SimpleTypeSyntax
-//@[023:0029) | | └─Token(Identifier) |string|
+//@[023:0029) | ├─VariableAccessSyntax
+//@[023:0029) | | └─IdentifierSyntax
+//@[023:0029) | |   └─Token(Identifier) |string|
 //@[030:0041) | └─ParameterDefaultValueSyntax
 //@[030:0031) |   ├─Token(Assignment) |=|
 //@[032:0041) |   └─FunctionCallSyntax
@@ -930,8 +931,9 @@ output stringOutputA string = modATest.outputs.stringOutputA
 //@[000:0006) | ├─Token(Identifier) |output|
 //@[007:0020) | ├─IdentifierSyntax
 //@[007:0020) | | └─Token(Identifier) |stringOutputA|
-//@[021:0027) | ├─SimpleTypeSyntax
-//@[021:0027) | | └─Token(Identifier) |string|
+//@[021:0027) | ├─VariableAccessSyntax
+//@[021:0027) | | └─IdentifierSyntax
+//@[021:0027) | |   └─Token(Identifier) |string|
 //@[028:0029) | ├─Token(Assignment) |=|
 //@[030:0060) | └─PropertyAccessSyntax
 //@[030:0046) |   ├─PropertyAccessSyntax
@@ -950,8 +952,9 @@ output stringOutputB string = modATest.outputs.stringOutputB
 //@[000:0006) | ├─Token(Identifier) |output|
 //@[007:0020) | ├─IdentifierSyntax
 //@[007:0020) | | └─Token(Identifier) |stringOutputB|
-//@[021:0027) | ├─SimpleTypeSyntax
-//@[021:0027) | | └─Token(Identifier) |string|
+//@[021:0027) | ├─VariableAccessSyntax
+//@[021:0027) | | └─IdentifierSyntax
+//@[021:0027) | |   └─Token(Identifier) |string|
 //@[028:0029) | ├─Token(Assignment) |=|
 //@[030:0060) | └─PropertyAccessSyntax
 //@[030:0046) |   ├─PropertyAccessSyntax
@@ -970,8 +973,9 @@ output objOutput object = modATest.outputs.objOutput
 //@[000:0006) | ├─Token(Identifier) |output|
 //@[007:0016) | ├─IdentifierSyntax
 //@[007:0016) | | └─Token(Identifier) |objOutput|
-//@[017:0023) | ├─SimpleTypeSyntax
-//@[017:0023) | | └─Token(Identifier) |object|
+//@[017:0023) | ├─VariableAccessSyntax
+//@[017:0023) | | └─IdentifierSyntax
+//@[017:0023) | |   └─Token(Identifier) |object|
 //@[024:0025) | ├─Token(Assignment) |=|
 //@[026:0052) | └─PropertyAccessSyntax
 //@[026:0042) |   ├─PropertyAccessSyntax
@@ -990,8 +994,9 @@ output arrayOutput array = modATest.outputs.arrayOutput
 //@[000:0006) | ├─Token(Identifier) |output|
 //@[007:0018) | ├─IdentifierSyntax
 //@[007:0018) | | └─Token(Identifier) |arrayOutput|
-//@[019:0024) | ├─SimpleTypeSyntax
-//@[019:0024) | | └─Token(Identifier) |array|
+//@[019:0024) | ├─VariableAccessSyntax
+//@[019:0024) | | └─IdentifierSyntax
+//@[019:0024) | |   └─Token(Identifier) |array|
 //@[025:0026) | ├─Token(Assignment) |=|
 //@[027:0055) | └─PropertyAccessSyntax
 //@[027:0043) |   ├─PropertyAccessSyntax
@@ -1010,8 +1015,9 @@ output modCalculatedNameOutput object = moduleWithCalculatedName.outputs.outputO
 //@[000:0006) | ├─Token(Identifier) |output|
 //@[007:0030) | ├─IdentifierSyntax
 //@[007:0030) | | └─Token(Identifier) |modCalculatedNameOutput|
-//@[031:0037) | ├─SimpleTypeSyntax
-//@[031:0037) | | └─Token(Identifier) |object|
+//@[031:0037) | ├─VariableAccessSyntax
+//@[031:0037) | | └─IdentifierSyntax
+//@[031:0037) | |   └─Token(Identifier) |object|
 //@[038:0039) | ├─Token(Assignment) |=|
 //@[040:0082) | └─PropertyAccessSyntax
 //@[040:0072) |   ├─PropertyAccessSyntax
@@ -3140,8 +3146,102 @@ module secureModuleLooped 'child/secureParams.bicep' = [for (secret, i) in secre
 }]
 //@[000:0001) |   | └─Token(RightBrace) |}|
 //@[001:0002) |   └─Token(RightSquare) |]|
-//@[002:0008) ├─Token(NewLine) |\r\n\r\n\r\n|
+//@[002:0006) ├─Token(NewLine) |\r\n\r\n|
 
+module secureModuleCondition 'child/secureParams.bicep' = {
+//@[000:0285) ├─ModuleDeclarationSyntax
+//@[000:0006) | ├─Token(Identifier) |module|
+//@[007:0028) | ├─IdentifierSyntax
+//@[007:0028) | | └─Token(Identifier) |secureModuleCondition|
+//@[029:0055) | ├─StringSyntax
+//@[029:0055) | | └─Token(StringComplete) |'child/secureParams.bicep'|
+//@[056:0057) | ├─Token(Assignment) |=|
+//@[058:0285) | └─ObjectSyntax
+//@[058:0059) |   ├─Token(LeftBrace) |{|
+//@[059:0061) |   ├─Token(NewLine) |\r\n|
+  name: 'secureModuleCondition'
+//@[002:0031) |   ├─ObjectPropertySyntax
+//@[002:0006) |   | ├─IdentifierSyntax
+//@[002:0006) |   | | └─Token(Identifier) |name|
+//@[006:0007) |   | ├─Token(Colon) |:|
+//@[008:0031) |   | └─StringSyntax
+//@[008:0031) |   |   └─Token(StringComplete) |'secureModuleCondition'|
+//@[031:0033) |   ├─Token(NewLine) |\r\n|
+  params: {
+//@[002:0188) |   ├─ObjectPropertySyntax
+//@[002:0008) |   | ├─IdentifierSyntax
+//@[002:0008) |   | | └─Token(Identifier) |params|
+//@[008:0009) |   | ├─Token(Colon) |:|
+//@[010:0188) |   | └─ObjectSyntax
+//@[010:0011) |   |   ├─Token(LeftBrace) |{|
+//@[011:0013) |   |   ├─Token(NewLine) |\r\n|
+    secureStringParam1: true ? kv.getSecret('mySecret') : 'notTrue'
+//@[004:0067) |   |   ├─ObjectPropertySyntax
+//@[004:0022) |   |   | ├─IdentifierSyntax
+//@[004:0022) |   |   | | └─Token(Identifier) |secureStringParam1|
+//@[022:0023) |   |   | ├─Token(Colon) |:|
+//@[024:0067) |   |   | └─TernaryOperationSyntax
+//@[024:0028) |   |   |   ├─BooleanLiteralSyntax
+//@[024:0028) |   |   |   | └─Token(TrueKeyword) |true|
+//@[029:0030) |   |   |   ├─Token(Question) |?|
+//@[031:0055) |   |   |   ├─InstanceFunctionCallSyntax
+//@[031:0033) |   |   |   | ├─VariableAccessSyntax
+//@[031:0033) |   |   |   | | └─IdentifierSyntax
+//@[031:0033) |   |   |   | |   └─Token(Identifier) |kv|
+//@[033:0034) |   |   |   | ├─Token(Dot) |.|
+//@[034:0043) |   |   |   | ├─IdentifierSyntax
+//@[034:0043) |   |   |   | | └─Token(Identifier) |getSecret|
+//@[043:0044) |   |   |   | ├─Token(LeftParen) |(|
+//@[044:0054) |   |   |   | ├─FunctionArgumentSyntax
+//@[044:0054) |   |   |   | | └─StringSyntax
+//@[044:0054) |   |   |   | |   └─Token(StringComplete) |'mySecret'|
+//@[054:0055) |   |   |   | └─Token(RightParen) |)|
+//@[056:0057) |   |   |   ├─Token(Colon) |:|
+//@[058:0067) |   |   |   └─StringSyntax
+//@[058:0067) |   |   |     └─Token(StringComplete) |'notTrue'|
+//@[067:0069) |   |   ├─Token(NewLine) |\r\n|
+    secureStringParam2: true ? false ? 'false' : kv.getSecret('mySecret','secretVersion') : 'notTrue'
+//@[004:0101) |   |   ├─ObjectPropertySyntax
+//@[004:0022) |   |   | ├─IdentifierSyntax
+//@[004:0022) |   |   | | └─Token(Identifier) |secureStringParam2|
+//@[022:0023) |   |   | ├─Token(Colon) |:|
+//@[024:0101) |   |   | └─TernaryOperationSyntax
+//@[024:0028) |   |   |   ├─BooleanLiteralSyntax
+//@[024:0028) |   |   |   | └─Token(TrueKeyword) |true|
+//@[029:0030) |   |   |   ├─Token(Question) |?|
+//@[031:0089) |   |   |   ├─TernaryOperationSyntax
+//@[031:0036) |   |   |   | ├─BooleanLiteralSyntax
+//@[031:0036) |   |   |   | | └─Token(FalseKeyword) |false|
+//@[037:0038) |   |   |   | ├─Token(Question) |?|
+//@[039:0046) |   |   |   | ├─StringSyntax
+//@[039:0046) |   |   |   | | └─Token(StringComplete) |'false'|
+//@[047:0048) |   |   |   | ├─Token(Colon) |:|
+//@[049:0089) |   |   |   | └─InstanceFunctionCallSyntax
+//@[049:0051) |   |   |   |   ├─VariableAccessSyntax
+//@[049:0051) |   |   |   |   | └─IdentifierSyntax
+//@[049:0051) |   |   |   |   |   └─Token(Identifier) |kv|
+//@[051:0052) |   |   |   |   ├─Token(Dot) |.|
+//@[052:0061) |   |   |   |   ├─IdentifierSyntax
+//@[052:0061) |   |   |   |   | └─Token(Identifier) |getSecret|
+//@[061:0062) |   |   |   |   ├─Token(LeftParen) |(|
+//@[062:0072) |   |   |   |   ├─FunctionArgumentSyntax
+//@[062:0072) |   |   |   |   | └─StringSyntax
+//@[062:0072) |   |   |   |   |   └─Token(StringComplete) |'mySecret'|
+//@[072:0073) |   |   |   |   ├─Token(Comma) |,|
+//@[073:0088) |   |   |   |   ├─FunctionArgumentSyntax
+//@[073:0088) |   |   |   |   | └─StringSyntax
+//@[073:0088) |   |   |   |   |   └─Token(StringComplete) |'secretVersion'|
+//@[088:0089) |   |   |   |   └─Token(RightParen) |)|
+//@[090:0091) |   |   |   ├─Token(Colon) |:|
+//@[092:0101) |   |   |   └─StringSyntax
+//@[092:0101) |   |   |     └─Token(StringComplete) |'notTrue'|
+//@[101:0103) |   |   ├─Token(NewLine) |\r\n|
+  }
+//@[002:0003) |   |   └─Token(RightBrace) |}|
+//@[003:0005) |   ├─Token(NewLine) |\r\n|
+}
+//@[000:0001) |   └─Token(RightBrace) |}|
+//@[001:0005) ├─Token(NewLine) |\r\n\r\n|
 
 // END: Key Vault Secret Reference
 //@[034:0038) ├─Token(NewLine) |\r\n\r\n|

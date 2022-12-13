@@ -20,7 +20,7 @@ namespace Bicep.Core.UnitTests.Syntax
         {
             var hierarchy = new SyntaxHierarchy();
             Action fail = () => hierarchy.GetParent(TestSyntaxFactory.CreateNull());
-            fail.Should().Throw<ArgumentException>().WithMessage("Unable to determine parent of specified node of type 'NullLiteralSyntax' at span '[0:0]' because it has not been indexed.");
+            fail.Should().Throw<ArgumentException>().WithMessage("Unable to determine parent of specified node of type 'NullLiteralSyntax' at span '[-1:-1]' because it has not been indexed.");
         }
 
         [TestMethod]
@@ -65,11 +65,14 @@ namespace Bicep.Core.UnitTests.Syntax
             var varIdSyntax = nodes.OfType<IdentifierSyntax>().Single(id => string.Equals(id.IdentifierName, "bar"));
             hierarchy.GetParent(varIdSyntax).Should().BeSameAs(varDecl);
 
-            var paramTypeSyntax = nodes.OfType<TypeSyntax>().Single();
+            var paramTypeSyntax = nodes.OfType<VariableAccessSyntax>().Single();
             hierarchy.GetParent(paramTypeSyntax).Should().BeSameAs(paramDecl);
 
+            var paramTypeIdSyntax = nodes.OfType<IdentifierSyntax>().Single(id => string.Equals(id.IdentifierName, "string"));
+            hierarchy.GetParent(paramTypeIdSyntax).Should().BeSameAs(paramTypeSyntax);
+
             var paramTypeToken = nodes.OfType<Token>().Single(t => t.Type == TokenType.Identifier && string.Equals(t.Text, "string"));
-            hierarchy.GetParent(paramTypeToken).Should().BeSameAs(paramTypeSyntax);
+            hierarchy.GetParent(paramTypeToken).Should().BeSameAs(paramTypeIdSyntax);
         }
     }
 }

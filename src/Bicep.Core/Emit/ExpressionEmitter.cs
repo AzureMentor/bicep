@@ -6,10 +6,12 @@ using System.Linq;
 using Azure.Deployments.Expression.Configuration;
 using Azure.Deployments.Expression.Expressions;
 using Azure.Deployments.Expression.Serializers;
+using Bicep.Core.Extensions;
 using Bicep.Core.Semantics;
 using Bicep.Core.Semantics.Metadata;
 using Bicep.Core.Syntax;
 using Bicep.Core.TypeSystem.Az;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace Bicep.Core.Emit
@@ -115,7 +117,7 @@ namespace Bicep.Core.Emit
 
         public void EmitIndexedSymbolReference(DeclaredResourceMetadata resource, SyntaxBase indexExpression, SyntaxBase newContext)
         {
-            var expression = converter.CreateConverterForIndexReplacement(resource.Symbol.NameSyntax, indexExpression, newContext)
+            var expression = converter.CreateConverterForIndexReplacement(resource.Symbol.NameIdentifier, indexExpression, newContext)
                 .GenerateSymbolicReference(resource, indexExpression);
 
             writer.WriteValue(ExpressionSerializer.SerializeExpression(expression));
@@ -358,53 +360,67 @@ namespace Bicep.Core.Emit
 
         public void EmitModuleParameterValue(SyntaxBase syntax)
         {
-            if (syntax is InstanceFunctionCallSyntax instanceFunctionCall && string.Equals(instanceFunctionCall.Name.IdentifierName, "getSecret", LanguageConstants.IdentifierComparison))
+            if (syntax is InstanceFunctionCallSyntax instanceFunctionCall
+                && string.Equals(instanceFunctionCall.Name.IdentifierName, "getSecret", LanguageConstants.IdentifierComparison))
             {
-                var (baseSyntax, _) = SyntaxHelper.UnwrapArrayAccessSyntax(instanceFunctionCall.BaseExpression);
-
-                if (context.SemanticModel.ResourceMetadata.TryLookup(baseSyntax) is not { } resource ||
-                    !StringComparer.OrdinalIgnoreCase.Equals(resource.TypeReference.FormatType(), AzResourceTypeProvider.ResourceTypeKeyVault))
-                {
-                    throw new InvalidOperationException("Cannot emit parameter's KeyVault secret reference.");
-                }
-
-                var keyVaultId = instanceFunctionCall.BaseExpression switch
-                {
-                    ArrayAccessSyntax arrayAccessSyntax when resource is DeclaredResourceMetadata declared => converter
-                        .CreateConverterForIndexReplacement(declared.NameSyntax, arrayAccessSyntax.IndexExpression, instanceFunctionCall)
-                        .GetFullyQualifiedResourceId(resource),
-                    _ => converter.GetFullyQualifiedResourceId(resource)
-                };
-
-                writer.WritePropertyName("reference");
-                writer.WriteStartObject();
-                writer.WritePropertyName("keyVault");
-                writer.WriteStartObject();
-
-                writer.WritePropertyName("id");
-
-                var keyVaultIdSerialised = ExpressionSerializer.SerializeExpression(keyVaultId);
-                writer.WriteValue(keyVaultIdSerialised);
-
-                writer.WriteEndObject(); // keyVault
-
-                writer.WritePropertyName("secretName");
-                var secretName = converter.ConvertExpression(instanceFunctionCall.GetArgumentByPosition(0).Expression);
-                var secretNameSerialised = ExpressionSerializer.SerializeExpression(secretName);
-                writer.WriteValue(secretNameSerialised);
-
-                if (instanceFunctionCall.Arguments.Count() > 1)
-                {
-                    writer.WritePropertyName("secretVersion");
-                    var secretVersion = converter.ConvertExpression(instanceFunctionCall.GetArgumentByPosition(1).Expression);
-                    var secretVersionSerialised = ExpressionSerializer.SerializeExpression(secretVersion);
-                    writer.WriteValue(secretVersionSerialised);
-                }
-                writer.WriteEndObject(); // reference
-
+                EmitModuleParameterGetSecret(instanceFunctionCall);
                 return;
             }
+            if (syntax is TernaryOperationSyntax ternarySyntax)
+            {
+                writer.WriteValue(ExpressionSerializer.SerializeExpression(converter.ConvertModuleParameterTernaryExpression(ternarySyntax)));
+                return;
+            }
+            writer.WriteStartObject();
             EmitProperty("value", syntax);
+            writer.WriteEndObject();
+        }
+
+        private void EmitModuleParameterGetSecret(InstanceFunctionCallSyntax instanceFunctionCallSyntax)
+        {
+            var (baseSyntax, _) = SyntaxHelper.UnwrapArrayAccessSyntax(instanceFunctionCallSyntax.BaseExpression);
+
+            if (context.SemanticModel.ResourceMetadata.TryLookup(baseSyntax) is not { } resource ||
+                !StringComparer.OrdinalIgnoreCase.Equals(resource.TypeReference.FormatType(), AzResourceTypeProvider.ResourceTypeKeyVault))
+            {
+                throw new InvalidOperationException("Cannot emit parameter's KeyVault secret reference.");
+            }
+
+            var keyVaultId = instanceFunctionCallSyntax.BaseExpression switch
+            {
+                ArrayAccessSyntax arrayAccessSyntax when resource is DeclaredResourceMetadata declared => converter
+                    .CreateConverterForIndexReplacement(declared.NameSyntax, arrayAccessSyntax.IndexExpression, instanceFunctionCallSyntax)
+                    .GetFullyQualifiedResourceId(resource),
+                _ => converter.GetFullyQualifiedResourceId(resource)
+            };
+            writer.WriteStartObject();
+            writer.WritePropertyName("reference");
+            writer.WriteStartObject();
+            writer.WritePropertyName("keyVault");
+            writer.WriteStartObject();
+
+            writer.WritePropertyName("id");
+
+            var keyVaultIdSerialised = ExpressionSerializer.SerializeExpression(keyVaultId);
+            writer.WriteValue(keyVaultIdSerialised);
+
+            writer.WriteEndObject(); // keyVault
+
+            writer.WritePropertyName("secretName");
+            var secretName = converter.ConvertExpression(instanceFunctionCallSyntax.GetArgumentByPosition(0).Expression);
+            var secretNameSerialised = ExpressionSerializer.SerializeExpression(secretName);
+            writer.WriteValue(secretNameSerialised);
+
+            if (instanceFunctionCallSyntax.Arguments.Count() > 1)
+            {
+                writer.WritePropertyName("secretVersion");
+                var secretVersion = converter.ConvertExpression(instanceFunctionCallSyntax.GetArgumentByPosition(1).Expression);
+                var secretVersionSerialised = ExpressionSerializer.SerializeExpression(secretVersion);
+                writer.WriteValue(secretVersionSerialised);
+            }
+
+            writer.WriteEndObject(); // reference
+            writer.WriteEndObject();
         }
 
         public void EmitProperty(string name, LanguageExpression expressionValue)

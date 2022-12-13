@@ -68,17 +68,17 @@ namespace Bicep.Core.Emit
         private readonly BicepSourceFile? sourceFile;
         private readonly PositionTrackingTextWriter trackingWriter;
 
-        public PositionTrackingJsonTextWriter(IFileResolver fileResolver, TextWriter textWriter, BicepSourceFile? sourceFile = null)
-            : this(fileResolver, new(textWriter), sourceFile)
+        public PositionTrackingJsonTextWriter(IFileResolver fileResolver, TextWriter textWriter, BicepSourceFile? sourceFile = null, RawSourceMap? rawSourceMap = null)
+            : this(fileResolver, new(textWriter), sourceFile, rawSourceMap)
         {
         }
 
-        private PositionTrackingJsonTextWriter(IFileResolver fileResolver, PositionTrackingTextWriter trackingWriter, BicepSourceFile? sourceFile)
+        private PositionTrackingJsonTextWriter(IFileResolver fileResolver, PositionTrackingTextWriter trackingWriter, BicepSourceFile? sourceFile, RawSourceMap? rawSourceMap)
             : base(trackingWriter)
         {
             this.fileResolver = fileResolver;
+            this.rawSourceMap = rawSourceMap ?? new RawSourceMap(new List<RawSourceMapFileEntry>());
             this.sourceFile = sourceFile;
-            this.rawSourceMap = new RawSourceMap(new List<RawSourceMapFileEntry>());
             this.trackingWriter = trackingWriter;
         }
 
@@ -149,7 +149,7 @@ namespace Bicep.Core.Emit
                 {
                     bicepPosition = new TextSpan(
                         lastLeadingNode.Span.Position + lastLeadingNode.Span.Length,
-                        syntax.Span.Length - lastLeadingNode.Span.Length);
+                        syntax.Span.Length - syntax.LeadingNodes.Sum(node => node.Span.Length));
                 }
             }
 
@@ -272,9 +272,14 @@ namespace Bicep.Core.Emit
                     }
                 }
 
+                // ensure ordering is deterministic
+                var sortedEntries = sourceMapEntries
+                    .OrderBy(x => x.SourceLine).ThenBy(x => x.TargetLine)
+                    .ToImmutableArray();
+
                 var fileEntry = new SourceMapFileEntry(
                     bicepRelativeFilePath,
-                    sourceMapEntries.ToImmutableArray());
+                    sortedEntries);
                 sourceMapFileEntries.Add(fileEntry);
             }
 
