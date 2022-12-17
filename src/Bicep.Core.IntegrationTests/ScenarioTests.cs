@@ -1989,7 +1989,7 @@ var primaryFoo = foos[0]
 ");
             result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new[]
             {
-                ("BCP076", DiagnosticLevel.Error, "Cannot index over expression of type \"array | true\". Arrays or objects are required.")
+                ("BCP076", DiagnosticLevel.Error, "Cannot index over expression of type \"<empty array> | true\". Arrays or objects are required.")
             });
         }
 
@@ -4104,6 +4104,77 @@ output message sys.string = string
 ");
 
             result.Should().NotHaveAnyDiagnostics();
+        }
+
+        // https://github.com/Azure/bicep/issues/9246
+        [TestMethod]
+        public void Test_Issue9246()
+        {
+            var result = CompilationHelper.Compile(Services.WithFeatureOverrides(new(SymbolicNameCodegenEnabled: true)), ("main.bicep", @"
+var vnetAddressSpace = '10.1'
+
+resource aksRouteTable 'Microsoft.Network/routeTables@2022-07-01' existing = {
+  name: 'aksRouteTable'
+}
+
+var _subnets = {
+  AzureFirewallSubnet: {
+    name: 'AzureFirewallSubnet'
+    addressPrefix: '${vnetAddressSpace}.0.0/26'
+  }
+
+  aksPoolSys: {
+    name: 'snet-001-sys-snet'
+    addressPrefix: '${vnetAddressSpace}.0.64/26'
+    routeTable: aksRouteTable.id
+  }
+}
+
+output aksRouteTable string = _subnets.aksPoolSys.routeTable
+"));
+
+            // verify the variable has been inlined
+            result.Template.Should().NotHaveValueAtPath("$.variables['_subnets']");
+
+            var evaluated = TemplateEvaluator.Evaluate(result.Template);
+            evaluated.Should().HaveValueAtPath("$.outputs['aksRouteTable'].value", "/subscriptions/f91a30fd-f403-4999-ae9f-ec37a6d81e13/resourceGroups/testResourceGroup/providers/Microsoft.Network/routeTables/aksRouteTable");
+        }
+
+        // https://github.com/Azure/bicep/issues/9285
+        [TestMethod]
+        public void Test_Issue9285()
+        {
+            var result = CompilationHelper.Compile(@"
+resource foo 'Microsoft.Storage/storageAccounts@2022-09-01' existing = {
+  name: 'asdf'
+}
+
+output fooProps object = {
+  id: foo.id
+  name: foo.name
+  type: foo.type
+  apiVersion: foo.apiVersion
+}
+output fooAccess object = {
+  id: foo['id']
+  name: foo['name']
+  type: foo['type']
+  apiVersion: foo['apiVersion']
+}
+");
+
+            result.Should().HaveTemplateWithOutput("fooProps", JToken.Parse(@"{
+  ""id"": ""[resourceId('Microsoft.Storage/storageAccounts', 'asdf')]"",
+  ""name"": ""asdf"",
+  ""type"": ""Microsoft.Storage/storageAccounts"",
+  ""apiVersion"": ""2022-09-01""
+}"));
+            result.Should().HaveTemplateWithOutput("fooAccess", JToken.Parse(@"{
+  ""id"": ""[resourceId('Microsoft.Storage/storageAccounts', 'asdf')]"",
+  ""name"": ""asdf"",
+  ""type"": ""Microsoft.Storage/storageAccounts"",
+  ""apiVersion"": ""2022-09-01""
+}"));
         }
     }
 }

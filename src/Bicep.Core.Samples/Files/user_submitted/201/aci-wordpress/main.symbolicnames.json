@@ -7,7 +7,7 @@
     "_generator": {
       "name": "bicep",
       "version": "dev",
-      "templateHash": "1171624580190451551"
+      "templateHash": "3656280551063454010"
     }
   },
   "parameters": {
@@ -43,8 +43,6 @@
     "wpShareName": "wordpress-share",
     "sqlShareName": "mysql-share",
     "roleDefinitionId": "[resourceId('microsoft.authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
-    "roleAssignmentName": "[guid(resourceInfo('mi').name, variables('roleDefinitionId'), resourceGroup().id)]",
-    "uamiId": "[resourceId(resourceInfo('mi').type, resourceInfo('mi').name)]",
     "wpScriptToExecute": "[format('Get-AzStorageAccount -StorageAccountName {0} -ResourceGroupName {1} | New-AzStorageShare -Name {2}', parameters('storageAccountName'), resourceGroup().name, variables('wpShareName'))]",
     "sqlScriptToExecute": "[format('Get-AzStorageAccount -StorageAccountName {0} -ResourceGroupName {1} | New-AzStorageShare -Name {2}', parameters('storageAccountName'), resourceGroup().name, variables('sqlShareName'))]"
   },
@@ -58,7 +56,7 @@
     "miRoleAssign": {
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2020-04-01-preview",
-      "name": "[variables('roleAssignmentName')]",
+      "name": "[guid(resourceInfo('mi').name, variables('roleDefinitionId'), resourceGroup().id)]",
       "properties": {
         "roleDefinitionId": "[variables('roleDefinitionId')]",
         "principalId": "[reference('mi').principalId]",
@@ -90,14 +88,14 @@
       "identity": {
         "type": "UserAssigned",
         "userAssignedIdentities": {
-          "[format('{0}', variables('uamiId'))]": {}
+          "[format('{0}', resourceId(resourceInfo('mi').type, resourceInfo('mi').name))]": {}
         }
       },
       "properties": {
         "azPowerShellVersion": "3.0",
         "storageAccountSettings": {
           "storageAccountName": "[resourceInfo('stg').name]",
-          "storageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2019-06-01').keys[0].value]"
+          "storageAccountKey": "[listKeys(resourceInfo('stg').id, '2019-06-01').keys[0].value]"
         },
         "scriptContent": "[variables('wpScriptToExecute')]",
         "cleanupPreference": "OnSuccess",
@@ -118,14 +116,14 @@
       "identity": {
         "type": "UserAssigned",
         "userAssignedIdentities": {
-          "[format('{0}', variables('uamiId'))]": {}
+          "[format('{0}', resourceId(resourceInfo('mi').type, resourceInfo('mi').name))]": {}
         }
       },
       "properties": {
         "azPowerShellVersion": "3.0",
         "storageAccountSettings": {
           "storageAccountName": "[resourceInfo('stg').name]",
-          "storageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2019-06-01').keys[0].value]"
+          "storageAccountKey": "[listKeys(resourceInfo('stg').id, '2019-06-01').keys[0].value]"
         },
         "scriptContent": "[variables('sqlScriptToExecute')]",
         "cleanupPreference": "OnSuccess",
@@ -213,7 +211,7 @@
           {
             "azureFile": {
               "shareName": "[variables('wpShareName')]",
-              "storageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2019-06-01').keys[0].value]",
+              "storageAccountKey": "[listKeys(resourceInfo('stg').id, '2019-06-01').keys[0].value]",
               "storageAccountName": "[resourceInfo('stg').name]"
             },
             "name": "wordpressfile"
@@ -221,7 +219,7 @@
           {
             "azureFile": {
               "shareName": "[variables('sqlShareName')]",
-              "storageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2019-06-01').keys[0].value]",
+              "storageAccountKey": "[listKeys(resourceInfo('stg').id, '2019-06-01').keys[0].value]",
               "storageAccountName": "[resourceInfo('stg').name]"
             },
             "name": "mysqlfile"
