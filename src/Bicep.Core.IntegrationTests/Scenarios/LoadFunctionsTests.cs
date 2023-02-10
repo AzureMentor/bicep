@@ -523,11 +523,11 @@ output out string = script
   ""propString"": ""propStringValue"",
   ""propBoolTrue"": true,
   ""propBoolFalse"": false,
-  ""propNull"": ""[null()]"",
+  ""propNull"": null,
   ""propInt"": 1073741824,
   ""propIntNegative"": -1073741824,
   ""propBigInt"": 4611686018427387904,
-  ""propBigIntNegative"": ""[json('-4611686018427387904')]"",
+  ""propBigIntNegative"": -4611686018427387904,
   ""propFloat"": ""[json('1.618033988749894')]"",
   ""propFloatNegative"": ""[json('-1.618033988749894')]"",
   ""propArrayString"": [
@@ -549,7 +549,7 @@ output out string = script
     ""subObjectPropString"": ""subObjectPropStringValue"",
     ""subObjectPropBoolTrue"": true,
     ""subObjectPropBoolFalse"": false,
-    ""subObjectPropNull"": ""[null()]"",
+    ""subObjectPropNull"": null,
     ""subObjectPropInt"": 1234542113245,
     ""subObjectPropFloat"": ""[json('1.618033988749894')]"",
     ""subObjectPropArrayString"": [
@@ -758,7 +758,7 @@ var fileObj = loadJsonContent('file.json')
     ""products"" : /* block-comment */ [
         { //item-1
             ""name"": ""pizza"", //the-name
-            ""price"": 5.00 
+            ""price"": 5.00
         },
         //---
         { //item-2

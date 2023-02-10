@@ -7,7 +7,7 @@
     "_generator": {
       "name": "bicep",
       "version": "dev",
-      "templateHash": "14237309335148944435"
+      "templateHash": "2414029487247477729"
     }
   },
   "parameters": {
@@ -148,8 +148,6 @@
     "namedPropertyIndexer": "[createObject('foo', 's').foo]",
     "intIndexer": "[createArray('s')[0]]",
     "functionOnIndexer1": "[concat(createArray('s')[0], 's')]",
-    "functionOnIndexer2": "[concat(createArray()[0], 's')]",
-    "functionOnIndexer3": "[concat(createArray()[0], 's')]",
     "singleQuote": "'",
     "myPropertyName": "[format('{0}foo{1}', variables('singleQuote'), variables('singleQuote'))]",
     "previousEmitLimit": [
@@ -220,8 +218,8 @@
     "isFalse": "[not(variables('isTrue'))]",
     "someText": "[if(variables('isTrue'), concat('a', concat('b', 'c')), 'someText')]",
     "scopesWithoutArmRepresentation": {
-      "subscription": "[createObject()]",
-      "resourceGroup": "[createObject()]"
+      "subscription": {},
+      "resourceGroup": {}
     },
     "scopesWithArmRepresentation": {
       "tenant": "[tenant()]",

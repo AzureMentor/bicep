@@ -13,11 +13,11 @@ public interface IExpressionVisitor
 
     void VisitNullLiteralExpression(NullLiteralExpression expression);
 
-    void VisitSyntaxExpression(SyntaxExpression expression);
-
     void VisitInterpolatedStringExpression(InterpolatedStringExpression expression);
 
     void VisitObjectExpression(ObjectExpression expression);
+
+    void VisitObjectPropertyExpression(ObjectPropertyExpression expression);
 
     void VisitArrayExpression(ArrayExpression expression);
 
@@ -28,6 +28,8 @@ public interface IExpressionVisitor
     void VisitUnaryExpression(UnaryExpression expression);
 
     void VisitFunctionCallExpression(FunctionCallExpression expression);
+
+    void VisitResourceFunctionCallExpression(ResourceFunctionCallExpression expression);
 
     void VisitArrayAccessExpression(ArrayAccessExpression expression);
 
@@ -41,11 +43,35 @@ public interface IExpressionVisitor
 
     void VisitVariableReferenceExpression(VariableReferenceExpression expression);
 
+    void VisitSynthesizedVariableReferenceExpression(SynthesizedVariableReferenceExpression expression);
+
     void VisitParametersReferenceExpression(ParametersReferenceExpression expression);
 
     void VisitLambdaVariableReferenceExpression(LambdaVariableReferenceExpression expression);
 
+    void VisitForLoopExpression(ForLoopExpression expression);
+
     void VisitCopyIndexExpression(CopyIndexExpression expression);
 
+    void VisitConditionExpression(ConditionExpression expression);
+
     void VisitLambdaExpression(LambdaExpression expression);
+
+    void VisitDeclaredMetadataExpression(DeclaredMetadataExpression expression);
+
+    void VisitDeclaredImportExpression(DeclaredImportExpression expression);
+
+    void VisitDeclaredParameterExpression(DeclaredParameterExpression expression);
+
+    void VisitDeclaredVariableExpression(DeclaredVariableExpression expression);
+
+    void VisitDeclaredOutputExpression(DeclaredOutputExpression expression);
+
+    void VisitDeclaredResourceExpression(DeclaredResourceExpression expression);
+
+    void VisitDeclaredModuleExpression(DeclaredModuleExpression expression);
+
+    void VisitResourceDependencyExpression(ResourceDependencyExpression expression);
+    
+    void VisitProgramExpression(ProgramExpression expression);
 }

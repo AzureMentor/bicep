@@ -182,14 +182,6 @@ var functionOnIndexer1 = concat([
   's'
 ][0], 's')
 
-var functionOnIndexer2 = concat([
-//@    "functionOnIndexer2": "[concat(createArray()[0], 's')]",
-][0], 's')
-
-var functionOnIndexer3 = concat([
-//@    "functionOnIndexer3": "[concat(createArray()[0], 's')]",
-][0], any('s'))
-
 var singleQuote = '\''
 //@    "singleQuote": "'",
 var myPropertyName = '${singleQuote}foo${singleQuote}'
@@ -391,9 +383,9 @@ var scopesWithoutArmRepresentation = {
 //@    "scopesWithoutArmRepresentation": {
 //@    },
   subscription: subscription('10b57a01-6350-4ce2-972a-6a13642f00bf')
-//@      "subscription": "[createObject()]",
+//@      "subscription": {},
   resourceGroup: az.resourceGroup('10b57a01-6350-4ce2-972a-6a13642f00bf', 'myRgName')
-//@      "resourceGroup": "[createObject()]"
+//@      "resourceGroup": {}
 }
 
 var scopesWithArmRepresentation = {

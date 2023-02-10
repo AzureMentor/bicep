@@ -167,15 +167,16 @@ namespace Bicep.Core.Parsing
                 return new TernaryOperationSyntax(candidate, question, trueExpression, colon, falseExpression);
             }
 
-            if (HasExpressionFlag(expressionFlags, ExpressionFlags.TypeExpression) && this.Check(TokenType.Pipe))
+            if (HasExpressionFlag(expressionFlags, ExpressionFlags.TypeExpression) && HasTrailingUnionMember())
             {
                 var elementAndSeparators = new List<SyntaxBase> { new UnionTypeMemberSyntax(candidate) };
-                while (Check(TokenType.Pipe))
+                while (HasTrailingUnionMember())
                 {
-                    // consume the pipe
+                    // consume the pipe and newline
+                    elementAndSeparators.AddRange(NewLines());
                     elementAndSeparators.Add(reader.Read());
 
-                    // error reporting gets really wonky if users can have newlines between union members. `type foo = 'foo'|` causes the start of the next declaration (i.e., a language keyword) to be reported as a non-existent symbol
+                    // error reporting gets really wonky if users can have newlines after the pipe. `type foo = 'foo'|` causes the start of the next declaration (i.e., a language keyword) to be reported as a non-existent symbol
                     if (Check(TokenType.NewLine))
                     {
                         elementAndSeparators.Add(SkipEmpty(b => b.ExpectedTypeLiteral()));
@@ -190,6 +191,8 @@ namespace Bicep.Core.Parsing
 
             return candidate;
         }
+
+        private bool HasTrailingUnionMember() => Check(TokenType.Pipe) || (Check(TokenType.NewLine) && Check(reader.PeekAhead(), TokenType.Pipe));
 
         public abstract ProgramSyntax Program();
 
@@ -847,6 +850,12 @@ namespace Bicep.Core.Parsing
                     continue;
                 }
 
+                if (this.Check(TokenType.Exclamation))
+                {
+                    current = new NonNullAssertionSyntax(current, this.reader.Read());
+                    continue;
+                }
+
                 break;
             }
 
@@ -1244,7 +1253,8 @@ namespace Bicep.Core.Parsing
                         {
                             TokenType.Identifier => this.Identifier(b => b.ExpectedPropertyName()),
                             TokenType.StringComplete or TokenType.StringLeftPiece => this.InterpolableString(),
-                            _ => throw new ExpectedTokenException(current, b => b.ExpectedPropertyName()),
+                            TokenType.Asterisk => this.Expect(TokenType.Asterisk, b => b.ExpectedCharacter("*")),
+                            _ => throw new ExpectedTokenException(current, b => b.ExpectedPropertyNameOrMatcher()),
                         }, b => b.ExpectedPropertyName()),
                 RecoveryFlags.None,
                 TokenType.Colon, TokenType.NewLine, TokenType.RightBrace);
@@ -1252,6 +1262,11 @@ namespace Bicep.Core.Parsing
             Token? optionalityMarker = Check(reader.Peek(), TokenType.Question) ? reader.Read() : default;
             var colon = this.WithRecovery(() => Expect(TokenType.Colon, b => b.ExpectedCharacter(":")), GetSuppressionFlag(optionalityMarker ?? key), TokenType.NewLine, TokenType.RightBrace);
             var value = this.WithRecovery(() => Expression(flags), GetSuppressionFlag(colon), TokenType.NewLine, TokenType.RightBrace);
+
+            if (key is Token { Type: TokenType.Asterisk })
+            {
+                return new ObjectTypeAdditionalPropertiesSyntax(leadingNodes, key, colon, value);
+            }
 
             return new ObjectTypePropertySyntax(leadingNodes, key, optionalityMarker, colon, value);
         }

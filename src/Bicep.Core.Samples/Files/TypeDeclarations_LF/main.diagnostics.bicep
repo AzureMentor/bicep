@@ -33,7 +33,9 @@ type aUnion = 'snap'|'crackle'|'pop'
 
 type expandedUnion = aUnion|'fizz'|'buzz'|'pop'
 
-type tupleUnion = ['foo', 'bar', 'baz']|['fizz', 'buzz']|['snap', 'crackle', 'pop']
+type tupleUnion = ['foo', 'bar', 'baz']
+|['fizz', 'buzz']
+|['snap', 'crackle', 'pop']
 
 type mixedArray = ('heffalump'|'woozle'|{ shape: '*', size: '*'}|10|-10|true|!true|null)[]
 
@@ -63,3 +65,13 @@ type tuple = [
     @description('A second element using a type alias')
     bar
 ]
+
+type stringStringDictionary = {
+    *: string
+}
+
+param mightIncludeNull ({key: 'value'} | null)[]
+
+var maybeNull = mightIncludeNull[0]!.key
+//@[4:13) [no-unused-vars (Warning)] Variable "maybeNull" is declared but never used. (CodeDescription: bicep core(https://aka.ms/bicep/linter/no-unused-vars)) |maybeNull|
+
