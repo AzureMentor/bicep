@@ -192,14 +192,12 @@ resource name 'Microsoft.Storage/storageAccounts@2021-02-01' = {
 
         private const string ComplexExpectedBicep_MainOutput = @"module nestedDeploymentInner './nested_nestedDeploymentInner.bicep' = {
   name: 'nestedDeploymentInner'
-  params: {
-  }
+  params: {}
 }
 
 module nestedDeploymentOuter './nested_nestedDeploymentOuter.bicep' = {
   name: 'nestedDeploymentOuter'
-  params: {
-  }
+  params: {}
 }
 
 resource storageaccount 'Microsoft.Storage/storageAccounts@2021-04-01' = {
@@ -217,8 +215,7 @@ resource storageaccount 'Microsoft.Storage/storageAccounts@2021-04-01' = {
 
 module nestedDeploymentInner2 './nested_nestedDeploymentInner2.bicep' = {
   name: 'nestedDeploymentInner2'
-  params: {
-  }
+  params: {}
 }";
 
         private const string ComplexExpectedBicep_Filename2 = "nested_nestedDeploymentInner.bicep";
@@ -236,15 +233,15 @@ module nestedDeploymentInner2 './nested_nestedDeploymentInner2.bicep' = {
         [DataRow("")]
         [DataRow("   ")]
         [DataTestMethod]
-        public void WithInvalidPath_ShouldThrowArgumentException(string path)
+        public async Task WithInvalidPath_ShouldThrowArgumentException(string path)
         {
             var server = new LanguageServerMock();
 
             ICompilationManager bicepCompilationManager = StrictMock.Of<ICompilationManager>().Object;
             var (handler, _) = CreateHandlers(server);
 
-            Action action = () => handler.Handle(new(DocumentUri.File(path)), CancellationToken.None);
-            action.Should().Throw<Exception>();
+            Func<Task> action = () => handler.Handle(new(DocumentUri.File(path)), CancellationToken.None);
+            await action.Should().ThrowAsync<Exception>();
         }
 
         [TestMethod]

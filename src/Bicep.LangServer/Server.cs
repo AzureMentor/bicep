@@ -38,6 +38,7 @@ using System.IO.Abstractions;
 using System.Threading;
 using System.Threading.Tasks;
 using OmnisharpLanguageServer = OmniSharp.Extensions.LanguageServer.Server.LanguageServer;
+using Bicep.LanguageServer.Settings;
 
 namespace Bicep.LanguageServer
 {
@@ -47,7 +48,6 @@ namespace Bicep.LanguageServer
 
         public Server(Action<LanguageServerOptions> onOptionsFunc)
         {
-            BicepDeploymentsInterop.Initialize();
             server = OmnisharpLanguageServer.PreInit(options =>
             {
                 options
@@ -87,6 +87,7 @@ namespace Bicep.LanguageServer
                     .WithHandler<BicepForceModulesRestoreCommandHandler>()
                     .WithHandler<BicepRegistryCacheRequestHandler>()
                     .WithHandler<InsertResourceHandler>()
+                    .WithHandler<ConfigurationSettingsHandler>()
                     .WithServices(RegisterServices);
 
                 onOptionsFunc(options);
@@ -133,7 +134,12 @@ namespace Bicep.LanguageServer
                 .AddSingleton<IDeploymentCollectionProvider, DeploymentCollectionProvider>()
                 .AddSingleton<IDeploymentOperationsCache, DeploymentOperationsCache>()
                 .AddSingleton<IDeploymentFileCompilationCache, DeploymentFileCompilationCache>()
-                .AddSingleton<IClientCapabilitiesProvider, ClientCapabilitiesProvider>();
+                .AddSingleton<IClientCapabilitiesProvider, ClientCapabilitiesProvider>()
+                .AddSingleton<IModuleReferenceCompletionProvider, ModuleReferenceCompletionProvider>()
+                .AddSingleton<ITokenCredentialFactory, TokenCredentialFactory>()
+                .AddSingleton<ISettingsProvider, SettingsProvider>()
+                .AddSingleton<IAzureContainerRegistryNamesProvider, AzureContainerRegistryNamesProvider>()
+                .AddSingleton<IPublicRegistryModuleMetadataProvider, PublicRegistryModuleMetadataProvider>();
         }
 
         public void Dispose()

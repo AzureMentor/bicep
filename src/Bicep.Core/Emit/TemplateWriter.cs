@@ -111,7 +111,7 @@ namespace Bicep.Core.Emit
 
             if (Context.Settings.EnableSymbolicNames)
             {
-                emitter.EmitProperty("languageVersion", "1.9-experimental");
+                emitter.EmitProperty("languageVersion", "1.10-experimental");
             }
 
             emitter.EmitProperty("contentVersion", "1.0.0.0");
@@ -216,33 +216,28 @@ namespace Bicep.Core.Emit
                     parameterObject = parameterObject.MergeProperty("defaultValue", parameter.DefaultValue);
                 }
 
-                parameterObject = AddDecoratorsToBody(declaringParameter, parameterObject, parameter.Symbol.Type);
-
-                foreach (var property in parameterObject.Properties)
-                {
-                    if (property.TryGetKeyText() is string propertyName)
-                    {
-                        emitter.EmitProperty(propertyName, property.Value);
-                    }
-                }
+                EmitProperties(emitter, AddDecoratorsToBody(declaringParameter, parameterObject, parameter.Symbol.Type));
             }, parameter.SourceSyntax);
         }
 
-        private void EmitTypeDeclaration(JsonTextWriter jsonWriter, TypeAliasSymbol declaredTypeSymbol, ExpressionEmitter emitter)
+        private void EmitProperties(ExpressionEmitter emitter, ObjectExpression objectExpression)
         {
-            jsonWriter.WriteStartObject();
-
-            var typeDefinitionObject = TypePropertiesForTypeExpression(declaredTypeSymbol.DeclaringType.Value);
-
-            typeDefinitionObject = AddDecoratorsToBody(declaredTypeSymbol.DeclaringType, typeDefinitionObject, declaredTypeSymbol.Type);
-
-            foreach (var property in typeDefinitionObject.Properties)
+            foreach (var property in objectExpression.Properties)
             {
                 if (property.TryGetKeyText() is string propertyName)
                 {
                     emitter.EmitProperty(propertyName, property.Value);
                 }
             }
+        }
+
+        private void EmitTypeDeclaration(JsonTextWriter jsonWriter, TypeAliasSymbol declaredTypeSymbol, ExpressionEmitter emitter)
+        {
+            jsonWriter.WriteStartObject();
+
+            EmitProperties(emitter, AddDecoratorsToBody(declaredTypeSymbol.DeclaringType,
+                TypePropertiesForTypeExpression(declaredTypeSymbol.DeclaringType.Value),
+                declaredTypeSymbol.Type));
 
             jsonWriter.WriteEndObject();
         }
@@ -261,6 +256,8 @@ namespace Bicep.Core.Emit
             UnaryOperationSyntax unaryOperation => GetTypePropertiesForUnaryOperationSyntax(unaryOperation),
             UnionTypeSyntax unionType => GetTypePropertiesForUnionTypeSyntax(unionType),
             ParenthesizedExpressionSyntax parenthesizedExpression => TypePropertiesForTypeExpression(parenthesizedExpression.Expression),
+            NullableTypeSyntax nullableType => GetTypePropertiesForNullableTypeSyntax(nullableType),
+            NonNullAssertionSyntax nonNullableType => GetTypePropertiesForNonNullableTypeSyntax(nonNullableType),
             // this should have been caught by the parser
             _ => throw new ArgumentException("Invalid type syntax encountered."),
         };
@@ -361,7 +358,6 @@ namespace Bicep.Core.Emit
         private ObjectExpression GetTypePropertiesForObjectType(ObjectTypeSyntax syntax)
         {
             var properties = new List<ObjectPropertyExpression> { TypeProperty(LanguageConstants.ObjectType) };
-            List<Expression> required = new();
             List<ObjectPropertyExpression> propertySchemata = new();
 
             foreach (var property in syntax.Properties)
@@ -372,20 +368,10 @@ namespace Bicep.Core.Emit
                     throw new ArgumentException("Invalid object type key encountered during serialization.");
                 }
 
-                if (property.OptionalityMarker is null)
-                {
-                    required.Add(ExpressionFactory.CreateStringLiteral(keyText));
-                }
-
                 var propertySchema = TypePropertiesForTypeExpression(property.Value);
                 propertySchema = AddDecoratorsToBody(property, propertySchema, Context.SemanticModel.GetDeclaredType(property) ?? ErrorType.Empty());
 
                 propertySchemata.Add(ExpressionFactory.CreateObjectProperty(keyText, propertySchema));
-            }
-
-            if (required.Any())
-            {
-                properties.Add(ExpressionFactory.CreateObjectProperty("required", ExpressionFactory.CreateArray(required)));
             }
 
             if (propertySchemata.Any())
@@ -457,11 +443,25 @@ namespace Bicep.Core.Emit
                 throw new ArgumentException("Invalid union encountered during template serialization");
             }
 
-            return ExpressionFactory.CreateObject(new[]
+            (var nullable, var nonLiteralTypeName) = TypeHelper.TryRemoveNullability(unionType) switch
             {
-                TypeProperty(GetNonLiteralTypeName(unionType.Members.First().Type)),
+                UnionType nonNullableUnion => (true, GetNonLiteralTypeName(nonNullableUnion.Members.First().Type)),
+                TypeSymbol nonNullable => (true, GetNonLiteralTypeName(nonNullable)),
+                _ => (false, GetNonLiteralTypeName(unionType.Members.First().Type)),
+            };
+
+            var properties = new List<ObjectPropertyExpression>
+            {
+                TypeProperty(nonLiteralTypeName),
                 ExpressionFactory.CreateObjectProperty("allowedValues", GetAllowedValuesForUnionType(unionType)),
-            });
+            };
+
+            if (nullable)
+            {
+                properties.Add(ExpressionFactory.CreateObjectProperty("nullable", ExpressionFactory.CreateBooleanLiteral(true)));
+            }
+
+            return ExpressionFactory.CreateObject(properties);
         }
 
         private ObjectPropertyExpression AllowedValuesForTypeExpression(SyntaxBase syntax) => ExpressionFactory.CreateObjectProperty("allowedValues",
@@ -472,23 +472,29 @@ namespace Bicep.Core.Emit
             StringLiteralType @string => ExpressionFactory.CreateStringLiteral(@string.RawStringValue),
             IntegerLiteralType @int => new IntegerLiteralExpression(null, @int.Value),
             BooleanLiteralType @bool => ExpressionFactory.CreateBooleanLiteral(@bool.Value),
-            PrimitiveType pt when pt.Name == LanguageConstants.NullKeyword => new NullLiteralExpression(null),
+            NullType => new NullLiteralExpression(null),
             ObjectType @object => ExpressionFactory.CreateObject(@object.Properties.Select(kvp => ExpressionFactory.CreateObjectProperty(kvp.Key, ToLiteralValue(kvp.Value.TypeReference)))),
             TupleType tuple => ExpressionFactory.CreateArray(tuple.Items.Select(ToLiteralValue)),
             // This would have been caught by the DeclaredTypeManager during initial type assignment
             _ => throw new ArgumentException("Union types used in ARM type checks must be composed entirely of literal types"),
         };
 
-        private string GetNonLiteralTypeName(TypeSymbol? type) => type switch {
-            StringLiteralType => "string",
-            IntegerLiteralType => "int",
-            BooleanLiteralType => "bool",
+        private string GetNonLiteralTypeName(TypeSymbol? type) => type switch
+        {
+            StringLiteralType or StringType => "string",
+            IntegerLiteralType or IntegerType => "int",
+            BooleanLiteralType or BooleanType => "bool",
             ObjectType => "object",
             ArrayType => "array",
-            PrimitiveType pt when pt.Name != LanguageConstants.NullKeyword => pt.Name,
             // This would have been caught by the DeclaredTypeManager during initial type assignment
             _ => throw new ArgumentException("Unresolvable type name"),
         };
+
+        private ObjectExpression GetTypePropertiesForNullableTypeSyntax(NullableTypeSyntax syntax)
+            => TypePropertiesForTypeExpression(syntax.Base).MergeProperty("nullable", ExpressionFactory.CreateBooleanLiteral(true));
+
+        private ObjectExpression GetTypePropertiesForNonNullableTypeSyntax(NonNullAssertionSyntax syntax)
+            => TypePropertiesForTypeExpression(syntax.BaseExpression).MergeProperty("nullable", ExpressionFactory.CreateBooleanLiteral(false));
 
         private void EmitVariablesIfPresent(ExpressionEmitter emitter, ImmutableArray<DeclaredVariableExpression> variables)
         {
@@ -700,7 +706,7 @@ namespace Bicep.Core.Emit
                     {
                         // This is a resource being passed into a module, we actually want to pass in its id
                         // rather than the whole resource.
-                        var idExpression = new PropertyAccessExpression(resource.SourceSyntax, resource, "id");
+                        var idExpression = new PropertyAccessExpression(resource.SourceSyntax, resource, "id", AccessExpressionFlags.None);
                         emitter.EmitProperty(keyName, ExpressionEmitter.ConvertModuleParameter(idExpression));
                     }
                     else
@@ -747,7 +753,8 @@ namespace Bicep.Core.Emit
                         emitter.EmitProperty("location", new PropertyAccessExpression(
                             null,
                             new FunctionCallExpression(null, "resourceGroup", ImmutableArray<Expression>.Empty),
-                            "location"));
+                            "location",
+                            AccessExpressionFlags.None));
                     }
                     else
                     {
@@ -755,7 +762,8 @@ namespace Bicep.Core.Emit
                         emitter.EmitProperty("location", new PropertyAccessExpression(
                             null,
                             new FunctionCallExpression(null, "deployment", ImmutableArray<Expression>.Empty),
-                            "location"));
+                            "location",
+                            AccessExpressionFlags.None));
                     }
                 }
 
@@ -920,26 +928,10 @@ namespace Bicep.Core.Emit
         {
             emitter.EmitObjectProperty(output.Name, () =>
             {
-                var properties = new List<ObjectPropertyExpression>();
-                if (output.Symbol.Type is ResourceType resourceType)
-                {
-                    // Resource-typed outputs are encoded as strings
-                    emitter.EmitProperty("type", LanguageConstants.String.Name);
-
-                    properties.Add(
-                        ExpressionFactory.CreateObjectProperty(
-                            LanguageConstants.ParameterMetadataPropertyName,
-                            ExpressionFactory.CreateObject(
-                                new [] {
-                                    ExpressionFactory.CreateObjectProperty(
-                                        LanguageConstants.MetadataResourceTypePropertyName,
-                                        ExpressionFactory.CreateStringLiteral(resourceType.TypeReference.FormatName()))
-                                })));
-                }
-                else
-                {
-                    emitter.EmitProperty("type", output.Symbol.Type.Name);
-                }
+                var declaringOutput = output.Symbol.DeclaringOutput;
+                EmitProperties(emitter, AddDecoratorsToBody(declaringOutput,
+                    TypePropertiesForTypeExpression(declaringOutput.Type),
+                    output.Symbol.Type));
 
                 if (output.Value is ForLoopExpression @for)
                 {
@@ -948,22 +940,13 @@ namespace Bicep.Core.Emit
                 else if (output.Symbol.Type is ResourceType)
                 {
                     // Resource-typed outputs are serialized using the resource id.
-                    var value = new PropertyAccessExpression(output.SourceSyntax, output.Value, "id");
+                    var value = new PropertyAccessExpression(output.SourceSyntax, output.Value, "id", AccessExpressionFlags.None);
 
                     emitter.EmitProperty("value", value);
                 }
                 else
                 {
                     emitter.EmitProperty("value", output.Value);
-                }
-
-                // emit any decorators on this output
-                foreach (var property in AddDecoratorsToBody(
-                    output.Symbol.DeclaringOutput,
-                    ExpressionFactory.CreateObject(properties),
-                    output.Symbol.Type).Properties)
-                {
-                    emitter.EmitProperty(property);
                 }
             }, output.SourceSyntax);
         }
