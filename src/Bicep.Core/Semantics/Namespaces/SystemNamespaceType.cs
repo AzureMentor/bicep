@@ -112,6 +112,27 @@ namespace Bicep.Core.Semantics.Namespaces
                 .WithVariableParameter("arg", LanguageConstants.Array, minimumCount: 1, "The array for concatenation")
                 .Build();
 
+            yield return new FunctionOverloadBuilder("cidrSubnet")
+                .WithReturnType(LanguageConstants.String)
+                .WithGenericDescription("Returns the specified subnet of a CIDR network.")
+                .WithRequiredParameter("network", LanguageConstants.String, "The string containing an IP network (CIDR format)")
+                .WithRequiredParameter("cidr", LanguageConstants.Int, "New CIDR suffix")
+                .WithRequiredParameter("subnetIndex", LanguageConstants.Int, "A 0-based index of the desired subnet. Must be less than the maximum number of possible subnets.")
+                .Build();
+
+            yield return new FunctionOverloadBuilder("cidrHost")
+                .WithReturnType(LanguageConstants.String)
+                .WithGenericDescription("Calculates the IP address of the specified host on a network.")
+                .WithRequiredParameter("network", LanguageConstants.String, "The string containing an ip network (CIDR format)")
+                .WithRequiredParameter("hostIndex", LanguageConstants.Int, "A 0-based index of the usable host on the specified network. Must be less than the number of usable hosts on the specified network.")
+                .Build();
+
+            yield return new FunctionOverloadBuilder("parseCidr")
+                .WithReturnType(GetParseCidrReturnType())
+                .WithGenericDescription("Parses an IP address into individual components and other useful information.")
+                .WithRequiredParameter("network", LanguageConstants.String, "The string containing an IP network (CIDR format)")
+                .Build();
+
             yield return new FunctionOverloadBuilder("concat")
                 .WithReturnType(LanguageConstants.String)
                 .WithGenericDescription(ConcatDescription)
@@ -942,6 +963,19 @@ namespace Bicep.Core.Semantics.Namespaces
                 .Build();
         }
 
+        private static ObjectType GetParseCidrReturnType()
+        {
+            return new ObjectType("parseCidr", TypeSymbolValidationFlags.Default, new[]
+            {
+                new TypeProperty("network", LanguageConstants.String),
+                new TypeProperty("netmask", LanguageConstants.String),
+                new TypeProperty("broadcast", LanguageConstants.String),
+                new TypeProperty("firstUsable", LanguageConstants.String),
+                new TypeProperty("lastUsable", LanguageConstants.String),
+                new TypeProperty("cidr", TypeFactory.CreateIntegerType(0, 255)),
+            }, null);
+        }
+        
         private static bool TryGetFileUriWithDiagnostics(IBinder binder, IFileResolver fileResolver, string filePath, SyntaxBase filePathArgument, [NotNullWhen(true)] out Uri? fileUri, [NotNullWhen(false)] out ErrorDiagnostic? error)
         {
             if (!LocalModuleReference.Validate(filePath, out var validateFilePathFailureBuilder))
@@ -1339,12 +1373,12 @@ namespace Bicep.Core.Semantics.Namespaces
                 }
             }
 
-            static void ValidateNotTargetingAlias(string decoratorName, DecoratorSyntax decoratorSyntax, TypeSymbol targetType, ITypeManager typeManager, IBinder binder, IDiagnosticWriter diagnosticWriter)
+            static void ValidateNotTargetingAlias(string decoratorName, DecoratorSyntax decoratorSyntax, TypeSymbol targetType, ITypeManager typeManager, IBinder binder, IDiagnosticLookup parsingErrorLookup, IDiagnosticWriter diagnosticWriter)
                 => EmitDiagnosticIfTargetingAlias(decoratorName, decoratorSyntax, GetDeclaredTypeSyntaxOfParent(decoratorSyntax, binder), binder, diagnosticWriter);
 
-            static void ValidateLength(string decoratorName, DecoratorSyntax decoratorSyntax, TypeSymbol targetType, ITypeManager typeManager, IBinder binder, IDiagnosticWriter diagnosticWriter)
+            static void ValidateLength(string decoratorName, DecoratorSyntax decoratorSyntax, TypeSymbol targetType, ITypeManager typeManager, IBinder binder, IDiagnosticLookup parsingErrorLookup, IDiagnosticWriter diagnosticWriter)
             {
-                ValidateNotTargetingAlias(decoratorName, decoratorSyntax, targetType, typeManager, binder, diagnosticWriter);
+                ValidateNotTargetingAlias(decoratorName, decoratorSyntax, targetType, typeManager, binder, parsingErrorLookup, diagnosticWriter);
 
                 if (targetType is UnionType || TypeHelper.IsLiteralType(targetType))
                 {
@@ -1384,7 +1418,7 @@ namespace Bicep.Core.Semantics.Namespaces
                 .WithDescription("Defines the allowed values of the parameter.")
                 .WithRequiredParameter("values", LanguageConstants.Array, "The allowed values.")
                 .WithFlags(FunctionFlags.ParameterDecorator)
-                .WithValidator((decoratorName, decoratorSyntax, targetType, typeManager, binder, diagnosticWriter) =>
+                .WithValidator((decoratorName, decoratorSyntax, targetType, typeManager, binder, parsingErrorLookup, diagnosticWriter) =>
                 {
                     var parentTypeSyntax = GetDeclaredTypeSyntaxOfParent(decoratorSyntax, binder);
 
@@ -1406,6 +1440,7 @@ namespace Bicep.Core.Semantics.Namespaces
                     TypeValidator.NarrowTypeAndCollectDiagnostics(
                         typeManager,
                         binder,
+                        parsingErrorLookup,
                         diagnosticWriter,
                         SingleArgumentSelector(decoratorSyntax),
                         new TypedArrayType(targetType, TypeSymbolValidationFlags.Default));
@@ -1453,8 +1488,8 @@ namespace Bicep.Core.Semantics.Namespaces
                 .WithDescription("Defines metadata of the parameter.")
                 .WithRequiredParameter("object", LanguageConstants.Object, "The metadata object.")
                 .WithFlags(FunctionFlags.ParameterOutputOrTypeDecorator)
-                .WithValidator((_, decoratorSyntax, _, typeManager, binder, diagnosticWriter) =>
-                    TypeValidator.NarrowTypeAndCollectDiagnostics(typeManager, binder, diagnosticWriter, SingleArgumentSelector(decoratorSyntax), LanguageConstants.ParameterModifierMetadata))
+                .WithValidator((_, decoratorSyntax, _, typeManager, binder, parsingErrorLookup, diagnosticWriter) =>
+                    TypeValidator.NarrowTypeAndCollectDiagnostics(typeManager, binder, parsingErrorLookup, diagnosticWriter, SingleArgumentSelector(decoratorSyntax), LanguageConstants.ParameterModifierMetadata))
                 .WithEvaluator(MergeToTargetObject(LanguageConstants.ParameterMetadataPropertyName, SingleParameterSelector))
                 .Build();
 
@@ -1471,7 +1506,7 @@ namespace Bicep.Core.Semantics.Namespaces
                 .WithRequiredParameter(LanguageConstants.BatchSizePropertyName, LanguageConstants.Int, "The size of the batch")
                 .WithFlags(FunctionFlags.ResourceOrModuleDecorator)
                 // the decorator is constrained to resources and modules already - checking for array alone is simple and should be sufficient
-                .WithValidator((decoratorName, decoratorSyntax, targetType, typeManager, binder, diagnosticWriter) =>
+                .WithValidator((decoratorName, decoratorSyntax, targetType, typeManager, binder, _, diagnosticWriter) =>
                 {
                     if (!TypeValidator.AreTypesAssignable(targetType, LanguageConstants.Array))
                     {
