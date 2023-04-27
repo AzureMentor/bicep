@@ -162,7 +162,7 @@ namespace Bicep.Core.Semantics
                     TemplateParameterType.Array => GetArrayType(resolved),
                     TemplateParameterType.Object => GetObjectType(SourceFile.Template!, resolved),
                     TemplateParameterType.SecureString => GetStringType(resolved,
-                        TypeSymbolValidationFlags.IsSecure & (allowLooseAssignment ? TypeSymbolValidationFlags.AllowLooseAssignment : TypeSymbolValidationFlags.Default)),
+                        TypeSymbolValidationFlags.IsSecure | (allowLooseAssignment ? TypeSymbolValidationFlags.AllowLooseAssignment : TypeSymbolValidationFlags.Default)),
                     TemplateParameterType.SecureObject => GetObjectType(SourceFile.Template!, resolved, TypeSymbolValidationFlags.IsSecure),
                     _ => ErrorType.Empty(),
                 };
@@ -391,28 +391,16 @@ namespace Bicep.Core.Semantics
             _ => GetType(schemaNode) switch { TypeSymbol concreteType => (concreteType, concreteType.Name) },
         };
 
-        private static TypeSymbol GetType(TemplateOutputParameter output)
+        private TypeSymbol GetType(TemplateOutputParameter output)
         {
-            return output.Type.Value switch
+            return output.Type?.Value switch
             {
                 TemplateParameterType.String when TryCreateUnboundResourceTypeParameter(output.Metadata?.Value, out var resourceType) =>
                     resourceType,
 
-                _ => GetType((TemplateParameter)output),
+                _ => GetType((ITemplateSchemaNode)output),
             };
         }
-
-        private static TypeSymbol GetType(TemplateParameter parameterOrOutput) => parameterOrOutput.Type.Value switch
-        {
-            TemplateParameterType.String => LanguageConstants.LooseString,
-            TemplateParameterType.Int => LanguageConstants.Int,
-            TemplateParameterType.Bool => LanguageConstants.Bool,
-            TemplateParameterType.Array => LanguageConstants.Array,
-            TemplateParameterType.Object => LanguageConstants.Object,
-            TemplateParameterType.SecureString => LanguageConstants.SecureString,
-            TemplateParameterType.SecureObject => LanguageConstants.SecureObject,
-            _ => ErrorType.Empty(),
-        };
 
         private static bool TryCreateUnboundResourceTypeParameter(JToken? metadataToken, [NotNullWhen(true)] out TypeSymbol? type)
         {

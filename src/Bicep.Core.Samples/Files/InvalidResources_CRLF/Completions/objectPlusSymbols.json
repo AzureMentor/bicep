@@ -724,6 +724,10 @@
     "label": "dataCollectionRule",
     "kind": "field",
     "detail": "dataCollectionRule",
+    "documentation": {
+      "kind": "markdown",
+      "value": "Type: object"
+    },
     "deprecated": false,
     "preselect": false,
     "sortText": "2_dataCollectionRule",
@@ -2831,6 +2835,10 @@
     "label": "issue4668_identity",
     "kind": "field",
     "detail": "issue4668_identity",
+    "documentation": {
+      "kind": "markdown",
+      "value": "Type: object  \nThe identity that will be used to execute the Deployment Script."
+    },
     "deprecated": false,
     "preselect": false,
     "sortText": "2_issue4668_identity",
@@ -2845,6 +2853,10 @@
     "label": "issue4668_kind",
     "kind": "field",
     "detail": "issue4668_kind",
+    "documentation": {
+      "kind": "markdown",
+      "value": "Type: 'AzureCLI' | 'AzurePowerShell'  \nThe language of the Deployment Script. AzurePowerShell or AzureCLI."
+    },
     "deprecated": false,
     "preselect": false,
     "sortText": "2_issue4668_kind",
@@ -2876,6 +2888,10 @@
     "label": "issue4668_properties",
     "kind": "field",
     "detail": "issue4668_properties",
+    "documentation": {
+      "kind": "markdown",
+      "value": "Type: object  \nThe properties of the Deployment Script."
+    },
     "deprecated": false,
     "preselect": false,
     "sortText": "2_issue4668_properties",
@@ -3114,6 +3130,27 @@
     "textEdit": {
       "range": {},
       "newText": "loadTextContent($0)"
+    },
+    "command": {
+      "title": "signature help",
+      "command": "editor.action.triggerParameterHints"
+    }
+  },
+  {
+    "label": "loadYamlContent",
+    "kind": "function",
+    "documentation": {
+      "kind": "markdown",
+      "value": "```bicep\nloadYamlContent(filePath: string, [pathFilter: string], [encoding: 'iso-8859-1' | 'us-ascii' | 'utf-16' | 'utf-16BE' | 'utf-8']): any\n\n```\nLoads the specified YAML file as bicep object. File loading occurs during compilation, not at runtime.\n"
+    },
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "3_loadYamlContent",
+    "insertTextFormat": "snippet",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "loadYamlContent($0)"
     },
     "command": {
       "title": "signature help",
@@ -4784,6 +4821,10 @@
     "label": "resrefpar",
     "kind": "field",
     "detail": "resrefpar",
+    "documentation": {
+      "kind": "markdown",
+      "value": "Type: string"
+    },
     "deprecated": false,
     "preselect": false,
     "sortText": "2_resrefpar",
@@ -5140,23 +5181,6 @@
     ]
   },
   {
-    "label": "runtimeInvalidRes9",
-    "kind": "interface",
-    "detail": "runtimeInvalidRes9",
-    "deprecated": false,
-    "preselect": false,
-    "sortText": "2_runtimeInvalidRes9",
-    "insertTextFormat": "plainText",
-    "insertTextMode": "adjustIndentation",
-    "textEdit": {
-      "range": {},
-      "newText": "runtimeInvalidRes9"
-    },
-    "commitCharacters": [
-      ":"
-    ]
-  },
-  {
     "label": "runtimeValid",
     "kind": "variable",
     "detail": "runtimeValid",
@@ -5182,6 +5206,23 @@
     "textEdit": {
       "range": {},
       "newText": "runtimeValidRes1"
+    },
+    "commitCharacters": [
+      ":"
+    ]
+  },
+  {
+    "label": "runtimeValidRes10",
+    "kind": "interface",
+    "detail": "runtimeValidRes10",
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_runtimeValidRes10",
+    "insertTextFormat": "plainText",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "runtimeValidRes10"
     },
     "commitCharacters": [
       ":"
@@ -5685,6 +5726,10 @@
     "label": "tags",
     "kind": "field",
     "detail": "tags",
+    "documentation": {
+      "kind": "markdown",
+      "value": "Type: object"
+    },
     "deprecated": false,
     "preselect": false,
     "sortText": "2_tags",

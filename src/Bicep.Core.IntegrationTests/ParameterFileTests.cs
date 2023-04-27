@@ -61,29 +61,6 @@ using './one.bicepparam'
         }
 
         [TestMethod]
-        public void Params_file_with_not_implemented_syntax_should_log_diagnostic()
-        {                    
-            var result = CompilationHelper.CompileParams(
-    ("parameters.bicepparam", @"
-    using 'main.bicep'
-
-    param foo = 1 + 2
-    "),
-    ("main.bicep", @"
-    param foo int
-    "));
-
-            using(new AssertionScope())
-            {
-                result.Parameters.Should().BeNull();
-                result.Diagnostics.Should().HaveDiagnostics(new[]
-                {
-                    ("BCP252", DiagnosticLevel.Error, "Binary operator is not allowed in Bicep parameter file.")
-                });
-            }
-        }
-
-        [TestMethod]
         public void Params_file_with_not_using_declaration_should_log_diagnostic()
         {                    
             var result = CompilationHelper.CompileParams(

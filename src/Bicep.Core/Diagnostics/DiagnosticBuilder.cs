@@ -50,6 +50,11 @@ namespace Bicep.Core.Diagnostics
                 ? $" You are referencing a variable which cannot be calculated at the start (\"{string.Join("\" -> \"", variableDependencyChain)}\")."
                 : string.Empty;
 
+            private static string BuildNonDeployTimeConstantPropertyClause(string? accessedSymbolName, string? propertyName) =>
+                accessedSymbolName is not null && propertyName is not null
+                    ? $" The property \"{propertyName}\" of {accessedSymbolName} cannot be calculated at the start."
+                    : string.Empty;
+
             private static string BuildAccessiblePropertiesClause(string? accessedSymbolName, IEnumerable<string>? accessiblePropertyNames) => accessedSymbolName is not null && accessiblePropertyNames is not null
                 ? $" Properties of {accessedSymbolName} which can be calculated at the start include {ToQuotedString(accessiblePropertyNames.OrderBy(s => s))}."
                 : string.Empty;
@@ -1090,15 +1095,16 @@ namespace Bicep.Core.Diagnostics
                     $"This expression is being used in an argument of the function \"{functionName}\", which requires a value that can be calculated at the start of the deployment.{variableDependencyChainClause}{accessiblePropertiesClause}");
             }
 
-            public ErrorDiagnostic RuntimeValueNotAllowedInVariableForBody(string variableName, string? accessedSymbolName, IEnumerable<string>? accessiblePropertyNames, IEnumerable<string>? variableDependencyChain)
+            public ErrorDiagnostic RuntimeValueNotAllowedInVariableForBody(string variableName, string? accessedSymbolName, IEnumerable<string>? accessiblePropertyNames, IEnumerable<string>? variableDependencyChain, string? violatingPropertyName)
             {
                 var variableDependencyChainClause = BuildVariableDependencyChainClause(variableDependencyChain);
+                var violatingPropertyNameClause = BuildNonDeployTimeConstantPropertyClause(accessedSymbolName, violatingPropertyName);
                 var accessiblePropertiesClause = BuildAccessiblePropertiesClause(accessedSymbolName, accessiblePropertyNames);
 
                 return new ErrorDiagnostic(
                     TextSpan,
                     "BCP182",
-                    $"This expression is being used in the for-body of the variable \"{variableName}\", which requires values that can be calculated at the start of the deployment.{variableDependencyChainClause}{accessiblePropertiesClause}");
+                    $"This expression is being used in the for-body of the variable \"{variableName}\", which requires values that can be calculated at the start of the deployment.{variableDependencyChainClause}{violatingPropertyNameClause}{accessiblePropertiesClause}");
             }
 
             public ErrorDiagnostic ModuleParametersPropertyRequiresObjectLiteral() => new(
@@ -1464,31 +1470,6 @@ namespace Bicep.Core.Diagnostics
                 TextSpan,
                 "BCP250",
                 $"Parameter \"{identifier}\" is assigned multiple times. Remove or rename the duplicates.");
-
-            public ErrorDiagnostic ParameterTernaryOperationNotSupported() => new(
-                TextSpan,
-                "BCP251",
-                $"Ternary operator is not allowed in Bicep parameter file.");
-
-            public ErrorDiagnostic ParameterBinaryOperationNotSupported() => new(
-                TextSpan,
-                "BCP252",
-                $"Binary operator is not allowed in Bicep parameter file.");
-
-            public ErrorDiagnostic ParameterUnaryOperationNotSupported() => new(
-                TextSpan,
-                "BCP253",
-                $"Unary operator is not allowed in Bicep parameter file.");
-
-            public ErrorDiagnostic ParameterLambdaFunctionNotSupported() => new(
-                TextSpan,
-                "BCP254",
-                $"Lambda function is not allowed in Bicep parameter file.");
-
-            public ErrorDiagnostic ParameterFunctionCallNotSupported() => new(
-                TextSpan,
-                "BCP255",
-                $"Function call is not allowed in Bicep parameter file.");
 
             public ErrorDiagnostic TemplatePathHasNotBeenSpecified() => new(
                 TextSpan,
@@ -1873,17 +1854,17 @@ namespace Bicep.Core.Diagnostics
                 "BCP328",
                 $"The provided value (which will always be less than or equal to {sourceMax}) is too small to assign to a target for which the minimum allowable value is {targetMin}.");
 
-            public Diagnostic SourceIntDomainExtendsBelowTargetIntDomain(long? sourceMin, long targetMin) => new(
+            public Diagnostic SourceIntDomainExtendsBelowTargetIntDomain(long sourceMin, long targetMin) => new(
                 TextSpan,
                 DiagnosticLevel.Warning,
                 "BCP329",
-                $"The provided value {(sourceMin.HasValue ? $"may be as small as {sourceMin.Value}" : "has no configured minimum")} and may be too small to assign to a target with a configured minimum of {targetMin}.");
+                $"The provided value can be as small as {sourceMin} and may be too small to assign to a target with a configured minimum of {targetMin}.");
 
-            public Diagnostic SourceIntDomainExtendsAboveTargetIntDomain(long? sourceMax, long targetMax) => new(
+            public Diagnostic SourceIntDomainExtendsAboveTargetIntDomain(long sourceMax, long targetMax) => new(
                 TextSpan,
                 DiagnosticLevel.Warning,
                 "BCP330",
-                $"The provided value {(sourceMax.HasValue ? $"may be as large as {sourceMax.Value}" : "has no configured maximum")} and may be too large to assign to a target with a configured maximum of {targetMax}.");
+                $"The provided value can be as large as {sourceMax} and may be too large to assign to a target with a configured maximum of {targetMax}.");
 
             public ErrorDiagnostic MinMayNotExceedMax(string minDecoratorName, long minValue, string maxDecoratorName, long maxValue) => new(
                 TextSpan,
@@ -1902,17 +1883,43 @@ namespace Bicep.Core.Diagnostics
                 "BCP333",
                 $"The provided value (whose length will always be less than or equal to {sourceMaxLength}) is too short to assign to a target for which the minimum allowable length is {targetMinLength}.");
 
-            public Diagnostic SourceValueLengthDomainExtendsBelowTargetValueLengthDomain(long? sourceMinLength, long targetMinLength) => new(
+            public Diagnostic SourceValueLengthDomainExtendsBelowTargetValueLengthDomain(long sourceMinLength, long targetMinLength) => new(
                 TextSpan,
                 DiagnosticLevel.Warning,
                 "BCP334",
-                $"The provided value {(sourceMinLength.HasValue ? $"may have a length as small as {sourceMinLength.Value}" : "has no configured minimum length")} and may be too short to assign to a target with a configured minimum length of {targetMinLength}.");
+                $"The provided value can have a length as small as {sourceMinLength} and may be too short to assign to a target with a configured minimum length of {targetMinLength}.");
 
-            public Diagnostic SourceValueLengthDomainExtendsAboveTargetValueLengthDomain(long? sourceMaxLength, long targetMaxLength) => new(
+            public Diagnostic SourceValueLengthDomainExtendsAboveTargetValueLengthDomain(long sourceMaxLength, long targetMaxLength) => new(
                 TextSpan,
                 DiagnosticLevel.Warning,
                 "BCP335",
-                $"The provided value {(sourceMaxLength.HasValue ? $"may have a length as large as {sourceMaxLength.Value}" : "has no configured maximum length")} and may be too long to assign to a target with a configured maximum length of {targetMaxLength}.");
+                $"The provided value can have a length as large as {sourceMaxLength} and may be too long to assign to a target with a configured maximum length of {targetMaxLength}.");
+
+            public ErrorDiagnostic ParametersFileUnsupported() => new(
+                TextSpan,
+                "BCP336",
+                $@"Using a Bicep Parameters file requires enabling EXPERIMENTAL feature ""{nameof(ExperimentalFeaturesEnabled.ParamsFiles)}"".",
+                new Uri("https://aka.ms/bicep/config"));
+
+            public ErrorDiagnostic UnrecognizedParamsFileDeclaration() => new(
+                TextSpan,
+                "BCP337",
+                $@"This declaration type is not valid for a Bicep Parameters file. Specify a ""{LanguageConstants.UsingKeyword}"" or ""{LanguageConstants.ParameterKeyword}"" declaration.");
+
+            public ErrorDiagnostic FailedToEvaluateParameter(string parameterName, string message) => new(
+                TextSpan,
+                "BCP338",
+                $"Failed to evaluate parameter \"{parameterName}\": {message}");
+
+            public ErrorDiagnostic ArrayIndexOutOfBounds(long indexSought) => new(
+                TextSpan,
+                "BCP339",
+                $"""The provided array index value of "{indexSought}" is not valid. Array index should be greater than or equal to 0.""");
+
+            public ErrorDiagnostic UnparseableYamlType() => new(
+               TextSpan,
+               "BCP340",
+               $"Unable to parse literal YAML value. Please ensure that it is well-formed.");
         }
 
         public static DiagnosticBuilderInternal ForPosition(TextSpan span)

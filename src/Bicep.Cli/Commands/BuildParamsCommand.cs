@@ -11,6 +11,7 @@ using Bicep.Core.Emit;
 using Bicep.Core.Features;
 using Bicep.Core.FileSystem;
 using Bicep.Core.Semantics;
+using Bicep.Core.Workspaces;
 using Microsoft.Extensions.Logging;
 
 namespace Bicep.Cli.Commands
@@ -46,7 +47,7 @@ namespace Bicep.Cli.Commands
             var bicepFileArgPath = args.BicepFile != null ? PathHelper.ResolvePath(args.BicepFile) : null;
 
             var features = featureProviderFactory.GetFeatureProvider(PathHelper.FilePathToFileUrl(paramsInputPath));
-            var emitterSettings = new EmitterSettings(features);
+            var emitterSettings = new EmitterSettings(features, BicepSourceFileKind.ParamsFile);
 
             if (emitterSettings.EnableSymbolicNames)
             {
@@ -63,15 +64,9 @@ namespace Bicep.Cli.Commands
                 throw new CommandLineException($"{bicepFileArgPath} is not a bicep file");
             }
 
-            if(!features.ParamsFilesEnabled) 
-            {
-                logger.LogError(CliResources.UnableToCompileParamsFile, paramsInputPath, nameof(ExperimentalFeaturesEnabled.ParamsFiles));
-                return 1;
-            }
-
             if (!IsBicepparamsFile(paramsInputPath))
             {
-                logger.LogError(CliResources.UnrecognizedFileExtensionMessage, paramsInputPath);
+                logger.LogError(CliResources.UnrecognizedBicepparamsFileExtensionMessage, paramsInputPath);
                 return 1;
             }
 

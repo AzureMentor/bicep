@@ -1004,11 +1004,6 @@ namespace Bicep.Core.TypeSystem
         public override void VisitTernaryOperationSyntax(TernaryOperationSyntax syntax)
             => AssignTypeWithDiagnostics(syntax, diagnostics =>
             {
-                if(this.fileKind == BicepSourceFileKind.ParamsFile)
-                {
-                    return ErrorType.Create(DiagnosticBuilder.ForPosition(syntax).ParameterTernaryOperationNotSupported());
-                }
-
                 var errors = new List<ErrorDiagnostic>();
 
                 // ternary operator requires the condition to be of bool type
@@ -1049,11 +1044,6 @@ namespace Bicep.Core.TypeSystem
         public override void VisitBinaryOperationSyntax(BinaryOperationSyntax syntax)
             => AssignTypeWithDiagnostics(syntax, diagnostics =>
             {
-                if (this.fileKind == BicepSourceFileKind.ParamsFile)
-                {
-                    return ErrorType.Create(DiagnosticBuilder.ForPosition(syntax).ParameterBinaryOperationNotSupported());
-                }
-
                 var errors = new List<ErrorDiagnostic>();
 
                 var operandType1 = typeManager.GetTypeInfo(syntax.LeftExpression);
@@ -1086,17 +1076,12 @@ namespace Bicep.Core.TypeSystem
 
                 // we do not have a match
                 // operand types didn't match available operators
-                return ErrorType.Create(DiagnosticBuilder.ForPosition(syntax).BinaryOperatorInvalidType(Operators.BinaryOperatorToText[syntax.Operator], operandType1, operandType2, additionalInfo: additionalInfo));
+                return ErrorType.Create(DiagnosticBuilder.ForPosition(syntax).BinaryOperatorInvalidType(syntax.OperatorToken.Text, operandType1, operandType2, additionalInfo: additionalInfo));
             });
 
         public override void VisitUnaryOperationSyntax(UnaryOperationSyntax syntax)
             => AssignTypeWithDiagnostics(syntax, diagnostics =>
             {
-                if (this.fileKind == BicepSourceFileKind.ParamsFile)
-                {
-                    return ErrorType.Create(DiagnosticBuilder.ForPosition(syntax).ParameterUnaryOperationNotSupported());
-                }
-
                 var errors = new List<ErrorDiagnostic>();
 
                 var operandType = typeManager.GetTypeInfo(syntax.Expression);
@@ -1212,6 +1197,14 @@ namespace Bicep.Core.TypeSystem
                     return TypeHelper.CreateTypeUnion(possibilities);
 
                 case ArrayType baseArray:
+                    if (indexType is IntegerLiteralType integerLiteralArrayIndex && integerLiteralArrayIndex.Value < 0)
+                    {
+                        return ErrorType.Create(
+                            DiagnosticBuilder
+                                .ForPosition(syntax.IndexExpression)
+                                .ArrayIndexOutOfBounds(integerLiteralArrayIndex.Value));
+                    }
+
                     // we are indexing over an array
                     if (TypeValidator.AreTypesAssignable(indexType, LanguageConstants.Int))
                     {
@@ -1417,11 +1410,6 @@ namespace Bicep.Core.TypeSystem
         public override void VisitFunctionCallSyntax(FunctionCallSyntax syntax)
             => AssignTypeWithDiagnostics(syntax, diagnostics =>
             {
-                if (this.fileKind == BicepSourceFileKind.ParamsFile)
-                {
-                    return ErrorType.Create(DiagnosticBuilder.ForPosition(syntax).ParameterFunctionCallNotSupported());
-                }
-
                 var errors = new List<ErrorDiagnostic>();
 
                 foreach (TypeSymbol argumentType in GetArgumentTypes(syntax.Arguments).ToArray())
@@ -1453,11 +1441,6 @@ namespace Bicep.Core.TypeSystem
         public override void VisitLambdaSyntax(LambdaSyntax syntax)
             => AssignTypeWithDiagnostics(syntax, diagnostics =>
             {
-                if (this.fileKind == BicepSourceFileKind.ParamsFile)
-                {
-                    return ErrorType.Create(DiagnosticBuilder.ForPosition(syntax).ParameterLambdaFunctionNotSupported());
-                }
-
                 var argumentTypes = syntax.GetLocalVariables().Select(x => typeManager.GetTypeInfo(x));
                 var returnType = TypeValidator.NarrowTypeAndCollectDiagnostics(typeManager, binder, this.parsingErrorLookup, diagnostics, syntax.Body, LanguageConstants.Any);
 
@@ -1666,6 +1649,9 @@ namespace Bicep.Core.TypeSystem
                         return new DeferredTypeReference(() => VisitDeclaredSymbol(syntax, module));
 
                     case ParameterSymbol parameter:
+                        return new DeferredTypeReference(() => VisitDeclaredSymbol(syntax, parameter));
+
+                    case ParameterAssignmentSymbol parameter:
                         return new DeferredTypeReference(() => VisitDeclaredSymbol(syntax, parameter));
 
                     case VariableSymbol variable:

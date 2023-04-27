@@ -8,6 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Azure.Deployments.Core.Comparers;
 using Bicep.Core;
@@ -48,20 +49,17 @@ namespace Bicep.LanguageServer.Completions
         private readonly IFileResolver FileResolver;
         private readonly ISnippetsProvider SnippetsProvider;
         public readonly IModuleReferenceCompletionProvider moduleReferenceCompletionProvider;
-        private readonly INamespaceProvider namespaceProvider;
 
-        public BicepCompletionProvider(IFileResolver fileResolver, ISnippetsProvider snippetsProvider, INamespaceProvider namespaceProvider, IModuleReferenceCompletionProvider moduleReferenceCompletionProvider)
+        public BicepCompletionProvider(IFileResolver fileResolver, ISnippetsProvider snippetsProvider, IModuleReferenceCompletionProvider moduleReferenceCompletionProvider)
         {
             this.FileResolver = fileResolver;
             this.SnippetsProvider = snippetsProvider;
             this.moduleReferenceCompletionProvider = moduleReferenceCompletionProvider;
-            this.namespaceProvider = namespaceProvider;
         }
 
-        public async Task<IEnumerable<CompletionItem>> GetFilteredCompletions(Compilation compilation, BicepCompletionContext context)
+        public async Task<IEnumerable<CompletionItem>> GetFilteredCompletions(Compilation compilation, BicepCompletionContext context, CancellationToken cancellationToken)
         {
             var model = compilation.GetEntrypointSemanticModel();
-            IEnumerable<CompletionItem> moduleReferenceCompletions = await moduleReferenceCompletionProvider.GetFilteredCompletions(model.SourceFile.FileUri, context);
 
             return GetDeclarationCompletions(model, context)
                 .Concat(GetSymbolCompletions(model, context))
@@ -74,7 +72,7 @@ namespace Bicep.LanguageServer.Completions
                 .Concat(GetArrayItemCompletions(model, context))
                 .Concat(GetResourceTypeCompletions(model, context))
                 .Concat(GetResourceTypeFollowerCompletions(context))
-                .Concat(GetModulePathCompletions(model, context))
+                .Concat(GetLocalModulePathCompletions(model, context))
                 .Concat(GetModuleBodyCompletions(model, context))
                 .Concat(GetResourceBodyCompletions(model, context))
                 .Concat(GetParameterDefaultValueCompletions(model, context))
@@ -90,7 +88,7 @@ namespace Bicep.LanguageServer.Completions
                 .Concat(GetParamIdentifierCompletions(model, context))
                 .Concat(GetParamValueCompletions(model, context))
                 .Concat(GetUsingDeclarationPathCompletions(model, context))
-                .Concat(moduleReferenceCompletions);
+                .Concat(await moduleReferenceCompletionProvider.GetFilteredCompletions(model.SourceFile.FileUri, context, cancellationToken));
         }
 
         private IEnumerable<CompletionItem> GetParamIdentifierCompletions(SemanticModel paramsSemanticModel, BicepCompletionContext paramsCompletionContext)
@@ -104,7 +102,7 @@ namespace Bicep.LanguageServer.Completions
                 {
                     if (!IsParamAssigned(declaration))
                     {
-                        yield return CreateSymbolCompletion(declaration, paramsCompletionContext.ReplacementRange);
+                        yield return CreateSymbolCompletion(declaration, paramsCompletionContext.ReplacementRange, bicepSemanticModel);
                     }
                 }
             }
@@ -252,12 +250,6 @@ namespace Bicep.LanguageServer.Completions
 
         private IEnumerable<CompletionItem> GetSymbolCompletions(SemanticModel model, BicepCompletionContext context)
         {
-            // TODO: Revisit when we support functions in param files
-            if(model.SourceFileKind != BicepSourceFileKind.BicepFile)
-            {
-                return Enumerable.Empty<CompletionItem>();
-            }
-
             if (!context.Kind.HasFlag(BicepCompletionContextKind.Expression) &&
                 !context.Kind.HasFlag(BicepCompletionContextKind.DecoratorName))
             {
@@ -398,7 +390,7 @@ namespace Bicep.LanguageServer.Completions
                     {
                         // An unterminated string will result in skipped trivia containing an unterminated token.
                         // Compensate here by building the expected token before lexing it.
-                        token = SyntaxFactory.CreateToken(token.Type, $"{token.Text}'");
+                        token = SyntaxFactory.CreateFreeformToken(token.Type, $"{token.Text}'");
                     }
 
                     return Lexer.TryGetStringValue(token);
@@ -614,7 +606,7 @@ namespace Bicep.LanguageServer.Completions
             }
         }
 
-        private IEnumerable<CompletionItem> GetModulePathCompletions(SemanticModel model, BicepCompletionContext context)
+        private IEnumerable<CompletionItem> GetLocalModulePathCompletions(SemanticModel model, BicepCompletionContext context)
         {
             if (!context.Kind.HasFlag(BicepCompletionContextKind.ModulePath))
             {
@@ -877,6 +869,50 @@ namespace Bicep.LanguageServer.Completions
                 .ToImmutableDictionary(x => x.symbol, x => x.type!);
         }
 
+        private static CompletionPriority GetContextualCompletionPriority(Symbol symbol, SemanticModel model, BicepCompletionContext context, Symbol? enclosingDeclarationSymbol)
+        {
+            // The value type of resource/module.dependsOn items can only be a resource or module symbol so prioritize them higher than anything else.
+            // Expressions can also be accepted in this context so other completion items will still be available, just lower in the list.
+            if (context.Kind.HasFlag(BicepCompletionContextKind.ExpectsResourceSymbolicReference)
+                && symbol is ResourceSymbol or ModuleSymbol)
+            {
+                // parent resource symbols of the current resource should not be prioritized but are still provided for use in expressions
+                var enclosingResourceMetadata = model.DeclaredResources.FirstOrDefault((drm) => drm.Symbol == enclosingDeclarationSymbol);
+                if (enclosingResourceMetadata != null
+                    && model.ResourceAncestors.GetAncestors(enclosingResourceMetadata).Any(ra => ra.Resource.Symbol == symbol))
+                {
+                    return CompletionPriority.Medium;
+                }
+
+                return CompletionPriority.VeryHigh;
+            }
+
+            return GetCompletionPriority(symbol);
+        }
+
+        private static bool ShouldSymbolBeIncludedInCompletion(Symbol symbol, SemanticModel model, BicepCompletionContext context, Symbol? enclosingDeclarationSymbol)
+        {
+            // filter out self references
+            if (enclosingDeclarationSymbol != null && ReferenceEquals(symbol, enclosingDeclarationSymbol))
+            {
+                return false;
+            }
+
+            // For nested resource/module symbol completions, don't suggest child symbols for resource.dependsOn symbol completions.
+            if (context.Kind.HasFlag(BicepCompletionContextKind.ExpectsResourceSymbolicReference) && symbol is ResourceSymbol or ModuleSymbol)
+            {
+                // filter out child resource symbols of the enclosing declaration symbol
+                var symbolResourceMetadata = model.DeclaredResources.FirstOrDefault((drm) => drm.Symbol == symbol);
+                if (symbolResourceMetadata != null
+                    && model.ResourceAncestors.GetAncestors(symbolResourceMetadata).Any(ra => ra.Resource.Symbol == enclosingDeclarationSymbol))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         private static IEnumerable<CompletionItem> GetAccessibleSymbolCompletions(SemanticModel model, BicepCompletionContext context)
         {
             // maps insert text to the completion item
@@ -895,13 +931,14 @@ namespace Bicep.LanguageServer.Completions
             {
                 foreach (var symbol in symbols)
                 {
-                    if (!result.ContainsKey(symbol.Name) && !ReferenceEquals(symbol, enclosingDeclarationSymbol))
+                    if (!result.ContainsKey(symbol.Name) && ShouldSymbolBeIncludedInCompletion(symbol, model, context, enclosingDeclarationSymbol))
                     {
                         // the symbol satisfies the following conditions:
                         // - we have not added a symbol with the same name (avoids duplicate completions)
                         // - the symbol is different than the enclosing declaration (avoids suggesting cycles)
                         // - the symbol name is different than the name of the enclosing declaration (avoids suggesting a duplicate identifier)
-                        result.Add(symbol.Name, CreateSymbolCompletion(symbol, context.ReplacementRange));
+                        var priority = GetContextualCompletionPriority(symbol, model, context, enclosingDeclarationSymbol);
+                        result.Add(symbol.Name, CreateSymbolCompletion(symbol, context.ReplacementRange, priority: priority, model: model));
                     }
                 }
             }
@@ -976,12 +1013,12 @@ namespace Bicep.LanguageServer.Completions
                         // either there is a declaration with the same name as the function or the function is ambiguous between the imported namespaces
                         // either way the function must be fully qualified in the completion
                         var fullyQualifiedFunctionName = $"{symbol.Name}.{function.Name}";
-                        completions.Add(fullyQualifiedFunctionName, CreateSymbolCompletion(function, context.ReplacementRange, insertText: fullyQualifiedFunctionName));
+                        completions.Add(fullyQualifiedFunctionName, CreateSymbolCompletion(function, context.ReplacementRange, model, insertText: fullyQualifiedFunctionName));
                     }
                     else
                     {
                         // function does not have to be fully qualified
-                        completions.Add(function.Name, CreateSymbolCompletion(function, context.ReplacementRange));
+                        completions.Add(function.Name, CreateSymbolCompletion(function, context.ReplacementRange, model));
                     }
                 }
             }
@@ -1025,14 +1062,14 @@ namespace Bicep.LanguageServer.Completions
             }
 
             var declaredType = compilation.GetEntrypointSemanticModel().GetDeclaredType(context.PropertyAccess.BaseExpression);
+            var model = compilation.GetEntrypointSemanticModel();
 
             if (context.Kind.HasFlag(BicepCompletionContextKind.DecoratorName) && declaredType is NamespaceType namespaceType)
             {
-                var model = compilation.GetEntrypointSemanticModel();
                 var enclosingDeclarationSymbol = context.EnclosingDeclaration is null ? null : model.GetSymbolInfo(context.EnclosingDeclaration);
 
                 return GetAccessibleDecoratorFunctions(namespaceType, enclosingDeclarationSymbol)
-                    .Select(symbol => CreateSymbolCompletion(symbol, context.ReplacementRange));
+                    .Select(symbol => CreateSymbolCompletion(symbol, context.ReplacementRange, model));
             }
 
             if (declaredType is not null && TypeHelper.TryRemoveNullability(declaredType) is TypeSymbol nonNullable)
@@ -1044,7 +1081,7 @@ namespace Bicep.LanguageServer.Completions
                 .Where(p => !p.Flags.HasFlag(TypePropertyFlags.WriteOnly))
                 .Select(p => CreatePropertyAccessCompletion(p, compilation.SourceFileGrouping.EntryPoint, context.PropertyAccess, context.ReplacementRange))
                 .Concat(GetMethods(declaredType)
-                    .Select(m => CreateSymbolCompletion(m, context.ReplacementRange)));
+                .Select(m => CreateSymbolCompletion(m, context.ReplacementRange, model)));
         }
 
         private IEnumerable<CompletionItem> GetResourceAccessCompletions(Compilation compilation, BicepCompletionContext context)
@@ -1059,13 +1096,14 @@ namespace Bicep.LanguageServer.Completions
             {
                 return Enumerable.Empty<CompletionItem>();
             }
+            var model = compilation.GetEntrypointSemanticModel();
 
             // Find child resources
             var children = symbol.DeclaringResource.TryGetBody()?.Resources ?? Enumerable.Empty<ResourceDeclarationSyntax>();
             return children
                 .Select(r => new { resource = r, symbol = compilation.GetEntrypointSemanticModel().GetSymbolInfo(r) as ResourceSymbol, })
                 .Where(entry => entry.symbol != null)
-                .Select(entry => CreateSymbolCompletion(entry.symbol!, context.ReplacementRange));
+                .Select(entry => CreateSymbolCompletion(entry.symbol!, context.ReplacementRange, model));
         }
 
         private IEnumerable<CompletionItem> GetArrayIndexCompletions(Compilation compilation, BicepCompletionContext context)
@@ -1159,6 +1197,14 @@ namespace Bicep.LanguageServer.Completions
                 return Enumerable.Empty<CompletionItem>();
             }
 
+            // Special case: there is a distinction in the type system that needs to be made for resource.dependsOn resource collections
+            // which are resources defined by a loop vs arrays. For now, check if type is the specific type of resource.dependsOn
+            // don't provide value completions as the resource collections completions are handled by GetSymbolCompletions.
+            if (ReferenceEquals(arrayType.Item.Type, LanguageConstants.ResourceOrResourceCollectionRefItem))
+            {
+                return Enumerable.Empty<CompletionItem>();
+            }
+
             return GetValueCompletionsForType(model, context, arrayType.Item.Type, loopsAllowed: false);
         }
 
@@ -1200,6 +1246,13 @@ namespace Bicep.LanguageServer.Completions
                 var jsonItems = CreateFileCompletionItems(model.SourceFile.FileUri, context.ReplacementRange, fileCompletionInfo, (file) => PathHelper.HasExtension(file, "json") || PathHelper.HasExtension(file, "jsonc"), CompletionPriority.High);
                 var nonJsonItems = CreateFileCompletionItems(model.SourceFile.FileUri, context.ReplacementRange, fileCompletionInfo, (file) => !PathHelper.HasExtension(file, "json") && !PathHelper.HasExtension(file, "jsonc"), CompletionPriority.Medium);
                 fileItems = jsonItems.Concat(nonJsonItems);
+            }
+            else if (argType.ValidationFlags.HasFlag(TypeSymbolValidationFlags.IsStringYamlFilePath))
+            {
+                // Prioritize .yaml or .yml files higher than other files.
+                var yamlItems = CreateFileCompletionItems(model.SourceFile.FileUri, context.ReplacementRange, fileCompletionInfo, (file) => PathHelper.HasExtension(file, "yaml") || PathHelper.HasExtension(file, "yml"), CompletionPriority.High);
+                var nonYamlItems = CreateFileCompletionItems(model.SourceFile.FileUri, context.ReplacementRange, fileCompletionInfo, (file) => !PathHelper.HasExtension(file, "yaml") && !PathHelper.HasExtension(file, "yml"), CompletionPriority.Medium);
+                fileItems = yamlItems.Concat(nonYamlItems);
             }
             else
             {
@@ -1337,7 +1390,7 @@ namespace Bicep.LanguageServer.Completions
 
         private IEnumerable<CompletionItem> GetExpressionCompletions(SemanticModel model, BicepCompletionContext context)
         {
-            if (context.Kind.HasFlag(BicepCompletionContextKind.Expression) && model.SourceFileKind == BicepSourceFileKind.BicepFile)
+            if (context.Kind.HasFlag(BicepCompletionContextKind.Expression))
             {
                 yield return CreateConditionCompletion(context.ReplacementRange);
             }
@@ -1456,12 +1509,12 @@ namespace Bicep.LanguageServer.Completions
 
         private static CompletionItem CreatePropertyNameCompletion(TypeProperty property, bool includeColon, Range replacementRange)
         {
-            var required = property.Flags.HasFlag(TypePropertyFlags.Required);
+            var required = TypeHelper.IsRequired(property);
 
             var escapedPropertyName = IsPropertyNameEscapingRequired(property) ? StringUtils.EscapeBicepString(property.Name) : property.Name;
             var suffix = includeColon ? ":" : string.Empty;
             return CompletionItemBuilder.Create(CompletionItemKind.Property, property.Name)
-                // property names that much Bicep keywords or containing non-identifier chars need to be escaped
+                // property names that match Bicep keywords or contain non-identifier chars need to be escaped
                 .WithPlainTextEdit(replacementRange, $"{escapedPropertyName}{suffix}")
                 .WithDetail(FormatPropertyDetail(property))
                 .WithDocumentation(FormatPropertyDocumentation(property))
@@ -1657,14 +1710,14 @@ namespace Bicep.LanguageServer.Completions
                 .WithSortText(GetSortText(label, priority))
                 .Build();
 
-        private static CompletionItem CreateSymbolCompletion(Symbol symbol, Range replacementRange, string? insertText = null)
+        private static CompletionItem CreateSymbolCompletion(Symbol symbol, Range replacementRange, SemanticModel model, string? insertText = null, CompletionPriority? priority = null)
         {
             insertText ??= symbol.Name;
             var kind = GetCompletionItemKind(symbol);
-            var priority = GetCompletionPriority(symbol);
+            var completion = CompletionItemBuilder.Create(kind, insertText);
 
-            var completion = CompletionItemBuilder.Create(kind, insertText)
-                .WithSortText(GetSortText(insertText, priority));
+            priority ??= GetCompletionPriority(symbol);
+            completion.WithSortText(GetSortText(insertText, priority.Value));
 
             if (symbol is ResourceSymbol)
             {
@@ -1711,6 +1764,11 @@ namespace Bicep.LanguageServer.Completions
                     .WithPlainTextEdit(replacementRange, insertText + ".")
                     .WithCommand(new Command { Name = EditorCommands.RequestCompletions, Title = "symbol completion" })
                     .Build();
+            }
+
+            if(TryGetSymbolDocumentationMarkdown(symbol, model) is {} documentation)
+            {
+                completion.WithDocumentation(documentation);
             }
 
             return completion
@@ -1802,7 +1860,7 @@ namespace Bicep.LanguageServer.Completions
             !Lexer.IsValidIdentifier(property.Name) || LanguageConstants.Keywords.ContainsKey(property.Name);
 
         private static string FormatPropertyDetail(TypeProperty property) =>
-            property.Flags.HasFlag(TypePropertyFlags.Required)
+            TypeHelper.IsRequired(property)
                 ? $"{property.Name} (Required)"
                 : property.Name;
 
@@ -1835,6 +1893,20 @@ namespace Bicep.LanguageServer.Completions
             }
 
             return buffer.ToString();
+        }
+
+        private static string? TryGetSymbolDocumentationMarkdown(Symbol symbol, SemanticModel model)
+        {   
+            if(symbol is DeclaredSymbol declaredSymbol && declaredSymbol.DeclaringSyntax is DecorableSyntax decorableSyntax)
+            {
+                var documentation = SemanticModelHelper.TryGetDescription(model, decorableSyntax);
+                if(declaredSymbol is ParameterSymbol)
+                {
+                    documentation = $"Type: {declaredSymbol.Type}" + (documentation is null ? "" : $"{MarkdownNewLine}{documentation}"); 
+                }
+                return documentation;
+            }
+            return null;
         }
     }
 }

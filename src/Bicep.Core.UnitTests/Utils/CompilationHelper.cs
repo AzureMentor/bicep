@@ -77,8 +77,7 @@ namespace Bicep.Core.UnitTests.Utils
 
         public static ParamsCompilationResult CompileParams(params (string fileName, string fileContents)[] files)
         {
-            var features = BicepTestConstants.FeatureOverrides;
-            var services = new ServiceBuilder().WithFeatureOverrides(features);
+            var services = new ServiceBuilder().WithFeatureOverrides(new(ParamsFilesEnabled: true));
             return CompileParams(services, files);
         }
 
@@ -91,6 +90,7 @@ namespace Bicep.Core.UnitTests.Utils
 
             var (uriDictionary, entryUri) = CreateFileDictionary(files, "parameters.bicepparam");
             var fileResolver = new InMemoryFileResolver(uriDictionary);
+            services = services.WithFileResolver(fileResolver);
 
             var sourceFiles = uriDictionary
                 .Where(x => PathHelper.HasBicepparamsExension(x.Key) || PathHelper.HasBicepExtension(x.Key) || PathHelper.HasArmTemplateLikeExtension(x.Key))
@@ -101,7 +101,7 @@ namespace Bicep.Core.UnitTests.Utils
             return CompileParams(compilation);
         }
 
-        private static (IReadOnlyDictionary<Uri, string> files, Uri entryFileUri) CreateFileDictionary(IEnumerable<(string fileName, string fileContents)> files, string entryFileName)
+        public static (IReadOnlyDictionary<Uri, string> files, Uri entryFileUri) CreateFileDictionary(IEnumerable<(string fileName, string fileContents)> files, string entryFileName)
         {
             var uriDictionary = files.ToDictionary(
                 x => InMemoryFileResolver.GetFileUri($"/path/to/{x.fileName}"),
