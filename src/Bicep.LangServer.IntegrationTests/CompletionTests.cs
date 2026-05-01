@@ -4441,7 +4441,10 @@ var file = " + functionName + @"(templ|)
                             }
                         }
                     }
-                    """));
+                    """),
+                security: SecurityConfiguration.Bind(JsonElementFactory.CreateElement(
+                    """{"trustedRegistries":["private.contoso.com"]}"""))
+                );
             var fileUri = DocumentUri.From($"file:///{Guid.NewGuid():D}/{TestContext.TestName}/main.{extension}");
             configurationManager.Setup(x => x.GetConfiguration(fileUri.ToIOUri())).Returns(moduleAliasesConfiguration);
 
@@ -4553,7 +4556,10 @@ var file = " + functionName + @"(templ|)
                         }
                     }
                     """),
-                null));
+                null),
+                security: SecurityConfiguration.Bind(JsonElementFactory.CreateElement(
+                    """{"trustedRegistries":["registry.contoso.io"]}"""))
+                );
             var fileUri = DocumentUri.From($"file:///{baseFolder}/{TestContext.TestName}/main.{extension}");
             configurationManager.Setup(x => x.GetConfiguration(fileUri.ToIOUri())).Returns(moduleAliasesConfiguration);
 
