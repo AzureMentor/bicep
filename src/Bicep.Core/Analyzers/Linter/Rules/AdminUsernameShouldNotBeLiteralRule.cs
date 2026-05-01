@@ -4,10 +4,7 @@
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
-using Bicep.Core.TypeSystem;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using Bicep.Core.TypeSystem.Types;
 
 namespace Bicep.Core.Analyzers.Linter.Rules
 {
@@ -18,7 +15,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
         public AdminUsernameShouldNotBeLiteralRule() : base(
             code: Code,
             description: CoreResources.AdminUsernameShouldNotBeLiteralRuleDescription,
-            docUri: new Uri($"https://aka.ms/bicep/linter/{Code}")
+            LinterRuleCategory.Security
         )
         {
         }

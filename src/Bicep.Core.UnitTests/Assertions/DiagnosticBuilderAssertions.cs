@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using Bicep.Core.Diagnostics;
-using Bicep.Core.Parsing;
 using FluentAssertions;
 using FluentAssertions.Execution;
 using FluentAssertions.Primitives;
@@ -23,9 +22,21 @@ namespace Bicep.Core.UnitTests.Assertions
 
         protected override string Identifier => "DiagnosticBuilderDelegate";
 
+        public AndConstraint<DiagnosticBuilderAssertions> HaveCode(string code, string because = "", params object[] becauseArgs)
+        {
+            var diagnostic = GetDiagnosticFromSubject();
+
+            using (new AssertionScope())
+            {
+                diagnostic.Should().HaveCodeAndSeverity(code, DiagnosticLevel.Error, because, becauseArgs);
+            }
+
+            return new(this);
+        }
+
         public AndConstraint<DiagnosticBuilderAssertions> HaveCodeAndSeverity(string code, DiagnosticLevel level, string because = "", params object[] becauseArgs)
         {
-            Diagnostic diagnostic = GetDiagnosticFromSubject();
+            var diagnostic = GetDiagnosticFromSubject();
 
             using (new AssertionScope())
             {
@@ -37,11 +48,23 @@ namespace Bicep.Core.UnitTests.Assertions
 
         public AndConstraint<DiagnosticBuilderAssertions> HaveMessage(string message, string because = "", params object[] becauseArgs)
         {
-            Diagnostic diagnostic = GetDiagnosticFromSubject();
+            var diagnostic = GetDiagnosticFromSubject();
 
             using (new AssertionScope())
             {
                 diagnostic.Should().HaveMessage(message, because, becauseArgs);
+            }
+
+            return new(this);
+        }
+
+        public AndConstraint<DiagnosticBuilderAssertions> HaveMessageStartWith(string prefix, string because = "", params object[] becauseArgs)
+        {
+            var diagnostic = GetDiagnosticFromSubject();
+
+            using (new AssertionScope())
+            {
+                diagnostic.Should().HaveMessageStartWith(prefix, because, becauseArgs);
             }
 
             return new(this);

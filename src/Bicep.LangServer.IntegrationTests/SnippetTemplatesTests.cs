@@ -1,16 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using System.Linq;
-using Bicep.Core;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.FileSystem;
 using Bicep.Core.Parsing;
-using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
@@ -67,7 +61,7 @@ namespace Bicep.LangServer.IntegrationTests
 
             if (semanticModel.HasErrors())
             {
-                var errors = semanticModel.GetAllDiagnostics().Where(x => x.Level == DiagnosticLevel.Error);
+                var errors = semanticModel.GetAllDiagnostics().Where(x => x.IsError());
                 var sourceTextWithDiags = OutputHelper.AddDiagsToSourceText(bicepContents, "\n", errors, diag => OutputHelper.GetDiagLoggingString(bicepContents, outputDirectory, diag));
                 Assert.Fail("Template with prefix {0} contains errors. Please fix following errors:\n {1}", completionData.Prefix, sourceTextWithDiags);
             }

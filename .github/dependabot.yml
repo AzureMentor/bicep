@@ -1,10 +1,45 @@
 # To get started with Dependabot version updates, you'll need to specify which
 # package ecosystems to update and where the package manifests are located.
 # Please see the documentation for all configuration options:
-# https://help.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
+# https://docs.github.com/en/code-security/dependabot/dependabot-security-updates/configuring-dependabot-security-updates
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file#commit-message
+
+# You can manually trigger a dependabot run in the "Insights -> Dependency Graph -> Dependabot" section of the repository.
+
+# See also:
+# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/managing-pull-requests-for-dependency-updates
+# Available commands: https://docs.github.com/en/code-security/dependabot/working-with-dependabot/managing-pull-requests-for-dependency-updates#managing-dependabot-pull-requests-with-comment-commands
+# Debugging/testing: https://github.com/dependabot/cli
 
 version: 2
 updates:
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+    ignore:
+      - dependency-name: "Moq"
+      - dependency-name: "FluentAssertions"
+      - dependency-name: "JsonPatch.Net"
+      - dependency-name: "JsonPath.Net"
+      - dependency-name: "JsonSchema.Net"
+  - package-ecosystem: "nuget"
+    directory: "/src/vs-bicep"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+    ignore:
+      - dependency-name: "Moq"
+      - dependency-name: "FluentAssertions"
+      # This causes problems with the mirror build because it tends to pull in Roslyn versions that are incompatible (ADO seems to lag behind the versions used in github actions)
+      - dependency-name: "Microsoft.CodeAnalysis.CSharp.CodeStyle"
+      - dependency-name: "JsonPatch.Net"
+      - dependency-name: "JsonPath.Net"
+      - dependency-name: "JsonSchema.Net"
+    labels:
+      - vs-bicep-dependencies
+      - dependencies
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -19,7 +54,12 @@ updates:
       # we're deliberately taking a dependency on an older version of vscode for back-compatibility
       - dependency-name: "@types/vscode"
         versions:
-        - ">1.52.0"
+          - ">1.90.0"
+  - package-ecosystem: "npm"
+    directory: "/src/vscode-bicep-ui"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
   - package-ecosystem: "npm"
     directory: "/src/playground"
     schedule:
@@ -50,8 +90,17 @@ updates:
     schedule:
       interval: "weekly"
       day: "sunday"
-  - package-ecosystem: "nuget"
+  - package-ecosystem: "devcontainers"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "sunday"
+      interval: weekly
+  - package-ecosystem: dotnet-sdk
+    directory: /
+    schedule:
+      interval: weekly
+      day: wednesday
+    ignore:
+      - dependency-name: '*'
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor

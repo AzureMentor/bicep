@@ -1,9 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 using Bicep.Core.Navigation;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
@@ -14,10 +11,9 @@ namespace Bicep.Core.TypeSystem
     public sealed class CyclicCheckVisitor : AstVisitor
     {
         private readonly IReadOnlyDictionary<SyntaxBase, Symbol> bindings;
-
-        private readonly IDictionary<DeclaredSymbol, IList<SyntaxBase>> declarationAccessDict;
-
-        private Stack<DeclaredSymbol> currentDeclarations;
+        private readonly Dictionary<DeclaredSymbol, IList<SyntaxBase>> declarationAccessDict = new();
+        private readonly Stack<DeclaredSymbol> currentDeclarations = new();
+        private bool selfReferencePermitted = false;
 
         public static ImmutableDictionary<DeclaredSymbol, ImmutableArray<DeclaredSymbol>> FindCycles(ProgramSyntax programSyntax, IReadOnlyDictionary<SyntaxBase, Symbol> bindings)
         {
@@ -39,12 +35,10 @@ namespace Bicep.Core.TypeSystem
         private CyclicCheckVisitor(IReadOnlyDictionary<SyntaxBase, Symbol> bindings)
         {
             this.bindings = bindings;
-            this.declarationAccessDict = new Dictionary<DeclaredSymbol, IList<SyntaxBase>>();
-            this.currentDeclarations = new Stack<DeclaredSymbol>();
         }
 
         private void VisitDeclaration<TDeclarationSyntax>(TDeclarationSyntax syntax, Action<TDeclarationSyntax> visitBaseFunc)
-            where TDeclarationSyntax : SyntaxBase, ITopLevelNamedDeclarationSyntax
+            where TDeclarationSyntax : SyntaxBase, INamedDeclarationSyntax
         {
             if (!bindings.TryGetValue(syntax, out var symbol) ||
                 symbol is not DeclaredSymbol currentDeclaration ||
@@ -75,6 +69,9 @@ namespace Bicep.Core.TypeSystem
         public override void VisitModuleDeclarationSyntax(ModuleDeclarationSyntax syntax)
             => VisitDeclaration(syntax, base.VisitModuleDeclarationSyntax);
 
+        public override void VisitTestDeclarationSyntax(TestDeclarationSyntax syntax)
+            => VisitDeclaration(syntax, base.VisitTestDeclarationSyntax);
+
         public override void VisitOutputDeclarationSyntax(OutputDeclarationSyntax syntax)
             => VisitDeclaration(syntax, base.VisitOutputDeclarationSyntax);
 
@@ -83,6 +80,9 @@ namespace Bicep.Core.TypeSystem
 
         public override void VisitParameterAssignmentSyntax(ParameterAssignmentSyntax syntax)
             => VisitDeclaration(syntax, base.VisitParameterAssignmentSyntax);
+
+        public override void VisitFunctionDeclarationSyntax(FunctionDeclarationSyntax syntax)
+            => VisitDeclaration(syntax, base.VisitFunctionDeclarationSyntax);
 
         public override void VisitResourceDeclarationSyntax(ResourceDeclarationSyntax syntax)
         {
@@ -121,8 +121,26 @@ namespace Bicep.Core.TypeSystem
                 return;
             }
 
-            declarationAccessDict[currentDeclaration].Add(syntax);
+            if (!selfReferencePermitted)
+            {
+                declarationAccessDict[currentDeclaration].Add(syntax);
+            }
             base.VisitVariableAccessSyntax(syntax);
+        }
+
+        public override void VisitTypeVariableAccessSyntax(TypeVariableAccessSyntax syntax)
+        {
+            if (!currentDeclarations.TryPeek(out var currentDeclaration))
+            {
+                return;
+            }
+
+            if (!selfReferencePermitted)
+            {
+                declarationAccessDict[currentDeclaration].Add(syntax);
+            }
+
+            base.VisitTypeVariableAccessSyntax(syntax);
         }
 
         public override void VisitResourceAccessSyntax(ResourceAccessSyntax syntax)
@@ -149,19 +167,57 @@ namespace Bicep.Core.TypeSystem
             base.VisitFunctionCallSyntax(syntax);
         }
 
-        public override void VisitArrayTypeMemberSyntax(ArrayTypeMemberSyntax syntax)
+        public override void VisitParameterizedTypeInstantiationSyntax(ParameterizedTypeInstantiationSyntax syntax)
         {
-            // recursive types are permitted. pass
+            if (!currentDeclarations.TryPeek(out var currentDeclaration))
+            {
+                // we're not inside a declaration, so there should be no risk of a cycle
+                return;
+            }
+
+            declarationAccessDict[currentDeclaration].Add(syntax);
+            base.VisitParameterizedTypeInstantiationSyntax(syntax);
         }
+
+        public override void VisitArrayTypeMemberSyntax(ArrayTypeMemberSyntax syntax)
+            => WithSelfReferencePermitted(() => base.VisitArrayTypeMemberSyntax(syntax), selfReferencePermitted: true);
 
         public override void VisitObjectTypePropertySyntax(ObjectTypePropertySyntax syntax)
-        {
-            // recursive types are permitted. pass
-        }
+            => WithSelfReferencePermitted(() => base.VisitObjectTypePropertySyntax(syntax), selfReferencePermitted: true);
+
+        public override void VisitObjectTypeAdditionalPropertiesSyntax(ObjectTypeAdditionalPropertiesSyntax syntax)
+            => WithSelfReferencePermitted(() => base.VisitObjectTypeAdditionalPropertiesSyntax(syntax), selfReferencePermitted: true);
 
         public override void VisitTupleTypeItemSyntax(TupleTypeItemSyntax syntax)
+            => WithSelfReferencePermitted(() => base.VisitTupleTypeItemSyntax(syntax), selfReferencePermitted: true);
+
+        public override void VisitArrayAccessSyntax(ArrayAccessSyntax syntax)
+            => WithSelfReferencePermitted(() => base.VisitArrayAccessSyntax(syntax), selfReferencePermitted: false);
+
+        public override void VisitPropertyAccessSyntax(PropertyAccessSyntax syntax)
+            => WithSelfReferencePermitted(() => base.VisitPropertyAccessSyntax(syntax), selfReferencePermitted: false);
+
+        public override void VisitTypePropertyAccessSyntax(TypePropertyAccessSyntax syntax)
+            => WithSelfReferencePermitted(() => base.VisitTypePropertyAccessSyntax(syntax), selfReferencePermitted: false);
+
+        public override void VisitTypeAdditionalPropertiesAccessSyntax(TypeAdditionalPropertiesAccessSyntax syntax)
+            => WithSelfReferencePermitted(() => base.VisitTypeAdditionalPropertiesAccessSyntax(syntax), selfReferencePermitted: false);
+
+        public override void VisitTypeArrayAccessSyntax(TypeArrayAccessSyntax syntax)
+            => WithSelfReferencePermitted(() => base.VisitTypeArrayAccessSyntax(syntax), selfReferencePermitted: false);
+
+        public override void VisitTypeItemsAccessSyntax(TypeItemsAccessSyntax syntax)
+            => WithSelfReferencePermitted(() => base.VisitTypeItemsAccessSyntax(syntax), selfReferencePermitted: false);
+
+        private void WithSelfReferencePermitted(Action action, bool selfReferencePermitted)
         {
-            // recursive types are permitted. pass
+            var previousSelfReferencePermissionState = this.selfReferencePermitted;
+            this.selfReferencePermitted = selfReferencePermitted;
+            action();
+            this.selfReferencePermitted = previousSelfReferencePermissionState;
         }
+
+        public override void VisitImportedSymbolsListItemSyntax(ImportedSymbolsListItemSyntax syntax)
+            => VisitDeclaration(syntax, base.VisitImportedSymbolsListItemSyntax);
     }
 }

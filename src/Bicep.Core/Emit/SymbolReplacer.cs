@@ -3,7 +3,6 @@
 
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
-using System.Collections.Generic;
 
 namespace Bicep.Core.Emit
 {

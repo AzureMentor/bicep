@@ -13,17 +13,11 @@ param aksClusterTags object = {
   createdBy: 'ARM Template'
 }
 
-@allowed([
-  'azure'
-  'kubenet'
-])
+@allowed(['azure', 'kubenet'])
 @description('Specifies the network plugin used for building Kubernetes network. - azure or kubenet.')
 param aksClusterNetworkPlugin string = 'azure'
 
-@allowed([
-  'azure'
-  'calico'
-])
+@allowed(['azure', 'calico'])
 @description('Specifies the network policy used for building Kubernetes network. - calico or azure')
 param aksClusterNetworkPolicy string = 'azure'
 
@@ -39,17 +33,11 @@ param aksClusterDnsServiceIP string = '10.2.0.10'
 @description('Specifies the CIDR notation IP range assigned to the Docker bridge network. It must not overlap with any Subnet IP ranges or the Kubernetes service address range.')
 param aksClusterDockerBridgeCidr string = '172.17.0.1/16'
 
-@allowed([
-  'basic'
-  'standard'
-])
+@allowed(['basic', 'standard'])
 @description('Specifies the sku of the load balancer used by the virtual machine scale sets used by nodepools.')
 param aksClusterLoadBalancerSku string = 'standard'
 
-@allowed([
-  'Paid'
-  'Free'
-])
+@allowed(['Paid', 'Free'])
 @description('Specifies the tier of a managed cluster SKU: Paid or Free')
 param aksClusterSkuTier string = 'Paid'
 
@@ -92,10 +80,7 @@ param nodePoolOsDiskSizeGB int = 100
 @description('Specifies the number of agents (VMs) to host docker containers. Allowed values must be in the range of 1 to 100 (inclusive). The default value is 1.')
 param nodePoolCount int = 3
 
-@allowed([
-  'Linux'
-  'Windows'
-])
+@allowed(['Linux', 'Windows'])
 @description('Specifies the OS type for the vms in the node pool. Choose from Linux and Windows. Default to Linux.')
 param nodePoolOsType string = 'Linux'
 
@@ -111,10 +96,7 @@ param nodePoolMinCount int = 3
 @description('Specifies whether to enable auto-scaling for the node pool.')
 param nodePoolEnableAutoScaling bool = true
 
-@allowed([
-  'Spot'
-  'Regular'
-])
+@allowed(['Spot', 'Regular'])
 @description('Specifies the virtual machine scale set priority: Spot or Regular.')
 param nodePoolScaleSetPriority string = 'Regular'
 
@@ -124,17 +106,11 @@ param nodePoolNodeLabels object = {}
 @description('Specifies the taints added to new nodes during node pool create and scale. For example, key=value:NoSchedule. - string')
 param nodePoolNodeTaints array = []
 
-@allowed([
-  'System'
-  'User'
-])
+@allowed(['System', 'User'])
 @description('Specifies the mode of an agent pool: System or User')
 param nodePoolMode string = 'System'
 
-@allowed([
-  'VirtualMachineScaleSets'
-  'AvailabilitySet'
-])
+@allowed(['VirtualMachineScaleSets', 'AvailabilitySet'])
 @description('Specifies the type of a node pool: VirtualMachineScaleSets or AvailabilitySet')
 param nodePoolType string = 'VirtualMachineScaleSets'
 
@@ -156,12 +132,7 @@ param aksSubnetAddressPrefix string = '10.0.0.0/16'
 @description('Specifies the name of the Log Analytics Workspace.')
 param logAnalyticsWorkspaceName string
 
-@allowed([
-  'Free'
-  'Standalone'
-  'PerNode'
-  'PerGB2018'
-])
+@allowed(['Free', 'Standalone', 'PerNode', 'PerGB2018'])
 @description('Specifies the service tier of the workspace: Free, Standalone, PerNode, Per-GB.')
 param logAnalyticsSku string = 'PerGB2018'
 
@@ -196,14 +167,9 @@ param vmAdminUsername string
 @secure()
 param vmSshKey string
 
-@allowed([
-  'Premium_LRS'
-  'StandardSSD_LRS'
-  'Standard_LRS'
-  'UltraSSD_LRS'
-])
+@allowed(['Premium_LRS', 'StandardSSD_LRS', 'Standard_LRS', 'UltraSSD_LRS'])
 @description('Specifies the storage account type for OS and data disk.')
-param diskStorageAccounType string = 'Premium_LRS'
+param diskStorageAccountType string = 'Premium_LRS'
 
 @minValue(0)
 @maxValue(64)
@@ -275,7 +241,7 @@ module jumpbox 'jumpbox.bicep' = {
 
     vmSize: vmSize
 
-    diskStorageAccounType: diskStorageAccounType
+    diskStorageAccountType: diskStorageAccountType
     osDiskSize: osDiskSize
     dataDiskCaching: dataDiskCaching
     dataDiskSize: dataDiskSize

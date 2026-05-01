@@ -1,7 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
-using System.Linq;
 using System.Text.RegularExpressions;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Parsing;
@@ -13,9 +11,9 @@ namespace Bicep.Core.Samples
     [TestClass]
     public class DataSetsTests
     {
-        private static readonly Regex Pattern_CRLF = new Regex(@"^(\r\n)+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        private static readonly Regex Pattern_CRLF = new(@"^(\r\n)+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-        private static readonly Regex Pattern_LF = new Regex(@"^(\n)+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        private static readonly Regex Pattern_LF = new(@"^(\n)+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
         [DataTestMethod]
         [DynamicData(nameof(GetData), DynamicDataSourceType.Method, DynamicDataDisplayNameDeclaringType = typeof(DataSet), DynamicDataDisplayName = nameof(DataSet.GetDisplayName))]

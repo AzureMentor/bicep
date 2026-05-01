@@ -1,12 +1,13 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
   </PropertyGroup>
 
   <ItemGroup>
     <None Remove="./Files/**/*.*" />
-    <!-- 
+    <!--
       .net 7 has a regression on Linux and Mac that assumes that if a file is named <name>.<something>.json that <something> is a culture
       this causes some of our *.metadata.json files to be stripped out of the main assembly and placed in a satellite assembly for the metadata culture
     -->
@@ -14,19 +15,16 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="FluentAssertions" Version="6.10.0" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.5.0" />
-    <PackageReference Include="MSTest.TestAdapter" Version="3.0.2" />
-    <PackageReference Include="MSTest.TestFramework" Version="3.0.2" />
-    <PackageReference Include="coverlet.collector" Version="3.2.0">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="MSTest" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Bicep.Cli\Bicep.Cli.csproj" />
     <ProjectReference Include="..\Bicep.Core\Bicep.Core.csproj" />
     <ProjectReference Include="..\Bicep.Core.UnitTests\Bicep.Core.UnitTests.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Nerdbank.GitVersioning" />
   </ItemGroup>
 </Project>

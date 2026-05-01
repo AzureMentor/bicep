@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
-using System.Linq;
 using Bicep.Core.Analyzers.Linter;
 using Bicep.Core.Configuration;
 using Newtonsoft.Json.Linq;
@@ -29,7 +27,7 @@ namespace Bicep.LanguageServer.Telemetry
 
             if (!prevLinterEnabledSettingValue && !curLinterEnabledSettingValue)
             {
-                return Enumerable.Empty<BicepTelemetryEvent>();
+                return [];
             }
 
             List<BicepTelemetryEvent> telemetryEvents = new();
@@ -43,8 +41,8 @@ namespace Bicep.LanguageServer.Telemetry
             {
                 foreach (var kvp in linterRulesProvider.GetLinterRules())
                 {
-                    string prevLinterRuleDiagnosticLevelValue = prevConfiguration.Analyzers.GetValue(kvp.Value, "warning");
-                    string curLinterRuleDiagnosticLevelValue = curConfiguration.Analyzers.GetValue(kvp.Value, "warning");
+                    string prevLinterRuleDiagnosticLevelValue = prevConfiguration.Analyzers.GetValue(kvp.Value.diagnosticLevelConfigProperty, "warning");
+                    string curLinterRuleDiagnosticLevelValue = curConfiguration.Analyzers.GetValue(kvp.Value.diagnosticLevelConfigProperty, "warning");
 
                     if (prevLinterRuleDiagnosticLevelValue != curLinterRuleDiagnosticLevelValue)
                     {

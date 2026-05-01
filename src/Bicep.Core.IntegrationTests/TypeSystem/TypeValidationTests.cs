@@ -1,11 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
-using System.Linq;
 using Bicep.Core.Configuration;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Semantics;
 using Bicep.Core.TypeSystem;
+using Bicep.Core.TypeSystem.Types;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.UnitTests.Utils;
@@ -17,17 +16,17 @@ namespace Bicep.Core.IntegrationTests
     [TestClass]
     public class TypeValidationTests
     {
-        private static ServiceBuilder Services => new ServiceBuilder();
+        private static CompilationHelper.CompilationResult Compile(string programText, IEnumerable<ResourceTypeComponents> definedTypes)
+        {
+            var services = new ServiceBuilder()
+                .WithAzResources(definedTypes)
+                .WithConfigurationPatch(c => c.WithAllAnalyzersDisabled());
+
+            return CompilationHelper.Compile(services, programText);
+        }
 
         private static SemanticModel GetSemanticModelForTest(string programText, IEnumerable<ResourceTypeComponents> definedTypes)
-        {
-            var compilation = Services
-                .WithAzResources(definedTypes)
-                .WithConfigurationPatch(c => c.WithAllAnalyzersDisabled())
-                .BuildCompilation(programText);
-
-            return compilation.GetEntrypointSemanticModel();
-        }
+            => Compile(programText, definedTypes).Compilation.GetEntrypointSemanticModel();
 
         [DataTestMethod]
         [DataRow(TypeSymbolValidationFlags.Default, DiagnosticLevel.Error)]
@@ -50,31 +49,31 @@ resource myRes 'My.Rp/myType@2020-01-01' = {
 
         [DataTestMethod]
         [DataRow(TypeSymbolValidationFlags.Default, DiagnosticLevel.Error)]
-        [DataRow(TypeSymbolValidationFlags.WarnOnTypeMismatch, DiagnosticLevel.Warning)]
+        [DataRow(TypeSymbolValidationFlags.WarnOnTypeMismatch | TypeSymbolValidationFlags.WarnOnPropertyTypeMismatch, DiagnosticLevel.Warning)]
         public void Type_validation_runs_on_compilation_common_failures(TypeSymbolValidationFlags validationFlags, DiagnosticLevel expectedDiagnosticLevel)
         {
             var customTypes = new[] {
                 TestTypeHelper.CreateCustomResourceTypeWithTopLevelProperties("My.Rp/myType", "2020-01-01", validationFlags,
-                    new [] { new TypeProperty("readOnlyTopLevelProp", LanguageConstants.String, TypePropertyFlags.ReadOnly) },
-                    new TypeProperty("readOnlyProp", LanguageConstants.String, TypePropertyFlags.ReadOnly),
-                    new TypeProperty("writeOnlyProp", LanguageConstants.String, TypePropertyFlags.WriteOnly | TypePropertyFlags.AllowImplicitNull),
-                    new TypeProperty("requiredProp", LanguageConstants.String, TypePropertyFlags.Required),
-                    new TypeProperty("additionalProps", new ObjectType(
+                    new [] { new NamedTypeProperty("readOnlyTopLevelProp", LanguageConstants.String, TypePropertyFlags.ReadOnly) },
+                    new NamedTypeProperty("readOnlyProp", LanguageConstants.String, TypePropertyFlags.ReadOnly),
+                    new NamedTypeProperty("writeOnlyProp", LanguageConstants.String, TypePropertyFlags.WriteOnly | TypePropertyFlags.AllowImplicitNull),
+                    new NamedTypeProperty("requiredProp", LanguageConstants.String, TypePropertyFlags.Required),
+                    new NamedTypeProperty("additionalProps", new ObjectType(
                         "additionalProps",
                         validationFlags,
                         new [] {
-                            new TypeProperty("propA", LanguageConstants.String, TypePropertyFlags.Required),
-                            new TypeProperty("propB", LanguageConstants.String, TypePropertyFlags.AllowImplicitNull),
+                            new NamedTypeProperty("propA", LanguageConstants.String, TypePropertyFlags.Required),
+                            new NamedTypeProperty("propB", LanguageConstants.String, TypePropertyFlags.AllowImplicitNull),
                         },
-                        LanguageConstants.Int
+                        new TypeProperty(LanguageConstants.Int)
                     )),
-                    new TypeProperty("nestedObj", new ObjectType(
+                    new NamedTypeProperty("nestedObj", new ObjectType(
                         "nestedObj",
                         validationFlags,
                         new [] {
-                            new TypeProperty("readOnlyNestedProp", LanguageConstants.String, TypePropertyFlags.ReadOnly),
-                            new TypeProperty("writeOnlyNestedProp", LanguageConstants.String, TypePropertyFlags.WriteOnly | TypePropertyFlags.AllowImplicitNull),
-                            new TypeProperty("requiredNestedProp", LanguageConstants.String, TypePropertyFlags.Required),
+                            new NamedTypeProperty("readOnlyNestedProp", LanguageConstants.String, TypePropertyFlags.ReadOnly),
+                            new NamedTypeProperty("writeOnlyNestedProp", LanguageConstants.String, TypePropertyFlags.WriteOnly | TypePropertyFlags.AllowImplicitNull),
+                            new NamedTypeProperty("requiredNestedProp", LanguageConstants.String, TypePropertyFlags.Required),
                         },
                         null
                     ))),
@@ -112,20 +111,20 @@ output incorrectTypeOutput2 int = myRes.properties.nestedObj.readOnlyProp
                 x => x.Should().HaveCodeAndSeverity("BCP073", expectedDiagnosticLevel).And.HaveMessage("The property \"id\" is read-only. Expressions cannot be assigned to read-only properties."),
                 x => x.Should().HaveCodeAndSeverity("BCP073", expectedDiagnosticLevel).And.HaveMessage("The property \"type\" is read-only. Expressions cannot be assigned to read-only properties."),
                 x => x.Should().HaveCodeAndSeverity("BCP073", expectedDiagnosticLevel).And.HaveMessage("The property \"apiVersion\" is read-only. Expressions cannot be assigned to read-only properties."),
-                x => x.Should().HaveCodeAndSeverity("BCP073", DiagnosticLevel.Warning).And.HaveMessage("The property \"readOnlyTopLevelProp\" is read-only. Expressions cannot be assigned to read-only properties. If this is an inaccuracy in the documentation, please report it to the Bicep Team."),
-                x => x.Should().HaveCodeAndSeverity("BCP035", DiagnosticLevel.Warning).And.HaveMessage("The specified \"object\" declaration is missing the following required properties: \"requiredProp\". If this is an inaccuracy in the documentation, please report it to the Bicep Team."),
-                x => x.Should().HaveCodeAndSeverity("BCP073", DiagnosticLevel.Warning).And.HaveMessage("The property \"readOnlyProp\" is read-only. Expressions cannot be assigned to read-only properties. If this is an inaccuracy in the documentation, please report it to the Bicep Team."),
-                x => x.Should().HaveCodeAndSeverity("BCP036", DiagnosticLevel.Warning).And.HaveMessage("The property \"writeOnlyProp\" expected a value of type \"null | string\" but the provided value is of type \"456\". If this is an inaccuracy in the documentation, please report it to the Bicep Team."),
-                x => x.Should().HaveCodeAndSeverity("BCP035", DiagnosticLevel.Warning).And.HaveMessage("The specified \"object\" declaration is missing the following required properties: \"propA\". If this is an inaccuracy in the documentation, please report it to the Bicep Team."),
-                x => x.Should().HaveCodeAndSeverity("BCP036", DiagnosticLevel.Warning).And.HaveMessage("The property \"propB\" expected a value of type \"null | string\" but the provided value is of type \"123\". If this is an inaccuracy in the documentation, please report it to the Bicep Team."),
-                x => x.Should().HaveCodeAndSeverity("BCP035", DiagnosticLevel.Warning).And.HaveMessage("The specified \"object\" declaration is missing the following required properties: \"requiredNestedProp\". If this is an inaccuracy in the documentation, please report it to the Bicep Team."),
-                x => x.Should().HaveCodeAndSeverity("BCP073", DiagnosticLevel.Warning).And.HaveMessage("The property \"readOnlyNestedProp\" is read-only. Expressions cannot be assigned to read-only properties. If this is an inaccuracy in the documentation, please report it to the Bicep Team."),
-                x => x.Should().HaveCodeAndSeverity("BCP036", DiagnosticLevel.Warning).And.HaveMessage("The property \"writeOnlyNestedProp\" expected a value of type \"null | string\" but the provided value is of type \"456\". If this is an inaccuracy in the documentation, please report it to the Bicep Team."),
+                x => x.Should().HaveCodeAndSeverity("BCP073", DiagnosticLevel.Warning).And.HaveMessage("The property \"readOnlyTopLevelProp\" is read-only. Expressions cannot be assigned to read-only properties. If this is a resource type definition inaccuracy, report it using https://aka.ms/bicep-type-issues."),
+                x => x.Should().HaveCodeAndSeverity("BCP035", DiagnosticLevel.Warning).And.HaveMessage("The specified \"object\" declaration is missing the following required properties: \"requiredProp\". If this is a resource type definition inaccuracy, report it using https://aka.ms/bicep-type-issues."),
+                x => x.Should().HaveCodeAndSeverity("BCP073", DiagnosticLevel.Warning).And.HaveMessage("The property \"readOnlyProp\" is read-only. Expressions cannot be assigned to read-only properties. If this is a resource type definition inaccuracy, report it using https://aka.ms/bicep-type-issues."),
+                x => x.Should().HaveCodeAndSeverity("BCP036", DiagnosticLevel.Warning).And.HaveMessage("The property \"writeOnlyProp\" expected a value of type \"null | string\" but the provided value is of type \"456\". If this is a resource type definition inaccuracy, report it using https://aka.ms/bicep-type-issues."),
+                x => x.Should().HaveCodeAndSeverity("BCP035", DiagnosticLevel.Warning).And.HaveMessage("The specified \"object\" declaration is missing the following required properties: \"propA\". If this is a resource type definition inaccuracy, report it using https://aka.ms/bicep-type-issues."),
+                x => x.Should().HaveCodeAndSeverity("BCP036", DiagnosticLevel.Warning).And.HaveMessage("The property \"propB\" expected a value of type \"null | string\" but the provided value is of type \"123\". If this is a resource type definition inaccuracy, report it using https://aka.ms/bicep-type-issues."),
+                x => x.Should().HaveCodeAndSeverity("BCP035", DiagnosticLevel.Warning).And.HaveMessage("The specified \"object\" declaration is missing the following required properties: \"requiredNestedProp\". If this is a resource type definition inaccuracy, report it using https://aka.ms/bicep-type-issues."),
+                x => x.Should().HaveCodeAndSeverity("BCP073", DiagnosticLevel.Warning).And.HaveMessage("The property \"readOnlyNestedProp\" is read-only. Expressions cannot be assigned to read-only properties. If this is a resource type definition inaccuracy, report it using https://aka.ms/bicep-type-issues."),
+                x => x.Should().HaveCodeAndSeverity("BCP036", DiagnosticLevel.Warning).And.HaveMessage("The property \"writeOnlyNestedProp\" expected a value of type \"null | string\" but the provided value is of type \"456\". If this is a resource type definition inaccuracy, report it using https://aka.ms/bicep-type-issues."),
                 x => x.Should().HaveCodeAndSeverity("BCP077", expectedDiagnosticLevel).And.HaveMessage("The property \"writeOnlyProp\" on type \"properties\" is write-only. Write-only properties cannot be accessed."),
                 x => x.Should().HaveCodeAndSeverity("BCP053", expectedDiagnosticLevel).And.HaveMessage("The type \"nestedObj\" does not contain property \"writeOnlyProp\". Available properties include \"readOnlyNestedProp\", \"requiredNestedProp\"."),
                 x => x.Should().HaveCodeAndSeverity("BCP053", expectedDiagnosticLevel).And.HaveMessage("The type \"properties\" does not contain property \"missingOutput\". Available properties include \"additionalProps\", \"nestedObj\", \"readOnlyProp\", \"requiredProp\"."),
                 x => x.Should().HaveCodeAndSeverity("BCP053", expectedDiagnosticLevel).And.HaveMessage("The type \"nestedObj\" does not contain property \"missingOutput\". Available properties include \"readOnlyNestedProp\", \"requiredNestedProp\"."),
-                x => x.Should().HaveCodeAndSeverity("BCP026", DiagnosticLevel.Error).And.HaveMessage("The output expects a value of type \"int\" but the provided value is of type \"string\"."),
+                x => x.Should().HaveCodeAndSeverity("BCP033", DiagnosticLevel.Error).And.HaveMessage("Expected a value of type \"int\" but the provided value is of type \"string\"."),
                 x => x.Should().HaveCodeAndSeverity("BCP053", expectedDiagnosticLevel).And.HaveMessage("The type \"nestedObj\" does not contain property \"readOnlyProp\". Available properties include \"readOnlyNestedProp\", \"requiredNestedProp\".")
             );
         }
@@ -137,16 +136,16 @@ output incorrectTypeOutput2 int = myRes.properties.nestedObj.readOnlyProp
         {
             var customTypes = new[] {
                 TestTypeHelper.CreateCustomResourceType("My.Rp/myType", "2020-01-01", validationFlags,
-                    new TypeProperty("stringOrInt", TypeHelper.CreateTypeUnion(LanguageConstants.String, LanguageConstants.Int), TypePropertyFlags.AllowImplicitNull),
-                    new TypeProperty("unspecifiedStringOrInt", TypeHelper.CreateTypeUnion(LanguageConstants.String, LanguageConstants.Int), TypePropertyFlags.AllowImplicitNull),
-                    new TypeProperty("abcOrDef", TypeHelper.CreateTypeUnion(TypeFactory.CreateStringLiteralType("abc"), TypeFactory.CreateStringLiteralType("def")), TypePropertyFlags.AllowImplicitNull),
-                    new TypeProperty("unspecifiedAbcOrDef", TypeHelper.CreateTypeUnion(TypeFactory.CreateStringLiteralType("abc"), TypeFactory.CreateStringLiteralType("def")), TypePropertyFlags.AllowImplicitNull)),
+                    new NamedTypeProperty("stringOrInt", TypeHelper.CreateTypeUnion(LanguageConstants.String, LanguageConstants.Int), TypePropertyFlags.AllowImplicitNull),
+                    new NamedTypeProperty("unspecifiedStringOrInt", TypeHelper.CreateTypeUnion(LanguageConstants.String, LanguageConstants.Int), TypePropertyFlags.AllowImplicitNull),
+                    new NamedTypeProperty("abcOrDef", TypeHelper.CreateTypeUnion(TypeFactory.CreateStringLiteralType("abc"), TypeFactory.CreateStringLiteralType("def")), TypePropertyFlags.AllowImplicitNull),
+                    new NamedTypeProperty("unspecifiedAbcOrDef", TypeHelper.CreateTypeUnion(TypeFactory.CreateStringLiteralType("abc"), TypeFactory.CreateStringLiteralType("def")), TypePropertyFlags.AllowImplicitNull)),
                 TestTypeHelper.CreateCustomResourceType("My.Rp/myDependentType", "2020-01-01", validationFlags,
-                    new TypeProperty("stringOnly", LanguageConstants.String, TypePropertyFlags.AllowImplicitNull),
-                    new TypeProperty("abcOnly", TypeFactory.CreateStringLiteralType("abc"), TypePropertyFlags.AllowImplicitNull),
-                    new TypeProperty("abcOnlyUnNarrowed", TypeFactory.CreateStringLiteralType("abc"), TypePropertyFlags.AllowImplicitNull),
-                    new TypeProperty("stringOrIntUnNarrowed", TypeHelper.CreateTypeUnion(LanguageConstants.String, LanguageConstants.Int), TypePropertyFlags.AllowImplicitNull),
-                    new TypeProperty("abcOrDefUnNarrowed", TypeHelper.CreateTypeUnion(TypeFactory.CreateStringLiteralType("abc"), TypeFactory.CreateStringLiteralType("def"), TypeFactory.CreateStringLiteralType("ghi")), TypePropertyFlags.AllowImplicitNull)),
+                    new NamedTypeProperty("stringOnly", LanguageConstants.String, TypePropertyFlags.AllowImplicitNull),
+                    new NamedTypeProperty("abcOnly", TypeFactory.CreateStringLiteralType("abc"), TypePropertyFlags.AllowImplicitNull),
+                    new NamedTypeProperty("abcOnlyUnNarrowed", TypeFactory.CreateStringLiteralType("abc"), TypePropertyFlags.AllowImplicitNull),
+                    new NamedTypeProperty("stringOrIntUnNarrowed", TypeHelper.CreateTypeUnion(LanguageConstants.String, LanguageConstants.Int), TypePropertyFlags.AllowImplicitNull),
+                    new NamedTypeProperty("abcOrDefUnNarrowed", TypeHelper.CreateTypeUnion(TypeFactory.CreateStringLiteralType("abc"), TypeFactory.CreateStringLiteralType("def"), TypeFactory.CreateStringLiteralType("ghi")), TypePropertyFlags.AllowImplicitNull)),
             };
             var program = @"
 resource myRes 'My.Rp/myType@2020-01-01' = {
@@ -171,25 +170,25 @@ resource myDependentRes 'My.Rp/myDependentType@2020-01-01' = {
 
             var model = GetSemanticModelForTest(program, customTypes);
             model.GetAllDiagnostics().Should().SatisfyRespectively(
-                x => x.Should().HaveCodeAndSeverity("BCP036", DiagnosticLevel.Warning).And.HaveMessage("The property \"abcOnlyUnNarrowed\" expected a value of type \"'abc' | null\" but the provided value is of type \"'abc' | 'def'\". If this is an inaccuracy in the documentation, please report it to the Bicep Team.")
+                x => x.Should().HaveCodeAndSeverity("BCP036", DiagnosticLevel.Warning).And.HaveMessage("The property \"abcOnlyUnNarrowed\" expected a value of type \"'abc' | null\" but the provided value is of type \"'abc' | 'def'\". If this is a resource type definition inaccuracy, report it using https://aka.ms/bicep-type-issues.")
             );
         }
 
         [DataTestMethod]
         [DataRow(TypeSymbolValidationFlags.Default, DiagnosticLevel.Error)]
-        [DataRow(TypeSymbolValidationFlags.WarnOnTypeMismatch, DiagnosticLevel.Warning)]
+        [DataRow(TypeSymbolValidationFlags.WarnOnTypeMismatch | TypeSymbolValidationFlags.WarnOnPropertyTypeMismatch, DiagnosticLevel.Warning)]
         public void Type_validation_narrowing_on_discriminated_object_types(TypeSymbolValidationFlags validationFlags, DiagnosticLevel expectedDiagnosticLevel)
         {
             var customTypes = new[] {
                 TestTypeHelper.CreateCustomResourceType("My.Rp/myType", "2020-01-01", validationFlags,
-                    new TypeProperty("myDisc1", new DiscriminatedObjectType("myDisc1", validationFlags, "discKey", new [] {
+                    new NamedTypeProperty("myDisc1", new DiscriminatedObjectType("myDisc1", validationFlags, "discKey", new [] {
                             new ObjectType("choiceA", validationFlags, new [] {
-                                new TypeProperty("discKey", TypeFactory.CreateStringLiteralType("choiceA"), TypePropertyFlags.Required),
-                                new TypeProperty("valueA", LanguageConstants.String, TypePropertyFlags.Required),
+                                new NamedTypeProperty("discKey", TypeFactory.CreateStringLiteralType("choiceA"), TypePropertyFlags.Required),
+                                new NamedTypeProperty("valueA", LanguageConstants.String, TypePropertyFlags.Required),
                             }, null),
                             new ObjectType("choiceB", validationFlags, new [] {
-                                new TypeProperty("discKey", TypeFactory.CreateStringLiteralType("choiceB"), TypePropertyFlags.Required),
-                                new TypeProperty("valueB", LanguageConstants.String, TypePropertyFlags.Required),
+                                new NamedTypeProperty("discKey", TypeFactory.CreateStringLiteralType("choiceB"), TypePropertyFlags.Required),
+                                new NamedTypeProperty("valueB", LanguageConstants.String, TypePropertyFlags.Required),
                             }, null),
                         }
                     ))),
@@ -249,7 +248,7 @@ resource myRes 'My.Rp/myType@2020-01-01' = {
 
                 var model = GetSemanticModelForTest(program, customTypes);
                 model.GetAllDiagnostics().Should().SatisfyRespectively(
-                    x => x.Should().HaveCodeAndSeverity("BCP036", DiagnosticLevel.Warning).And.HaveMessage("The property \"discKey\" expected a value of type \"'choiceA' | 'choiceB'\" but the provided value is of type \"'foo'\". If this is an inaccuracy in the documentation, please report it to the Bicep Team.")
+                    x => x.Should().HaveCodeAndSeverity("BCP036", DiagnosticLevel.Warning).And.HaveMessage("The property \"discKey\" expected a value of type \"'choiceA' | 'choiceB'\" but the provided value is of type \"'foo'\". If this is a resource type definition inaccuracy, report it using https://aka.ms/bicep-type-issues.")
                 );
             }
 
@@ -287,7 +286,7 @@ resource myRes 'My.Rp/myType@2020-01-01' = {
 
                 var model = GetSemanticModelForTest(program, customTypes);
                 model.GetAllDiagnostics().Should().SatisfyRespectively(
-                    x => x.Should().HaveCodeAndSeverity("BCP035", DiagnosticLevel.Warning).And.HaveMessage("The specified \"object\" declaration is missing the following required properties: \"valueA\". If this is an inaccuracy in the documentation, please report it to the Bicep Team.")
+                    x => x.Should().HaveCodeAndSeverity("BCP035", DiagnosticLevel.Warning).And.HaveMessage("The specified \"object\" declaration is missing the following required properties: \"valueA\". If this is a resource type definition inaccuracy, report it using https://aka.ms/bicep-type-issues.")
                 );
             }
 
@@ -307,7 +306,7 @@ resource myRes 'My.Rp/myType@2020-01-01' = {
 
                 var model = GetSemanticModelForTest(program, customTypes);
                 model.GetAllDiagnostics().Should().SatisfyRespectively(
-                    x => x.Should().HaveCodeAndSeverity("BCP035", DiagnosticLevel.Warning).And.HaveMessage("The specified \"object\" declaration is missing the following required properties: \"valueA\". If this is an inaccuracy in the documentation, please report it to the Bicep Team."),
+                    x => x.Should().HaveCodeAndSeverity("BCP035", DiagnosticLevel.Warning).And.HaveMessage("The specified \"object\" declaration is missing the following required properties: \"valueA\". If this is a resource type definition inaccuracy, report it using https://aka.ms/bicep-type-issues."),
                     x => x.Should().HaveCodeAndSeverity("BCP089", expectedDiagnosticLevel).And.HaveMessage("The property \"ValueA\" is not allowed on objects of type \"choiceA\". Did you mean \"valueA\"?")
                 );
             }
@@ -367,6 +366,7 @@ var intJson = json('123')
 var floatJson = json('1234.1224')
 var stringJson = json('""hello!""')
 var nullJson = json('null')
+var boolJson = json('true')
 var jsonWithComments = json('''
 {
     //here's a comment!
@@ -381,15 +381,16 @@ var commentsPropAccess = jsonWithComments.key
 var invalidPropAccess = objectJson.invalidProp
 ";
 
-            var model = GetSemanticModelForTest(program, Enumerable.Empty<ResourceTypeComponents>());
+            var model = GetSemanticModelForTest(program, []);
 
             GetTypeForNamedSymbol(model, "objectJson").Name.Should().Be("object");
             GetTypeForNamedSymbol(model, "propAccess").Name.Should().Be("'validValue'");
 
-            GetTypeForNamedSymbol(model, "intJson").Name.Should().Be("int");
+            GetTypeForNamedSymbol(model, "intJson").Name.Should().Be("123");
             GetTypeForNamedSymbol(model, "floatJson").Name.Should().Be("any");
             GetTypeForNamedSymbol(model, "stringJson").Name.Should().Be("'hello!'");
             GetTypeForNamedSymbol(model, "nullJson").Name.Should().Be("null");
+            GetTypeForNamedSymbol(model, "boolJson").Name.Should().Be("true");
             GetTypeForNamedSymbol(model, "commentsPropAccess").Name.Should().Be("'value'");
 
             GetTypeForNamedSymbol(model, "invalidPropAccess").Name.Should().Be("error");
@@ -400,13 +401,13 @@ var invalidPropAccess = objectJson.invalidProp
         }
 
         [TestMethod]
-        public void Json_function_returns_error_for_unparseable_json()
+        public void Json_function_returns_error_for_unparsable_json()
         {
             var program = @"
 var invalidJson = json('{""prop"": ""value')
 ";
 
-            var model = GetSemanticModelForTest(program, Enumerable.Empty<ResourceTypeComponents>());
+            var model = GetSemanticModelForTest(program, []);
 
             GetTypeForNamedSymbol(model, "invalidJson").Name.Should().Be("error");
 
@@ -436,7 +437,7 @@ var singleItemKey = itemsOutput[0].key
 var singleItemValue = itemsOutput[0].value
 ";
 
-            var model = GetSemanticModelForTest(program, Enumerable.Empty<ResourceTypeComponents>());
+            var model = GetSemanticModelForTest(program, []);
 
             GetTypeForNamedSymbol(model, "itemsOutput").Name.Should().Be("object[]");
             GetTypeForNamedSymbol(model, "singleItemKey").Name.Should().Be("'123' | 'DEF' | 'abc' | 'arr'");
@@ -452,7 +453,7 @@ var singleItemKey = itemsOutput[0].key
 var singleItemValue = itemsOutput[0].value
 ";
 
-            var model = GetSemanticModelForTest(program, Enumerable.Empty<ResourceTypeComponents>());
+            var model = GetSemanticModelForTest(program, []);
 
             GetTypeForNamedSymbol(model, "itemsOutput").Name.Should().Be("object[]");
             GetTypeForNamedSymbol(model, "singleItemKey").Name.Should().Be("string");
@@ -514,6 +515,28 @@ resource testRes 'My.Rp/myType@2020-01-01' = {
             model.GetAllDiagnostics().Should().SatisfyRespectively(
                 x => x.Should().HaveCodeAndSeverity("BCP246", DiagnosticLevel.Warning).And.HaveMessage(@"Resource type ""My.Rp/myType@2020-01-01"" can only be used with the 'existing' keyword at the requested scope. Permitted scopes for deployment: ""subscription"".")
             );
+        }
+
+        [TestMethod]
+        public void Required_readonly_properties_should_not_be_required_in_resource_body()
+        {
+            var customTypes = new[] {
+                TestTypeHelper.CreateCustomResourceTypeWithTopLevelProperties("My.Rp/myType", "2020-01-01", TypeSymbolValidationFlags.Default, [
+                    new NamedTypeProperty("required", LanguageConstants.String, TypePropertyFlags.Required),
+                    new NamedTypeProperty("readOnlyRequired", LanguageConstants.String, TypePropertyFlags.ReadOnly | TypePropertyFlags.Required),
+                ]),
+            };
+
+            var result = Compile("""
+            resource myRes 'My.Rp/myType@2020-01-01' = {
+              name: 'foo'
+              required: 'abcd'
+            }
+            
+            output readOnlyRequired string = myRes.readOnlyRequired
+            """, customTypes);
+
+            result.Should().NotHaveAnyDiagnostics();
         }
 
         private static TypeSymbol GetTypeForNamedSymbol(SemanticModel model, string symbolName)

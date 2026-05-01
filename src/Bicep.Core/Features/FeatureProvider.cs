@@ -1,9 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.IO;
 using Bicep.Core.Configuration;
+using Bicep.IO.Abstraction;
 
 namespace Bicep.Core.Features
 {
@@ -11,57 +10,72 @@ namespace Bicep.Core.Features
     {
         private readonly RootConfiguration configuration;
 
-        public FeatureProvider(RootConfiguration configuration)
+        private readonly IFileExplorer fileExplorer;
+
+        public FeatureProvider(RootConfiguration configuration, IFileExplorer fileExplorer)
         {
             this.configuration = configuration;
+            this.fileExplorer = fileExplorer;
         }
 
-        public string CacheRootDirectory => GetCacheRootDirectory(configuration.CacheRootDirectory);
+        public IDirectoryHandle CacheRootDirectory => GetCacheRootDirectory(this.configuration.CacheRootDirectory);
 
-        public bool RegistryEnabled => true;
+        public bool SymbolicNameCodegenEnabled => this.configuration.ExperimentalFeaturesEnabled.SymbolicNameCodegen;
 
-        public bool SymbolicNameCodegenEnabled => configuration.ExperimentalFeaturesEnabled.SymbolicNameCodegen ?? false;
+        public bool ExtendableParamFilesEnabled => this.configuration.ExperimentalFeaturesEnabled.ExtendableParamFiles;
 
-        public bool ExtensibilityEnabled => configuration.ExperimentalFeaturesEnabled.Extensibility ?? false;
-
-        public bool ResourceTypedParamsAndOutputsEnabled => configuration.ExperimentalFeaturesEnabled.ResourceTypedParamsAndOutputs ?? false;
+        public bool ResourceTypedParamsAndOutputsEnabled => this.configuration.ExperimentalFeaturesEnabled.ResourceTypedParamsAndOutputs;
 
         public string AssemblyVersion => ThisAssembly.AssemblyFileVersion;
 
-        public bool SourceMappingEnabled => configuration.ExperimentalFeaturesEnabled.SourceMapping ?? false;
+        public bool SourceMappingEnabled => this.configuration.ExperimentalFeaturesEnabled.SourceMapping;
 
-        public bool ParamsFilesEnabled => configuration.ExperimentalFeaturesEnabled.ParamsFiles ?? false;
+        public bool LegacyFormatterEnabled => configuration.ExperimentalFeaturesEnabled.LegacyFormatter;
 
-        public bool UserDefinedTypesEnabled => configuration.ExperimentalFeaturesEnabled.UserDefinedTypes ?? false;
+        public bool TestFrameworkEnabled => this.configuration.ExperimentalFeaturesEnabled.TestFramework;
 
-        public static bool TracingEnabled => ReadBooleanEnvVar("BICEP_TRACING_ENABLED", defaultValue: false);
+        public bool AssertsEnabled => configuration.ExperimentalFeaturesEnabled.Assertions;
 
-        public static TraceVerbosity TracingVerbosity => ReadEnumEnvvar<TraceVerbosity>("BICEP_TRACING_VERBOSITY", TraceVerbosity.Basic);
+        public static readonly bool TracingEnabled = ReadBooleanEnvVar("BICEP_TRACING_ENABLED", defaultValue: false);
+
+        public static readonly TraceVerbosity TracingVerbosity = ReadEnumEnvVar("BICEP_TRACING_VERBOSITY", TraceVerbosity.Basic);
+
+        public static bool HasTracingVerbosity(TraceVerbosity verbosity) => TracingVerbosity >= verbosity;
+
+        public bool WaitUntilEnabled => configuration.ExperimentalFeaturesEnabled.WaitUntil;
+
+        public bool LocalDeployEnabled => configuration.ExperimentalFeaturesEnabled.LocalDeploy;
+
+        public bool ResourceInfoCodegenEnabled => this.configuration.ExperimentalFeaturesEnabled.ResourceInfoCodegen;
+
+        public bool ModuleExtensionConfigsEnabled => configuration.ExperimentalFeaturesEnabled.ModuleExtensionConfigs;
+
+        public bool UserDefinedConstraintsEnabled => configuration.ExperimentalFeaturesEnabled.UserDefinedConstraints;
+
+        public bool DeployCommandsEnabled => configuration.ExperimentalFeaturesEnabled.DeployCommands;
+
+        public bool ThisNamespaceEnabled => configuration.ExperimentalFeaturesEnabled.ThisNamespace;
+
+        public bool ExistingNullIfNotFoundEnabled => configuration.ExperimentalFeaturesEnabled.ExistingNullIfNotFound;
 
         private static bool ReadBooleanEnvVar(string envVar, bool defaultValue)
             => bool.TryParse(Environment.GetEnvironmentVariable(envVar), out var value) ? value : defaultValue;
 
-        private static T ReadEnumEnvvar<T>(string envVar, T defaultValue) where T : struct
+        public static string ReadEnvVar(string envVar, string defaultValue)
+            => Environment.GetEnvironmentVariable(envVar) ?? defaultValue;
+
+        private static T ReadEnumEnvVar<T>(string envVar, T defaultValue) where T : struct
         {
             var str = Environment.GetEnvironmentVariable(envVar);
             return Enum.TryParse<T>(str, true, out var value) ? value : defaultValue;
         }
 
-        private static string GetDefaultCachePath()
-        {
-            string basePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        private IDirectoryHandle GetCacheRootDirectory(string? customPath) =>
+            this.GetCacheRootDirectoryFromLocalPath(string.IsNullOrWhiteSpace(customPath)
+                ? $"{Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)}/.bicep"
+                : customPath);
 
-            return Path.Combine(basePath, ".bicep");
-        }
-
-        private static string GetCacheRootDirectory(string? customPath)
-        {
-            if (string.IsNullOrWhiteSpace(customPath))
-            {
-                return GetDefaultCachePath();
-            }
-
-            return customPath;
-        }
+        private IDirectoryHandle GetCacheRootDirectoryFromLocalPath(string localPath) =>
+            this.fileExplorer.GetDirectory(IOUri.FromFilePath(localPath));
     }
 }

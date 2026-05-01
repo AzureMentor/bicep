@@ -1,12 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Bicep.Core.Modules;
 using Bicep.Core.Registry.Oci;
 using Bicep.Core.UnitTests.Modules;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
 
 namespace Bicep.Core.UnitTests.Registry
 {
@@ -31,7 +29,7 @@ namespace Bicep.Core.UnitTests.Registry
         [DataRow("ABCDABCDABCDABCDABCDABCDABCDABCDAbC", "ABCDABCDABCDABCDABCDABCDABCDABCDAbC$5ffffffff")]
         [DataRow(OciArtifactModuleReferenceTests.ExampleTagOfMaxLength, OciArtifactModuleReferenceTests.ExampleTagOfMaxLength + "$ffffff800000000000")]
         [DataTestMethod]
-        public void EncoderShouldProduceExpectedOutut(string tag, string expected) => TagEncoder.Encode(tag).Should().Be(expected);
+        public void EncoderShouldProduceExpectedOutput(string tag, string expected) => TagEncoder.Encode(tag).Should().Be(expected);
 
         [TestMethod]
         public void EncoderShouldThrowWhenMaxTagLengthIsExceeded() =>
@@ -44,7 +42,7 @@ namespace Bicep.Core.UnitTests.Registry
         [TestMethod]
         public void EncodingFullyCapitalizedStringOfMaxLengthShouldNotExceedMaxLinuxFileNameLength()
         {
-            var fullyCapitalizedTag = new string('A', OciArtifactModuleReference.MaxTagLength);
+            var fullyCapitalizedTag = new string('A', OciArtifactReferenceFacts.MaxTagLength);
             var encoded = TagEncoder.Encode(fullyCapitalizedTag);
 
             encoded.Length.Should().BeLessOrEqualTo(255);

@@ -1,9 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
@@ -20,11 +18,21 @@ namespace Bicep.Core.Samples
 
         public static DataSet Empty => CreateDataSet();
 
+        public static DataSet Extensions_CRLF => CreateDataSet();
+
+        public static DataSet Functions_LF => CreateDataSet();
+
+        public static DataSet Imports_LF => CreateDataSet();
+
         public static DataSet InvalidCycles_CRLF => CreateDataSet();
 
         public static DataSet InvalidDisableNextLineDiagnosticsDirective_CRLF => CreateDataSet();
 
         public static DataSet InvalidExpressions_LF => CreateDataSet();
+
+        public static DataSet InvalidExtensions_CRLF => CreateDataSet();
+
+        public static DataSet InvalidFunctions_LF => CreateDataSet();
 
         public static DataSet InvalidMetadata_CRLF => CreateDataSet();
 
@@ -33,6 +41,8 @@ namespace Bicep.Core.Samples
         public static DataSet InvalidParameters_LF => CreateDataSet();
 
         public static DataSet InvalidResources_CRLF => CreateDataSet();
+
+        public static DataSet InvalidResourceDerivedTypes_LF => CreateDataSet();
 
         public static DataSet InvalidRuntimeValueUsages_LF => CreateDataSet();
 
@@ -68,9 +78,13 @@ namespace Bicep.Core.Samples
 
         public static DataSet ResourcesManagementGroup_CRLF => CreateDataSet();
 
+        public static DataSet ResourceDerivedTypes_LF => CreateDataSet();
+
         public static DataSet ResourcesTenant_CRLF => CreateDataSet();
 
         public static DataSet TypeDeclarations_LF => CreateDataSet();
+
+        public static DataSet TypedVariables_LF => CreateDataSet();
 
         public static DataSet Unicode_LF => CreateDataSet();
 
@@ -87,6 +101,10 @@ namespace Bicep.Core.Samples
         public static DataSet ModulesSubscription_LF => CreateDataSet();
 
         public static DataSet ModulesWithScopes_LF => CreateDataSet();
+
+        public static DataSet TestFramework_CRLF => CreateDataSet();
+
+        public static DataSet InvalidTestFramework_CRLF => CreateDataSet();
 
         public static DataSet InvalidModules_LF => CreateDataSet();
 
@@ -112,6 +130,10 @@ namespace Bicep.Core.Samples
 
         public static DataSet Lambdas_LF => CreateDataSet();
 
+        public static DataSet PrettyPrint_LF => CreateDataSet();
+
+        public static DataSet MultilineStrings_LF => CreateDataSet();
+
         public static IEnumerable<DataSet> AllDataSets =>
             typeof(DataSets)
                 .GetProperties(BindingFlags.Public | BindingFlags.GetProperty | BindingFlags.Static)
@@ -125,6 +147,6 @@ namespace Bicep.Core.Samples
 
         public static ImmutableDictionary<string, string> Functions => DataSet.ReadDataSetDictionary($"{DataSet.Prefix}{DataSet.TestFunctionsPrefix}");
 
-        private static DataSet CreateDataSet([CallerMemberName] string? dataSetName = null) => new DataSet(dataSetName!);
+        private static DataSet CreateDataSet([CallerMemberName] string? dataSetName = null) => new(dataSetName!);
     }
 }

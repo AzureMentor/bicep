@@ -1,16 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Emit;
 using Bicep.Core.Extensions;
-using Bicep.Core.Parsing;
 using Bicep.Core.Text;
 using Microsoft.WindowsAzure.ResourceStack.Common.Extensions;
 
@@ -43,13 +38,20 @@ namespace Bicep.Core.UnitTests.Utils
 
         private static Func<int, string> GetPaddingFunc(IEnumerable<int> integers)
         {
-            var padding = integers.Any() ? CountDigits(integers.Max()) : 0;
+            var padding = CountDigits(integers.DefaultIfEmpty(0).Max());
 
             return x => x.ToInvariantString().PadLeft(padding, '0');
         }
 
         public static string AddDiagsToSourceText<T>(string bicepOutput, string newlineSequence, IEnumerable<T> items, Func<T, TextSpan> getSpanFunc, Func<T, string> diagsFunc, bool isLinePreformatted = false)
         {
+            if (bicepOutput.Equals("\r", StringComparison.Ordinal) ||
+                bicepOutput.Equals("\n", StringComparison.Ordinal) ||
+                bicepOutput.Equals("\r\n", StringComparison.Ordinal))
+            {
+                return bicepOutput;
+            }
+
             var lineStarts = TextCoordinateConverter.GetLineStarts(bicepOutput);
 
             var diagsByLine = items
@@ -114,7 +116,8 @@ namespace Bicep.Core.UnitTests.Utils
             }
 
             var lineStarts = TextCoordinateConverter.GetLineStarts(bicepOutput);
-            var sourceMapDiags = fileEntry.SourceMap.Select(entry => {
+            var sourceMapDiags = fileEntry.SourceMap.Select(entry =>
+            {
                 var offset = TextCoordinateConverter.GetOffset(lineStarts, entry.SourceLine, 0);
                 var jsonLine = jsonLines[entry.TargetLine];
 
@@ -139,19 +142,22 @@ namespace Bicep.Core.UnitTests.Utils
         public static string GetDiagLoggingString(string sourceText, string outputDirectory, IDiagnostic diagnostic)
         {
             var spanText = GetSpanText(sourceText, diagnostic);
-            var message = diagnostic.Message.Replace($"{outputDirectory}{Path.DirectorySeparatorChar}", "${TEST_OUTPUT_DIR}/");
-            // Normalize file path seperators across OS
+            var message = NormalizeOutputPath(outputDirectory, diagnostic.Message);
+            var source = diagnostic.Source.ToSourceString();
+
+            return $"[{diagnostic.Code} ({diagnostic.Level})] {message} ({source} {diagnostic.Uri}) |{spanText}|";
+        }
+
+        public static string NormalizeOutputPath(string outputDirectory, string message)
+        {
+            message = message.Replace($"{outputDirectory}{Path.DirectorySeparatorChar}", "${TEST_OUTPUT_DIR}/");
+            // Normalize file path separators across OS
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 message = Regex.Replace(message, @"(""|')\${TEST_OUTPUT_DIR}.*?(""|')", new MatchEvaluator((match) => match.Value.Replace('\\', '/')));
             }
 
-            var docLink = diagnostic.Uri == null
-                ? "none"
-                : $"{diagnostic.Source}({diagnostic.Uri.AbsoluteUri})";
-
-
-            return $"[{diagnostic.Code} ({diagnostic.Level})] {message} (CodeDescription: {docLink}) |{spanText}|";
+            return message;
         }
     }
 }

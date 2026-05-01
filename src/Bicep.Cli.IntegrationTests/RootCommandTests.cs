@@ -1,13 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Bicep.Core.Features;
 using Bicep.Core.UnitTests.Assertions;
 using FluentAssertions;
 using FluentAssertions.Execution;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
-using System.Threading.Tasks;
 
 namespace Bicep.Cli.IntegrationTests
 {
@@ -47,7 +44,7 @@ namespace Bicep.Cli.IntegrationTests
         [TestMethod]
         public async Task BicepHelpShouldPrintHelp()
         {
-            var settings = CreateDefaultSettings() with { FeatureOverrides = new(RegistryEnabled: true) };
+            var settings = new InvocationSettings() { FeatureOverrides = new(RegistryEnabled: true) };
 
             var (output, error, result) = await Bicep(settings, "--help");
 
@@ -67,6 +64,7 @@ namespace Bicep.Cli.IntegrationTests
                     "--outdir",
                     "--outfile",
                     "--stdout",
+                    "--diagnostics-format",
                     "--version",
                     "--help",
                     "information",
@@ -129,7 +127,7 @@ namespace Bicep.Cli.IntegrationTests
         {
             // disable registry to ensure `bicep --help` is not consulting the feature provider before
             // preparing the help text (as features can only be determined when an input file is specified)
-            var settings = CreateDefaultSettings() with { FeatureOverrides = new(RegistryEnabled: false) };
+            var settings = new InvocationSettings() { FeatureOverrides = new(RegistryEnabled: false) };
 
             var (output, error, result) = await Bicep(settings, "--help");
 

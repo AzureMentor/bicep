@@ -1,12 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
-using System.Text;
-using Bicep.Core.Diagnostics;
+
+using System.Diagnostics;
+using Bicep.Core.Extensions;
 using Bicep.Core.Parsing;
-using Bicep.Core.PrettyPrint;
 using Bicep.Core.Syntax;
+using Bicep.Core.Text;
 
 namespace Bicep.Core.Navigation
 {
@@ -24,6 +23,25 @@ namespace Bicep.Core.Navigation
             visitor.Visit(root);
 
             return visitor.Result;
+        }
+
+        public static TextSpan GetSpanIncludingTrivia(this SyntaxBase root)
+        {
+            if (root is not Token token)
+            {
+                return root.Span;
+            }
+
+            var first = token.LeadingTrivia.Where(t => !t.Span.IsNil).FirstOrDefault();
+            var start = first is { } ? first.Span.Position : token.Span.Position;
+
+            var last = token.TrailingTrivia.Where(t => !t.Span.IsNil).LastOrDefault();
+            var end = last is { } ? last.GetEndPosition() : token.GetEndPosition();
+
+            Debug.Assert(start >= 0 && end >= 0, "start and end shouldn't be nil");
+            Debug.Assert(start <= end, "start <= end");
+
+            return new TextSpan(start, end - start);
         }
 
         private sealed class NavigationSearchVisitor : CstVisitor
@@ -65,54 +83,6 @@ namespace Bicep.Core.Navigation
             private bool CheckNodeContainsOffset(SyntaxBase node) => this.inclusive
                     ? node.Span.ContainsInclusive(offset)
                     : node.Span.Contains(offset);
-        }
-
-        /// <summary>
-        /// Generate a string that represents this Syntax element
-        /// </summary>
-        public static string ToText(this SyntaxBase syntax, string indent = "", string? newLineSequence = null)
-        {
-            var sb = new StringBuilder();
-            var documentBuildVisitor = new DocumentBuildVisitor();
-            var document = documentBuildVisitor.BuildDocument(syntax);
-            document.Layout(sb, indent, newLineSequence ?? Environment.NewLine);
-            return sb.ToString();
-        }
-
-        /// <summary>
-        /// Generate a string that represents this Syntax element.
-        /// </summary>
-        public static string ToTextPreserveFormatting(this SyntaxBase syntax)
-        {
-            var sb = new StringBuilder();
-            var printVisitor = new PrintVisitor(sb);
-            printVisitor.Visit(syntax);
-            return sb.ToString();
-        }
-
-        private class PrintVisitor : CstVisitor
-        {
-            private readonly StringBuilder buffer;
-
-            public PrintVisitor(StringBuilder buffer)
-            {
-                this.buffer = buffer;
-            }
-
-            public override void VisitToken(Token token)
-            {
-                WriteTrivia(token.LeadingTrivia);
-                buffer.Append(token.Text);
-                WriteTrivia(token.TrailingTrivia);
-            }
-
-            private void WriteTrivia(IEnumerable<SyntaxTrivia> triviaList)
-            {
-                foreach (var trivia in triviaList)
-                {
-                    buffer.Append(trivia.Text);
-                }
-            }
         }
     }
 }

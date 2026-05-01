@@ -1,15 +1,19 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
-using Bicep.Core.Diagnostics;
+
+using System.Collections.Immutable;
+using Bicep.Core.Features;
 using Bicep.Core.Syntax;
 
 namespace Bicep.Core.Parsing
 {
     public class ParamsParser : BaseParser
     {
-        public ParamsParser(string text) : base(text)
+        private readonly IFeatureProvider featureProvider;
+
+        public ParamsParser(string text, IFeatureProvider featureProvider) : base(text)
         {
+            this.featureProvider = featureProvider;
         }
 
         public override ProgramSyntax Program()
@@ -36,7 +40,7 @@ namespace Bicep.Core.Parsing
             }
 
             var endOfFile = reader.Read();
-            var programSyntax = new ProgramSyntax(declarationsOrTokens, endOfFile, this.LexingErrorLookup, this.ParsingErrorTree);
+            var programSyntax = new ProgramSyntax(declarationsOrTokens, endOfFile);
 
             var parsingErrorVisitor = new ParseDiagnosticsVisitor(this.ParsingErrorTree);
             parsingErrorVisitor.Visit(programSyntax);
@@ -44,49 +48,104 @@ namespace Bicep.Core.Parsing
             return programSyntax;
         }
 
-        protected override SyntaxBase Declaration() =>
+        protected override SyntaxBase Declaration(params string[] expectedKeywords) =>
             this.WithRecovery(
                 () =>
                 {
+                    var leadingNodes = DecorableSyntaxLeadingNodes().ToImmutableArray();
 
-                    Token current = reader.Peek();
+                    var current = reader.Peek();
 
                     return current.Type switch
                     {
-                        TokenType.Identifier => current.Text switch
+                        TokenType.Identifier => ValidateKeyword(current.Text) switch
                         {
-                            LanguageConstants.UsingKeyword => this.UsingDeclaration(),
-                            LanguageConstants.ParameterKeyword => this.ParameterAssignment(),
-                            _ => throw new ExpectedTokenException(current, b => b.UnrecognizedParamsFileDeclaration()),
+                            LanguageConstants.UsingKeyword => this.UsingDeclaration(leadingNodes),
+                            LanguageConstants.ExtendsKeyword => this.ExtendsDeclaration(leadingNodes),
+                            LanguageConstants.ParameterKeyword => this.ParameterAssignment(leadingNodes),
+                            LanguageConstants.VariableKeyword => this.VariableDeclaration(leadingNodes),
+                            LanguageConstants.ImportKeyword => this.CompileTimeImportDeclaration(ExpectKeyword(LanguageConstants.ImportKeyword), leadingNodes),
+                            LanguageConstants.ExtensionConfigKeyword => this.ExtensionConfigAssignment(leadingNodes),
+                            LanguageConstants.ExtensionKeyword => this.ExtensionDeclaration(ExpectKeyword(current.Text), leadingNodes),
+                            LanguageConstants.TypeKeyword => this.TypeDeclaration(leadingNodes),
+                            _ => throw new ExpectedTokenException(current, b => b.UnrecognizedParamsFileDeclaration(featureProvider.ModuleExtensionConfigsEnabled)),
                         },
                         TokenType.NewLine => this.NewLine(),
-
-                        _ => throw new ExpectedTokenException(current, b => b.UnrecognizedParamsFileDeclaration()),
+                        _ => throw new ExpectedTokenException(current, b => b.UnrecognizedParamsFileDeclaration(featureProvider.ModuleExtensionConfigsEnabled)),
                     };
+
+                    string? ValidateKeyword(string keyword) =>
+                        expectedKeywords.Length == 0 || expectedKeywords.Contains(keyword) ? keyword : null;
                 },
                 RecoveryFlags.None,
                 TokenType.NewLine);
 
-        private UsingDeclarationSyntax UsingDeclaration()
+        private UsingDeclarationSyntax UsingDeclaration(ImmutableArray<SyntaxBase> leadingNodes)
         {
             var keyword = ExpectKeyword(LanguageConstants.UsingKeyword);
-            var path = this.WithRecovery(
-                () => ThrowIfSkipped(this.InterpolableString, b => b.ExpectedFilePathString()),
-                GetSuppressionFlag(keyword),
-                TokenType.Assignment, TokenType.NewLine);
 
-            return new UsingDeclarationSyntax(keyword, path);
+            SyntaxBase expression = reader.Peek().Type switch
+            {
+                TokenType.Identifier => new NoneLiteralSyntax(ExpectKeyword(LanguageConstants.NoneKeyword)),
+                TokenType.StringComplete => ThrowIfSkipped(this.InterpolableString, b => b.ExpectedFilePathString()),
+                _ => SkipEmpty(b => b.ExpectedSymbolListOrWildcard()),
+            };
 
+            var current = this.reader.Peek();
+            var withClause = current.Type switch
+            {
+                TokenType.EndOfFile or
+                TokenType.NewLine => this.SkipEmpty(),
+                _ => this.WithRecovery(this.UsingWithClause, GetSuppressionFlag(expression), TokenType.NewLine),
+            };
+
+            return new(leadingNodes, keyword, expression, withClause);
         }
 
-        private SyntaxBase ParameterAssignment()
+        private ExtendsDeclarationSyntax ExtendsDeclaration(ImmutableArray<SyntaxBase> leadingNodes)
+        {
+            var keyword = ExpectKeyword(LanguageConstants.ExtendsKeyword);
+            var path = this.WithRecovery(
+                () => ThrowIfSkipped(this.InterpolableString, b => b.ExtendsPathHasNotBeenSpecified()),
+                GetSuppressionFlag(keyword),
+                TokenType.NewLine);
+
+            return new ExtendsDeclarationSyntax(leadingNodes, keyword, path);
+        }
+
+        private SyntaxBase ParameterAssignment(ImmutableArray<SyntaxBase> leadingNodes)
         {
             var keyword = ExpectKeyword(LanguageConstants.ParameterKeyword);
             var name = this.IdentifierWithRecovery(b => b.ExpectedParameterIdentifier(), RecoveryFlags.None, TokenType.Identifier, TokenType.NewLine);
             var assignment = this.WithRecovery(this.Assignment, GetSuppressionFlag(name), TokenType.NewLine);
             var value = this.WithRecovery(() => this.Expression(ExpressionFlags.AllowComplexLiterals), GetSuppressionFlag(assignment), TokenType.NewLine);
 
-            return new ParameterAssignmentSyntax(keyword, name, assignment, value);
+            return new ParameterAssignmentSyntax(leadingNodes, keyword, name, assignment, value);
+        }
+
+        private ExtensionConfigAssignmentSyntax ExtensionConfigAssignment(IEnumerable<SyntaxBase> leadingNodes)
+        {
+            var extKeyword = ExpectKeyword(LanguageConstants.ExtensionConfigKeyword);
+            var aliasSyntax = this.IdentifierWithRecovery(b => b.ExpectedExtensionAliasName(), RecoveryFlags.None, TokenType.Identifier, TokenType.NewLine);
+            var withClause = this.WithRecovery(this.ExtensionWithClause, GetSuppressionFlag(aliasSyntax), TokenType.NewLine);
+
+            return new(leadingNodes, extKeyword, aliasSyntax, withClause);
+        }
+
+        private ExtensionWithClauseSyntax ExtensionWithClause()
+        {
+            var keyword = this.ExpectKeyword(LanguageConstants.WithKeyword);
+            var config = this.WithRecovery(() => this.Object(ExpressionFlags.AllowComplexLiterals), RecoveryFlags.None, TokenType.NewLine);
+
+            return new(keyword, config);
+        }
+
+        private UsingWithClauseSyntax UsingWithClause()
+        {
+            var keyword = this.ExpectKeyword(LanguageConstants.WithKeyword, b => b.ExpectedWithKeywordOrNewLine());
+            var config = this.WithRecovery(() => this.Object(ExpressionFlags.AllowComplexLiterals), RecoveryFlags.None, TokenType.NewLine);
+
+            return new(keyword, config);
         }
     }
 }

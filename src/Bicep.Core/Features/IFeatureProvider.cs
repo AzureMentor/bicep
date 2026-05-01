@@ -1,26 +1,75 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-namespace Bicep.Core.Features
+using Bicep.IO.Abstraction;
+
+namespace Bicep.Core.Features;
+
+public interface IFeatureProvider
 {
-    public interface IFeatureProvider
+    string AssemblyVersion { get; }
+
+    IDirectoryHandle CacheRootDirectory { get; }
+
+    bool SymbolicNameCodegenEnabled { get; }
+
+    bool ResourceTypedParamsAndOutputsEnabled { get; }
+
+    bool SourceMappingEnabled { get; }
+
+    bool LegacyFormatterEnabled { get; }
+
+    bool TestFrameworkEnabled { get; }
+
+    bool AssertsEnabled { get; }
+
+    bool WaitUntilEnabled { get; }
+
+    bool LocalDeployEnabled { get; }
+
+    bool ExtendableParamFilesEnabled { get; }
+
+    bool ResourceInfoCodegenEnabled { get; }
+
+    bool ModuleExtensionConfigsEnabled { get; }
+
+    bool UserDefinedConstraintsEnabled { get; }
+
+    bool DeployCommandsEnabled { get; }
+
+    bool ThisNamespaceEnabled { get; }
+
+    bool ExistingNullIfNotFoundEnabled { get; }
+
+    IEnumerable<(string name, bool impactsCompilation, bool usesExperimentalArmEngineFeature)> EnabledFeatureMetadata
     {
-        string AssemblyVersion { get; }
-
-        string CacheRootDirectory { get; }
-
-        bool RegistryEnabled { get; }
-
-        bool SymbolicNameCodegenEnabled { get; }
-
-        bool ExtensibilityEnabled { get; }
-
-        bool ResourceTypedParamsAndOutputsEnabled { get; }
-
-        bool SourceMappingEnabled { get; }
-
-        bool ParamsFilesEnabled { get; }
-
-        bool UserDefinedTypesEnabled { get; }
+        get
+        {
+            // `impactsCompilation` means that the CLI will emit a warning if this feature is enabled
+            // `usesExperimentalArmEngineFeature` means that the compiled JSON template will use an experimental language version and include a warning in the template metadata
+            foreach (var (enabled, name, impactsCompilation, usesExperimentalArmEngineFeature) in new[]
+            {
+                (SymbolicNameCodegenEnabled, CoreResources.ExperimentalFeatureNames_SymbolicNameCodegen, false, false), // Symbolic name codegen is listed as not impacting compilation because it is GA
+                (ResourceInfoCodegenEnabled, CoreResources.ExperimentalFeatureNames_ResourceInfoCodegen, true, true),
+                (ResourceTypedParamsAndOutputsEnabled, CoreResources.ExperimentalFeatureNames_ResourceTypedParamsAndOutputs, true, false),
+                (SourceMappingEnabled, CoreResources.ExperimentalFeatureNames_SourceMapping, true, false),
+                (TestFrameworkEnabled, CoreResources.ExperimentalFeatureNames_TestFramework, false, false),
+                (AssertsEnabled, CoreResources.ExperimentalFeatureNames_Asserts, true, true),
+                (WaitUntilEnabled, CoreResources.ExperimentalFeatureNames_WaitUntil, true, true),
+                (LocalDeployEnabled, "Enable local deploy", true, true),
+                (ExtendableParamFilesEnabled, "Enable extendable parameters", true, false),
+                (ModuleExtensionConfigsEnabled, "Enable defining extension configs for modules", true, true),
+                (UserDefinedConstraintsEnabled, "Enable @validate() decorator", true, true),
+                (DeployCommandsEnabled, "Enable deploy commands", true, true),
+                (ThisNamespaceEnabled, "Enable 'this' namespace", true, true),
+                (ExistingNullIfNotFoundEnabled, "Enable @nullIfNotFound() decorator for existing resources", true, true),
+            })
+            {
+                if (enabled)
+                {
+                    yield return (name, impactsCompilation, usesExperimentalArmEngineFeature);
+                }
+            }
+        }
     }
 }

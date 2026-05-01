@@ -1,8 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+
+/* eslint-disable jest/expect-expect */
 import * as vscode from "vscode";
 import { sleep } from "../../utils/time";
-
 import { expectDefined, expectRange } from "../utils/assert";
 import { retryWhile } from "../utils/time";
 import { executeCloseAllEditors, executeHoverProvider } from "./commands";
@@ -30,10 +31,7 @@ describe("hover", (): void => {
   });
 
   it("should reveal type signature when hovering over a parameter name", async () => {
-    const hovers = await executeHoverProviderCommandWithRetry(
-      document.uri,
-      new vscode.Position(1, 7)
-    );
+    const hovers = await executeHoverProviderCommandWithRetry(document.uri, new vscode.Position(1, 7));
 
     expectHovers(hovers, {
       startLine: 1,
@@ -45,10 +43,7 @@ describe("hover", (): void => {
   });
 
   it("should reveal type signature when hovering over a variable name", async () => {
-    const hovers = await executeHoverProviderCommandWithRetry(
-      document.uri,
-      new vscode.Position(50, 10)
-    );
+    const hovers = await executeHoverProviderCommandWithRetry(document.uri, new vscode.Position(50, 10));
 
     expectHovers(hovers, {
       startLine: 50,
@@ -60,10 +55,7 @@ describe("hover", (): void => {
   });
 
   it("should reveal type signature when hovering over a resource symbolic name", async () => {
-    const hovers = await executeHoverProviderCommandWithRetry(
-      document.uri,
-      new vscode.Position(108, 10)
-    );
+    const hovers = await executeHoverProviderCommandWithRetry(document.uri, new vscode.Position(108, 10));
 
     expectHovers(hovers, {
       startLine: 108,
@@ -73,17 +65,14 @@ describe("hover", (): void => {
       contents: [
         codeblockWithDescription(
           "resource vnet 'Microsoft.Network/virtualNetworks@2020-06-01'",
-          "[View Type Documentation](https://docs.microsoft.com/azure/templates/microsoft.network/virtualnetworks?tabs=bicep)"
+          "[View Documentation](https://learn.microsoft.com/azure/templates/microsoft.network/virtualnetworks?pivots=deployment-language-bicep)",
         ),
       ],
     });
   });
 
   it("should reveal type signature when hovering over an output name", async () => {
-    const hovers = await executeHoverProviderCommandWithRetry(
-      document.uri,
-      new vscode.Position(183, 14)
-    );
+    const hovers = await executeHoverProviderCommandWithRetry(document.uri, new vscode.Position(183, 14));
 
     expectHovers(hovers, {
       startLine: 183,
@@ -95,10 +84,7 @@ describe("hover", (): void => {
   });
 
   it("should reveal type signature when hovering over a function name", async () => {
-    const hovers = await executeHoverProviderCommandWithRetry(
-      document.uri,
-      new vscode.Position(18, 60)
-    );
+    const hovers = await executeHoverProviderCommandWithRetry(document.uri, new vscode.Position(18, 60));
 
     expectHovers(hovers, {
       startLine: 18,
@@ -108,19 +94,16 @@ describe("hover", (): void => {
       contents: [
         codeblockWithDescription(
           "function uniqueString(... : string): string",
-          "Creates a deterministic hash string based on the values provided as parameters. The returned value is 13 characters long."
+          "Creates a deterministic hash string based on the values provided as parameters. The returned value is 13 characters long.",
         ),
       ],
     });
   });
 
-  function executeHoverProviderCommandWithRetry(
-    documentUri: vscode.Uri,
-    position: vscode.Position
-  ) {
+  function executeHoverProviderCommandWithRetry(documentUri: vscode.Uri, position: vscode.Position) {
     return retryWhile(
       async () => await executeHoverProvider(documentUri, position),
-      (hovers) => hovers === undefined || hovers.length === 0
+      (hovers) => hovers === undefined || hovers.length === 0,
     );
   }
 
@@ -137,17 +120,10 @@ describe("hover", (): void => {
     expectDefined(hovers);
     expect(hovers).toHaveLength(expectedHovers.length);
     hovers.forEach((hover, hoverIndex) => {
-      const { startLine, startCharacter, endLine, endCharacter, contents } =
-        expectedHovers[hoverIndex];
+      const { startLine, startCharacter, endLine, endCharacter, contents } = expectedHovers[hoverIndex];
 
       expectDefined(hover.range);
-      expectRange(
-        hover.range,
-        startLine,
-        startCharacter,
-        endLine,
-        endCharacter
-      );
+      expectRange(hover.range, startLine, startCharacter, endLine, endCharacter);
       expect(hover.contents).toHaveLength(contents.length);
       hover.contents.forEach((content, contentIndex) => {
         expect(normalizeMarkedString(content)).toBe(contents[contentIndex]);
@@ -155,20 +131,15 @@ describe("hover", (): void => {
     });
   }
 
-  function normalizeMarkedString(
-    content: vscode.MarkedString | vscode.MarkdownString
-  ): string {
+  function normalizeMarkedString(content: vscode.MarkedString | vscode.MarkdownString): string {
     return typeof content === "string" ? content : content.value;
   }
 
   function codeblock(rawString: string): string {
-    return "```bicep\n" + rawString + "\n```\n";
+    return "```bicep\n" + rawString + "\n```  \n";
   }
 
-  function codeblockWithDescription(
-    rawString: string,
-    description: string
-  ): string {
-    return `${codeblock(rawString)}${description}\n`;
+  function codeblockWithDescription(rawString: string, description: string): string {
+    return `${codeblock(rawString)}${description}  \n`;
   }
 });

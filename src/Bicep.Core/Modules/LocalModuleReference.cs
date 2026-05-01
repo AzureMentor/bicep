@@ -1,32 +1,52 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Bicep.Core.Diagnostics;
-using System.Collections.Generic;
-using System;
 using System.Collections.Immutable;
-using System.Diagnostics.CodeAnalysis;
-using System.Linq;
+using Bicep.Core.Diagnostics;
+using Bicep.Core.Extensions;
+using Bicep.Core.Registry;
+using Bicep.Core.SourceGraph;
+using Bicep.Core.SourceGraph.ArtifactReferences;
+using Bicep.Core.SourceGraph.Artifacts;
+using Bicep.Core.Utils;
+using Bicep.IO.Abstraction;
 
 namespace Bicep.Core.Modules
 {
     /// <summary>
     /// Represents a reference to a local module (by relative path).
     /// </summary>
-    public class LocalModuleReference : ModuleReference
+    public class LocalModuleReference : ArtifactReference, IExtensionArtifactReference
     {
-        private static readonly IEqualityComparer<string> PathComparer = StringComparer.Ordinal;
+        // TODO(file-io-abstraction): Create a dedicated type for local extension reference.
 
-        private LocalModuleReference(string path, Uri parentModuleUri)
-            : base(ModuleReferenceSchemes.Local, parentModuleUri)
+        private static readonly StringComparer PathComparer = StringComparer.Ordinal;
+
+        private readonly Lazy<ResultWithDiagnosticBuilder<IFileHandle>> lazyTargetFileResult;
+        private readonly Lazy<ResultWithDiagnosticBuilder<BinaryData>> lazyExtensionBinaryDataResult;
+        private readonly Lazy<LocalExtensionArtifact> lazyLocalExtensionArtifact;
+        private readonly BicepSourceFile referencingFile;
+
+        private LocalModuleReference(BicepSourceFile referencingFile, ArtifactType artifactType, RelativePath path)
+            : base(referencingFile.Features, referencingFile.Configuration, ArtifactReferenceSchemes.Local)
         {
+            ArtifactType = artifactType;
             this.Path = path;
+            this.referencingFile = referencingFile;
+            this.lazyTargetFileResult = new(() => TryGetRelativeFile(this.Path));
+            this.lazyExtensionBinaryDataResult = new(() => this.lazyTargetFileResult.Value.Transform(x => x.TryReadBinaryData()));
+            this.lazyLocalExtensionArtifact = new(() => new(this.lazyExtensionBinaryDataResult.Value.Unwrap(), FeatureProvider.CacheRootDirectory));
         }
+
+        public ResultWithDiagnosticBuilder<IFileHandle> TryGetRelativeFile(RelativePath path)
+            => referencingFile.FileHandle.TryGetRelativeFile(path);
+
+        public ArtifactType ArtifactType { get; }
 
         /// <summary>
         /// Gets the relative path to the module.
         /// </summary>
-        public string Path { get; }
+        public RelativePath Path { get; }
 
         public override bool Equals(object? obj)
         {
@@ -46,74 +66,29 @@ namespace Bicep.Core.Modules
 
         public override bool IsExternal => false;
 
-        public static bool TryParse(string unqualifiedReference, Uri parentModuleUri, [NotNullWhen(true)] out LocalModuleReference? parsed, [NotNullWhen(false)] out DiagnosticBuilder.ErrorBuilderDelegate? failureBuilder)
+        public static ResultWithDiagnosticBuilder<LocalModuleReference> TryParse(BicepSourceFile referencingFile, ArtifactType artifactType, string unqualifiedReference) =>
+            RelativePath.TryCreate(unqualifiedReference).Transform(relativePath => new LocalModuleReference(referencingFile, artifactType, relativePath));
+
+        public override ResultWithDiagnosticBuilder<IFileHandle> TryGetEntryPointFileHandle()
         {
-            if (!Validate(unqualifiedReference, out failureBuilder))
+            if (this.ArtifactType == ArtifactType.Module)
             {
-                parsed = null;
-                return false;
+                return this.lazyTargetFileResult.Value;
             }
 
-            parsed = new(unqualifiedReference, parentModuleUri);
-            return true;
+            // Handle local extension reference.
+            if (!this.lazyExtensionBinaryDataResult.Value.IsSuccess(out _, out var error))
+            {
+                return new(error);
+            }
+
+            // For local extension, the "entry point" is the types.tgz file in the Bicep cache folder.
+            // TODO(shenglol): This is counterintuitive. Will refactor the whole "artifact" concept in the future.
+            return new(this.lazyLocalExtensionArtifact.Value.TypesTgzFile);
         }
 
-        public static bool Validate(string pathName, [NotNullWhen(false)] out DiagnosticBuilder.ErrorBuilderDelegate? failureBuilder)
-        {
-            if (pathName.Length == 0)
-            {
-                failureBuilder = x => x.FilePathIsEmpty();
-                return false;
-            }
-
-            if (pathName.First() == '/')
-            {
-                failureBuilder = x => x.FilePathBeginsWithForwardSlash();
-                return false;
-            }
-
-            foreach (var pathChar in pathName)
-            {
-                if (pathChar == '\\')
-                {
-                    // enforce '/' rather than '\' for module paths for cross-platform compatibility
-                    failureBuilder = x => x.FilePathContainsBackSlash();
-                    return false;
-                }
-
-                if (forbiddenPathChars.Contains(pathChar))
-                {
-                    failureBuilder = x => x.FilePathContainsForbiddenCharacters(forbiddenPathChars);
-                    return false;
-                }
-
-                if (IsInvalidPathControlCharacter(pathChar))
-                {
-                    failureBuilder = x => x.FilePathContainsControlChars();
-                    return false;
-                }
-            }
-
-            if (forbiddenPathTerminatorChars.Contains(pathName.Last()))
-            {
-                failureBuilder = x => x.FilePathHasForbiddenTerminator(forbiddenPathTerminatorChars);
-                return false;
-            }
-
-            failureBuilder = null;
-            return true;
-        }
-
-        private static readonly ImmutableHashSet<char> forbiddenPathChars = "<>:\"\\|?*".ToImmutableHashSet();
-        private static readonly ImmutableHashSet<char> forbiddenPathTerminatorChars = " .".ToImmutableHashSet();
-
-        private static bool IsInvalidPathControlCharacter(char pathChar)
-        {
-            // TODO: Revisit when we add unicode support to Bicep
-
-            // The following are disallowed as path chars on Windows, so we block them to avoid cross-platform compilation issues.
-            // Note that we're checking this range explicitly, as char.IsControl() includes some characters that are valid path characters.
-            return pathChar >= 0 && pathChar <= 31;
-        }
+        public IExtensionArtifact ResolveExtensionArtifact() => this.ArtifactType == ArtifactType.Extension
+            ? this.lazyLocalExtensionArtifact.Value
+            : throw new InvalidOperationException("Cannot resolve extension artifact for local module reference.");
     }
 }

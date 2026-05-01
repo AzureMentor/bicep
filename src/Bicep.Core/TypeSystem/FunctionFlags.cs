@@ -1,7 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-
 namespace Bicep.Core.TypeSystem
 {
     /// <summary>
@@ -31,7 +29,7 @@ namespace Bicep.Core.TypeSystem
         ParameterDecorator = 1 << 2,
 
         /// <summary>
-        /// The function can be used as a parameter decorator.
+        /// The function can be used as a variable decorator.
         /// </summary>
         VariableDecorator = 1 << 3,
 
@@ -51,9 +49,9 @@ namespace Bicep.Core.TypeSystem
         OutputDecorator = 1 << 6,
 
         /// <summary>
-        /// The  function can be used as an output decorator.
+        /// The  function can be used as an extension decorator.
         /// </summary>
-        ImportDecorator = 1 << 7,
+        ExtensionDecorator = 1 << 7,
 
         /// <summary>
         /// The function can be used in direct assignment to a module parameter with @secure decorator
@@ -65,11 +63,34 @@ namespace Bicep.Core.TypeSystem
         /// </summary>
         MetadataDecorator = 1 << 9,
 
+        /// <summary>
+        /// The function can be used as a type decorator.
+        /// </summary>
         TypeDecorator = 1 << 10,
 
         GenerateIntermediateVariableAlways = 1 << 11,
 
         GenerateIntermediateVariableOnIndirectAssignment = 1 << 12,
+
+        /// <summary>
+        /// The function can be used as a function decorator.
+        /// </summary>
+        FunctionDecorator = 1 << 13,
+
+        /// <summary>
+        /// The function can be used in direct assignment only
+        /// </summary>
+        DirectAssignment = 1 << 14,
+
+        /// <summary>
+        /// The function does not depend on argument values - e.g. `nameof(foo)` does not depend on the value of `foo`.
+        /// </summary>
+        IsArgumentValueIndependent = 1 << 15,
+
+        /// <summary>
+        /// The function depends on inputs provided by external tooling.
+        /// </summary>
+        RequiresExternalInput = 1 << 16,
 
         /// <summary>
         /// The function can be used as a resource or module decorator.
@@ -87,8 +108,13 @@ namespace Bicep.Core.TypeSystem
         ParameterOutputOrTypeDecorator = ParameterDecorator | OutputDecorator | TypeDecorator,
 
         /// <summary>
+        /// The function can be used as a type or variable decorator.
+        /// </summary>
+        TypeVariableOrFunctionDecorator = TypeDecorator | VariableDecorator | FunctionDecorator,
+
+        /// <summary>
         /// The function can be used as a decorator anywhere.
         /// </summary>
-        AnyDecorator = ParameterDecorator | VariableDecorator | ResourceDecorator | ModuleDecorator | OutputDecorator | ImportDecorator | MetadataDecorator | TypeDecorator,
+        AnyDecorator = ParameterDecorator | VariableDecorator | FunctionDecorator | ResourceDecorator | ModuleDecorator | OutputDecorator | ExtensionDecorator | MetadataDecorator | TypeDecorator,
     }
 }

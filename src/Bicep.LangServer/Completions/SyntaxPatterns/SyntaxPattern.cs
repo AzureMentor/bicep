@@ -1,17 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Collections.Immutable;
 using Bicep.Core.Extensions;
 using Bicep.Core.Parsing;
 using Bicep.Core.Syntax;
-using Bicep.LanguageServer.Completions.SyntaxPatterns;
-using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Bicep.LanguageServer.Completions.SyntaxPatterns
 {
@@ -76,7 +69,7 @@ namespace Bicep.LanguageServer.Completions.SyntaxPatterns
             var (leftSiblings, overlappingNode) = LeftSiblingsCollector.CollectLeftSiblings(ancestors[^1], offset);
 
             // pattern nodes = ancestors + left siblings + overlapping node.
-            return ancestors.Concat(leftSiblings).Append(overlappingNode).ToImmutableArray();
+            return [.. ancestors, .. leftSiblings, overlappingNode];
         }
 
         private static (string text, int offset) ProcessTextWithCursor(char cursor, string textWithCursor)

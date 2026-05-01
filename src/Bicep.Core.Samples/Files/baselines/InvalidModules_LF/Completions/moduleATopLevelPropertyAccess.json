@@ -1,0 +1,65 @@
+[
+  {
+    "label": "identity",
+    "kind": "property",
+    "detail": "identity",
+    "documentation": {
+      "kind": "markdown",
+      "value": "Type: `identity`  \n"
+    },
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_identity",
+    "insertTextFormat": "plainText",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "identity"
+    },
+    "commitCharacters": [
+      "."
+    ]
+  },
+  {
+    "label": "name",
+    "kind": "property",
+    "detail": "name",
+    "documentation": {
+      "kind": "markdown",
+      "value": "Type: `string`  \nThe deployment name. Must be 1-64 characters, and can contain alphanumerics, underscores, parentheses, hyphens, and periods.  \n"
+    },
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_name",
+    "insertTextFormat": "plainText",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "name"
+    },
+    "commitCharacters": [
+      "."
+    ]
+  },
+  {
+    "label": "outputs",
+    "kind": "property",
+    "detail": "outputs",
+    "documentation": {
+      "kind": "markdown",
+      "value": "Type: `outputs`  \nRead-only property  \n"
+    },
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_outputs",
+    "insertTextFormat": "plainText",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "outputs"
+    },
+    "commitCharacters": [
+      "."
+    ]
+  }
+]

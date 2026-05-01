@@ -1,10 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Reflection;
 
 namespace Bicep.LangServer.IntegrationTests.Completions
@@ -20,10 +16,10 @@ namespace Bicep.LangServer.IntegrationTests.Completions
             foreach (var manifestResourceName in manifestResourceNames)
             {
                 Stream? stream = languageServerAssembly.GetManifestResourceStream(manifestResourceName);
-                StreamReader streamReader = new StreamReader(stream!);
+                StreamReader streamReader = new(stream!);
 
                 string prefix = Path.GetFileNameWithoutExtension(manifestResourceName);
-                CompletionData completionData = new CompletionData(prefix, streamReader.ReadToEnd());
+                CompletionData completionData = new(prefix, streamReader.ReadToEnd());
 
                 yield return new object[] { completionData };
             }

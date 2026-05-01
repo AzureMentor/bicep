@@ -3,6 +3,7 @@
 using Bicep.Core.Extensions;
 using Bicep.Core.Rewriters;
 using Bicep.Core.TypeSystem;
+using Bicep.Core.TypeSystem.Types;
 using Bicep.Core.UnitTests.Utils;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -32,45 +33,49 @@ resource resA 'My.Rp/resA@2020-01-01' = {
         [TestMethod]
         public void Readonly_properties_are_removed()
         {
-            var bicepFile = @"
-resource resA 'My.Rp/resA@2020-01-01' = {
-  name: 'resA'
-  properties: {
-    readOnlyProp: 'abc'
-    readWriteProp: 'def'
-    writeOnlyProp: 'ghi'
-  }
-}
+            var bicepFile = """
+                resource resA 'My.Rp/resA@2020-01-01' = {
+                  name: 'resA'
+                  properties: {
+                    readOnlyProp: 'abc'
+                    readWriteProp: 'def'
+                    writeOnlyProp: 'ghi'
+                  }
+                }
 
-output myObj object = {
-  readOnlyProp: resA.properties.readOnlyProp
-  readWriteProp: resA.properties.readWriteProp
-}
-";
+                output myObj object = {
+                  readOnlyProp: resA.properties.readOnlyProp
+                  readWriteProp: resA.properties.readWriteProp
+                }
+
+                """;
 
             var typeDefinition = TestTypeHelper.CreateCustomResourceType("My.Rp/resA", "2020-01-01", TypeSymbolValidationFlags.WarnOnTypeMismatch,
-                new TypeProperty("readOnlyProp", LanguageConstants.String, TypePropertyFlags.ReadOnly),
-                new TypeProperty("readWriteProp", LanguageConstants.String, TypePropertyFlags.None),
-                new TypeProperty("writeOnlyProp", LanguageConstants.String, TypePropertyFlags.WriteOnly));
-            var typeLoader = TestTypeHelper.CreateAzResourceTypeLoaderWithTypes(typeDefinition.AsEnumerable());
+                new NamedTypeProperty("readOnlyProp", LanguageConstants.String, TypePropertyFlags.ReadOnly),
+                new NamedTypeProperty("readWriteProp", LanguageConstants.String, TypePropertyFlags.None),
+                new NamedTypeProperty("writeOnlyProp", LanguageConstants.String, TypePropertyFlags.WriteOnly));
+            var typeLoader = TestTypeHelper.CreateResourceTypeLoaderWithTypes(typeDefinition.AsEnumerable());
 
             var (_, _, compilation) = CompilationHelper.Compile(typeLoader, ("main.bicep", bicepFile));
             var rewriter = new ReadOnlyPropertyRemovalRewriter(compilation.GetEntrypointSemanticModel());
 
             var newProgramSyntax = rewriter.Rewrite(compilation.SourceFileGrouping.EntryPoint.ProgramSyntax);
             PrintHelper.PrintAndCheckForParseErrors(newProgramSyntax).Should().Be(
-@"resource resA 'My.Rp/resA@2020-01-01' = {
-  name: 'resA'
-  properties: {
-    readWriteProp: 'def'
-    writeOnlyProp: 'ghi'
-  }
-}
+                """
+                resource resA 'My.Rp/resA@2020-01-01' = {
+                  name: 'resA'
+                  properties: {
+                    readWriteProp: 'def'
+                    writeOnlyProp: 'ghi'
+                  }
+                }
 
-output myObj object = {
-  readOnlyProp: resA.properties.readOnlyProp
-  readWriteProp: resA.properties.readWriteProp
-}");
+                output myObj object = {
+                  readOnlyProp: resA.properties.readOnlyProp
+                  readWriteProp: resA.properties.readWriteProp
+                }
+
+                """);
         }
     }
 }

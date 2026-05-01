@@ -1,13 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Bicep.Core.Parsing;
-using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Bicep.Core.Text;
 
 namespace Bicep.Core.Diagnostics
 {
@@ -17,7 +12,7 @@ namespace Bicep.Core.Diagnostics
 
         private EmptyDiagnosticLookup() { }
 
-        public IEnumerable<IDiagnostic> this[IPositionable positionable] => Enumerable.Empty<IDiagnostic>();
+        public IEnumerable<IDiagnostic> this[IPositionable positionable] => [];
 
         public bool Contains(IPositionable positionable) => false;
 

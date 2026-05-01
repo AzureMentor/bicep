@@ -14,11 +14,7 @@ param cpuCores int = 1
 param memoryInGb int = 2
 
 @description('The behavior of Azure runtime if container has stopped.')
-@allowed([
-  'Always'
-  'Never'
-  'OnFailure'
-])
+@allowed(['Always', 'Never', 'OnFailure'])
 param restartPolicy string = 'Always'
 
 @description('Location for all resources.')

@@ -1,18 +1,12 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using Bicep.Core.Parsing;
-using Bicep.Core.UnitTests.Utils;
-using FluentAssertions;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Reflection;
-using System.Threading;
+using Bicep.Core.Text;
+using Bicep.Core.UnitTests.Utils;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Newtonsoft.Json;
 
 namespace Bicep.Core.Samples
 {
@@ -42,7 +36,7 @@ namespace Bicep.Core.Samples
 
         public record ExternalModuleMetadata(string Target);
 
-        public static readonly string Prefix = "Files/";
+        public static readonly string Prefix = "Files/baselines/";
 
         private readonly Lazy<string> lazyBicep;
 
@@ -119,9 +113,9 @@ namespace Bicep.Core.Samples
 
         public ImmutableDictionary<string, ExternalModuleInfo> TemplateSpecs => this.lazyTemplateSpecs.Value;
 
-        public bool HasRegistryModules => this.RegistryModules.Any();
+        public bool HasRegistryModules => !this.RegistryModules.IsEmpty;
 
-        public bool HasTemplateSpecs => this.TemplateSpecs.Any();
+        public bool HasTemplateSpecs => !this.TemplateSpecs.IsEmpty;
 
         public bool HasExternalModules => this.HasRegistryModules || this.HasTemplateSpecs;
 
@@ -140,7 +134,7 @@ namespace Bicep.Core.Samples
 
         public static string GetDisplayName(MethodInfo info, object[] data) => $"{info.Name}_{((DataSet)data[0]).Name}";
 
-        private string ReadDataSetFile(string fileName) => ReadFile(GetStreamName(fileName));
+        public string ReadDataSetFile(string fileName) => ReadFile(GetStreamName(fileName));
 
         private string GetStreamName(string fileName) => $"{GetStreamPrefix()}/{fileName}";
 
@@ -159,8 +153,11 @@ namespace Bicep.Core.Samples
             where TPositionable : IPositionable
             => OutputHelper.AddDiagsToSourceText(dataSet.Bicep, dataSet.HasCrLfNewlines() ? "\r\n" : "\n", items, item => item.Span, diagsFunc);
 
+        public static string GetBaselineUpdatePath(params string[] fileNames)
+            => Path.Combine("src", "Bicep.Core.Samples", "Files", "baselines", Path.Combine(fileNames));
+
         public static string GetBaselineUpdatePath(DataSet dataSet, string fileName)
-            => Path.Combine("src", "Bicep.Core.Samples", "Files", dataSet.Name, fileName);
+            => GetBaselineUpdatePath(dataSet.Name, fileName);
 
         private static ImmutableDictionary<string, ExternalModuleInfo> ReadPublishData(string streamNamePrefix) =>
             ReadExternalModuleData(streamNamePrefix, LanguageConstants.LanguageFileExtension);

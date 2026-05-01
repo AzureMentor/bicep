@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Diagnostics;
+using System.Text;
 using Bicep.Decompiler;
 using Bicep.LanguageServer.Providers;
 using Bicep.LanguageServer.Telemetry;
@@ -8,14 +10,6 @@ using OmniSharp.Extensions.JsonRpc;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using OmniSharp.Extensions.LanguageServer.Protocol.Window;
 using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using Path = System.IO.Path;
 
 namespace Bicep.LanguageServer.Handlers
@@ -69,7 +63,7 @@ namespace Bicep.LanguageServer.Handlers
             bool overwrite // If false, will create copy(ies) of the output file(s)
         )
         {
-            StringBuilder output = new StringBuilder();
+            StringBuilder output = new();
 
             try
             {
@@ -127,7 +121,7 @@ namespace Bicep.LanguageServer.Handlers
                         output.ToString(),
                         ex.Message,
                         null,
-                        new string[] { })
+                        [])
                 );
             }
         }
@@ -145,7 +139,7 @@ namespace Bicep.LanguageServer.Handlers
             {
                 // Create a bicep file with unique name alongside the existing bicep file
                 string newBicepPath = FindUniqueFileOrFolderName(outputFolder, mainBicepPath);
-                return new[] { (newBicepPath, outputFiles[0].bicepContents) };
+                return [(newBicepPath, outputFiles[0].bicepContents)];
             }
             else
             {
@@ -160,7 +154,7 @@ namespace Bicep.LanguageServer.Handlers
                     newOutputFiles.Add((newPath, outputFile.bicepContents));
                 }
 
-                return newOutputFiles.ToArray();
+                return [.. newOutputFiles];
             }
         }
 

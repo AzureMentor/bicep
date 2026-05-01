@@ -1,26 +1,18 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 using Bicep.Core.Parsing;
+using Bicep.Core.Text;
 
 namespace Bicep.Core.Syntax
 {
-    public class StringSyntax : ExpressionSyntax
+    public class StringSyntax(IEnumerable<Token> stringTokens, IEnumerable<SyntaxBase> expressions, IEnumerable<string> segmentValues) : ExpressionSyntax
     {
-        public StringSyntax(IEnumerable<Token> stringTokens, IEnumerable<SyntaxBase> expressions, IEnumerable<string> segmentValues)
-        {
-            this.StringTokens = stringTokens.ToImmutableArray();
-            this.Expressions = expressions.ToImmutableArray();
-            this.SegmentValues = segmentValues.ToImmutableArray();
-        }
+        public ImmutableArray<Token> StringTokens { get; } = [.. stringTokens];
 
-        public ImmutableArray<Token> StringTokens { get; }
+        public ImmutableArray<SyntaxBase> Expressions { get; } = [.. expressions];
 
-        public ImmutableArray<SyntaxBase> Expressions { get; }
-
-        public ImmutableArray<string> SegmentValues { get; }
+        public ImmutableArray<string> SegmentValues { get; } = [.. segmentValues];
 
         public override void Accept(ISyntaxVisitor visitor)
             => visitor.VisitStringSyntax(this);

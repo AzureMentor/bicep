@@ -1,0 +1,170 @@
+[
+  {
+    "label": "any",
+    "kind": "class",
+    "detail": "any",
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_any",
+    "insertTextFormat": "plainText",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "any"
+    }
+  },
+  {
+    "label": "array",
+    "kind": "class",
+    "detail": "array",
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_array",
+    "insertTextFormat": "plainText",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "array"
+    }
+  },
+  {
+    "label": "bool",
+    "kind": "class",
+    "detail": "bool",
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_bool",
+    "insertTextFormat": "plainText",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "bool"
+    }
+  },
+  {
+    "label": "int",
+    "kind": "class",
+    "detail": "int",
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_int",
+    "insertTextFormat": "plainText",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "int"
+    }
+  },
+  {
+    "label": "object",
+    "kind": "class",
+    "detail": "object",
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_object",
+    "insertTextFormat": "plainText",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "object"
+    }
+  },
+  {
+    "label": "resourceInput",
+    "kind": "class",
+    "detail": "Use the type definition of the input for a specific resource rather than a user-defined type.\n\nNB: The type definition will be checked by Bicep when the template is compiled but will not be enforced by the ARM engine during a deployment.",
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_resourceInput",
+    "insertTextFormat": "snippet",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "resourceInput<'$0'>"
+    },
+    "command": {
+      "title": "signature help",
+      "command": "editor.action.triggerParameterHints"
+    }
+  },
+  {
+    "label": "resourceOutput",
+    "kind": "class",
+    "detail": "Use the type definition of the return value of a specific resource rather than a user-defined type.\n\nNB: The type definition will be checked by Bicep when the template is compiled but will not be enforced by the ARM engine during a deployment.",
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_resourceOutput",
+    "insertTextFormat": "snippet",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "resourceOutput<'$0'>"
+    },
+    "command": {
+      "title": "signature help",
+      "command": "editor.action.triggerParameterHints"
+    }
+  },
+  {
+    "label": "secureObject",
+    "kind": "snippet",
+    "detail": "Secure object",
+    "documentation": {
+      "kind": "markdown",
+      "value": "```bicep\nobject\n```  \n"
+    },
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_secureObject",
+    "insertTextFormat": "snippet",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "object"
+    },
+    "additionalTextEdits": [
+      {
+        "range": {},
+        "newText": "@secure()\n"
+      }
+    ]
+  },
+  {
+    "label": "securestring",
+    "kind": "snippet",
+    "detail": "Secure string",
+    "documentation": {
+      "kind": "markdown",
+      "value": "```bicep\nstring\n```  \n"
+    },
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_securestring",
+    "insertTextFormat": "snippet",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "string"
+    },
+    "additionalTextEdits": [
+      {
+        "range": {},
+        "newText": "@secure()\n"
+      }
+    ]
+  },
+  {
+    "label": "string",
+    "kind": "class",
+    "detail": "string",
+    "deprecated": false,
+    "preselect": false,
+    "sortText": "2_string",
+    "insertTextFormat": "plainText",
+    "insertTextMode": "adjustIndentation",
+    "textEdit": {
+      "range": {},
+      "newText": "string"
+    }
+  }
+]

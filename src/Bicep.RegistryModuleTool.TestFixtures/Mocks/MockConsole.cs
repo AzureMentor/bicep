@@ -1,10 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using FluentAssertions;
-using Moq;
 using System.CommandLine;
 using System.CommandLine.IO;
+using FluentAssertions;
+using Moq;
 
 namespace Bicep.RegistryModuleTool.TestFixtures.Mocks
 {
@@ -16,7 +16,7 @@ namespace Bicep.RegistryModuleTool.TestFixtures.Mocks
 
         private readonly List<string> expectedOutLines = new();
 
-        private readonly List<string> expectedErrorLines = new ();
+        private readonly List<string> expectedErrorLines = new();
 
         private readonly List<string> actualOutLines = new();
 
@@ -38,7 +38,10 @@ namespace Bicep.RegistryModuleTool.TestFixtures.Mocks
         {
             this.expectedOutLines.Add(expectedOutLine + Environment.NewLine);
 
-            this.outMock.Setup(x => x.Write(It.IsAny<string>())).Callback<string>(actualOutLine => this.actualOutLines.Add(actualOutLine));
+            this.outMock.Setup(x => x.Write(It.IsAny<string>())).Callback<string>(actualOutLine =>
+            {
+                this.actualOutLines.Add(actualOutLine);
+            });
 
             return this;
         }
@@ -57,9 +60,9 @@ namespace Bicep.RegistryModuleTool.TestFixtures.Mocks
 
         public MockConsole ExpectErrorLine(string expectedErrorLine)
         {
-            this.expectedErrorLines.Add(expectedErrorLine + Environment.NewLine);
+            this.expectedErrorLines.Add($"{expectedErrorLine.ReplaceLineEndings()}{Environment.NewLine}");
 
-            this.errorMock.Setup(x => x.Write(It.IsAny<string>())).Callback<string>(actualErrorLine => this.actualErrorLines.Add(actualErrorLine));
+            this.errorMock.Setup(x => x.Write(It.IsAny<string>())).Callback<string>(this.actualErrorLines.Add);
 
             return this;
         }
@@ -76,8 +79,23 @@ namespace Bicep.RegistryModuleTool.TestFixtures.Mocks
 
         public void Verify()
         {
-            this.actualOutLines.Should().Equal(this.expectedOutLines);
-            this.actualErrorLines.Should().Equal(this.expectedErrorLines);
+            VerifyStringList(this.actualOutLines, this.expectedOutLines);
+            VerifyStringList(this.actualErrorLines, this.expectedErrorLines);
+        }
+
+        private static void VerifyStringList(List<string> a, List<string> b)
+        {
+            if (a.Count != b.Count)
+            {
+                a.Should().Equal(b);
+            }
+            else
+            {
+                for (var i = 0; i < a.Count; ++i)
+                {
+                    a[i].ReplaceLineEndings().Should().Be(b[i].ReplaceLineEndings());
+                }
+            }
         }
     }
 }

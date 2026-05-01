@@ -1,8 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using Bicep.Core.Configuration;
+using Bicep.IO.Abstraction;
 
 namespace Bicep.Core.UnitTests.Configuration;
 
@@ -17,5 +17,5 @@ public class PatchingConfigurationManager : IConfigurationManager
         this.patchFunc = patchFunc;
     }
 
-    public RootConfiguration GetConfiguration(Uri sourceFileUri) => patchFunc(configurationManager.GetConfiguration(sourceFileUri));
+    public RootConfiguration GetConfiguration(IOUri sourceFileUri) => patchFunc(configurationManager.GetConfiguration(sourceFileUri));
 }

@@ -21,34 +21,19 @@ param virtualMachineAdminUsername string
 param virtualMachineAdminPassword string
 
 // Size of the Virtual Machine.
-@allowed([
-  'Standard_D2s_v3'
-  'Standard_D4s_v3'
-  'Standard_D8s_v3'
-])
+@allowed(['Standard_D2s_v3', 'Standard_D4s_v3', 'Standard_D8s_v3'])
 param virtualMachineSize string = 'Standard_D8s_v3'
 
 // The publisher of the Virtual Machine.
-@allowed([
-  'MicrosoftVisualStudio'
-  'MicrosoftWindowsDesktop'
-])
+@allowed(['MicrosoftVisualStudio', 'MicrosoftWindowsDesktop'])
 param virtualMachinePublisher string = 'MicrosoftWindowsDesktop'
 
 // The offer of the Virtual Machine
-@allowed([
-  'visualstudio2019latest'
-  'Windows-10'
-])
+@allowed(['visualstudio2019latest', 'Windows-10'])
 param virtualMachineOffer string = 'Windows-10'
 
 // The Windows version for the VM. This will pick a fully patched image of this given Windows version.
-@allowed([
-  'vs-2019-comm-latest-ws2019'
-  'vs-2019-ent-latest-ws2019'
-  '20h1-pro-g2'
-  '20h1-ent-g2'
-])
+@allowed(['vs-2019-comm-latest-ws2019', 'vs-2019-ent-latest-ws2019', '20h1-pro-g2', '20h1-ent-g2'])
 param virtualMachineSku string = '20h1-pro-g2'
 
 // The URI of the PowerShell Custom Script.
@@ -59,7 +44,7 @@ var metadata = {
   shortName: '{0}${replace(name, '-', '')}${(suffix ?? '') == '' ? '' : suffix}'
 }
 
-// Stroage Account
+// Storage Account
 var storageAccount = {
   name: replace(metadata.shortName, '{0}', 'st')
   location: location
@@ -106,7 +91,7 @@ var networkSecurityGroup = {
         sourcePortRange: '*'
         sourceAddressPrefix: '*'
         destinationAddressPrefix: '*'
-        destinationPortRange: 3389
+        destinationPortRange: '3389'
       }
     }
   ]
@@ -125,9 +110,7 @@ var subnetName = 'default'
 var virtualNetwork = {
   name: replace(metadata.longName, '{0}', 'vnet')
   location: location
-  addressPrefixes: [
-    virtualNetworkAddressPrefix
-  ]
+  addressPrefixes: [virtualNetworkAddressPrefix]
   subnets: [
     {
       name: subnetName
@@ -247,9 +230,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2020-06-01' = {
 var virtualMachineExtensionCustomScript = {
   name: '${vm.name}/config-app'
   location: location
-  fileUris: [
-    virtualMachineExtensionCustomScriptUri
-  ]
+  fileUris: [virtualMachineExtensionCustomScriptUri]
   commandToExecute: 'powershell -ExecutionPolicy Unrestricted -File ./${last(split(virtualMachineExtensionCustomScriptUri, '/'))!}'
 }
 

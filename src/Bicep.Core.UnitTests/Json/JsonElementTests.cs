@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Linq;
-using System.Threading.Tasks;
 using Bicep.Core.Extensions;
 using Bicep.Core.Json;
 using Bicep.Core.UnitTests.Assertions;
@@ -11,7 +9,7 @@ using Json.More;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json.Linq;
 
-namespace Bicep.Core.UnitTests;
+namespace Bicep.Core.UnitTests.Json;
 
 [TestClass]
 public class JsonElementTests
@@ -62,7 +60,6 @@ public class JsonElementTests
         ""no-hardcoded-env-urls"": {
           ""level"": ""warning"",
           ""disallowedhosts"": [
-            ""api.loganalytics.io"",
             ""azuredatalakeanalytics.net"",
             ""azuredatalakestore.net"",
             ""batch.core.windows.net"",
@@ -74,8 +71,6 @@ public class JsonElementTests
             ""login.microsoftonline.com"",
             ""management.azure.com"",
             ""management.core.windows.net"",
-            ""region.asazure.windows.net"",
-            ""trafficmanager.net"",
             ""vault.azure.net""
           ],
           ""excludedhosts"": [
@@ -88,7 +83,7 @@ public class JsonElementTests
   ""experimentalFeaturesEnabled"": {}
 }";
 
-            var target = @"{
+        var target = @"{
   ""analyzers"": {
     ""core"": {
       ""verbose"": false,
@@ -101,13 +96,13 @@ public class JsonElementTests
     }
   }
 }";
-            var element = JsonElementFactory.CreateElement(target);
-            var config = JsonElementFactory.CreateElement(source);
+        var element = JsonElementFactory.CreateElement(target);
+        var config = JsonElementFactory.CreateElement(source);
 
-            Parallel.ForEach(Enumerable.Range(1, 1000000).ToList().AsParallel(), i =>
-            {
-                var result = config.Merge(element);
-                JToken.Parse(result.ToJsonString()).Should().DeepEqual(JToken.Parse(@"{
+        Parallel.ForEach(Enumerable.Range(1, 1000000).ToList().AsParallel(), i =>
+        {
+            var result = config.Merge(element);
+            JToken.Parse(result.ToJsonString()).Should().DeepEqual(JToken.Parse(@"{
   ""cloud"": {
     ""currentProfile"": ""AzureCloud"",
     ""profiles"": {
@@ -146,7 +141,6 @@ public class JsonElementTests
         ""no-hardcoded-env-urls"": {
           ""level"": ""warning"",
           ""disallowedhosts"": [
-            ""api.loganalytics.io"",
             ""azuredatalakeanalytics.net"",
             ""azuredatalakestore.net"",
             ""batch.core.windows.net"",
@@ -158,8 +152,6 @@ public class JsonElementTests
             ""login.microsoftonline.com"",
             ""management.azure.com"",
             ""management.core.windows.net"",
-            ""region.asazure.windows.net"",
-            ""trafficmanager.net"",
             ""vault.azure.net""
           ],
           ""excludedhosts"": [

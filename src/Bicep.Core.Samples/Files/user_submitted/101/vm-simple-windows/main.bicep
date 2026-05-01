@@ -13,17 +13,11 @@ param dnsLabelPrefix string = toLower('${vmName}-${uniqueString(resourceGroup().
 param publicIpName string = 'myPublicIP'
 
 @description('Allocation method for the Public IP used to access the Virtual Machine.')
-@allowed([
-  'Dynamic'
-  'Static'
-])
+@allowed(['Dynamic', 'Static'])
 param publicIPAllocationMethod string = 'Dynamic'
 
 @description('SKU for the Public IP used to access the Virtual Machine.')
-@allowed([
-  'Basic'
-  'Standard'
-])
+@allowed(['Basic', 'Standard'])
 param publicIpSku string = 'Basic'
 
 @description('The Windows version for the VM. This will pick a fully patched image of this given Windows version.')
@@ -112,9 +106,7 @@ resource vn 'Microsoft.Network/virtualNetworks@2021-02-01' = {
   location: location
   properties: {
     addressSpace: {
-      addressPrefixes: [
-        addressPrefix
-      ]
+      addressPrefixes: [addressPrefix]
     }
   }
 }

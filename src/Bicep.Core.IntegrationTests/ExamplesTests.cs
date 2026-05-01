@@ -1,24 +1,16 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using System.Linq;
-using Bicep.Core.Configuration;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Emit;
-using Bicep.Core.FileSystem;
-using Bicep.Core.PrettyPrint;
-using Bicep.Core.PrettyPrint.Options;
-using Bicep.Core.Registry;
+using Bicep.Core.Extensions;
+using Bicep.Core.PrettyPrintV2;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.UnitTests.Baselines;
 using Bicep.Core.UnitTests.Features;
 using Bicep.Core.UnitTests.Utils;
-using Bicep.Core.Workspaces;
 using FluentAssertions;
 using FluentAssertions.Execution;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -33,26 +25,28 @@ namespace Bicep.Core.IntegrationTests
         [NotNull]
         public TestContext? TestContext { get; set; }
 
-        private void RunExampleTest(EmbeddedFile embeddedBicep, FeatureProviderOverrides features, string jsonFileExtension)
+        public static async Task RunExampleTest(TestContext testContext, EmbeddedFile embeddedBicep, FeatureProviderOverrides? features = null, string jsonFileExtension = ".json")
         {
-            var baselineFolder = BaselineFolder.BuildOutputFolder(TestContext, embeddedBicep);
+            features ??= new(testContext);
+            FileHelper.GetCacheRootDirectory(testContext).EnsureExists();
+            var baselineFolder = BaselineFolder.BuildOutputFolder(testContext, embeddedBicep);
             var bicepFile = baselineFolder.EntryFile;
             var jsonFile = baselineFolder.GetFileOrEnsureCheckedIn(Path.ChangeExtension(embeddedBicep.FileName, jsonFileExtension));
 
-            var configManager = IConfigurationManager.WithStaticConfiguration(BicepTestConstants.BuiltInConfigurationWithAllAnalyzersDisabled);
-            var dispatcher = new ModuleDispatcher(BicepTestConstants.RegistryProvider, configManager);
-            var sourceFileGrouping = SourceFileGroupingBuilder.Build(BicepTestConstants.FileResolver, dispatcher, new Workspace(), PathHelper.FilePathToFileUrl(bicepFile.OutputFilePath));
-            var compilation = Services.WithFeatureOverrides(features).Build().BuildCompilation(sourceFileGrouping);
-            var emitter = new TemplateEmitter(compilation.GetEntrypointSemanticModel());
+            var compiler = Services.WithFeatureOverrides(features).Build().GetCompiler();
+            var compilation = await compiler.CreateCompilation(bicepFile.OutputFileUri.ToIOUri());
+            var model = compilation.GetEntrypointSemanticModel();
+
+            var emitter = new TemplateEmitter(model);
 
             foreach (var (file, diagnostics) in compilation.GetAllDiagnosticsByBicepFile())
             {
                 DiagnosticAssertions.DoWithDiagnosticAnnotations(
                     file,
-                    diagnostics.Where(x => !IsPermittedMissingTypeDiagnostic(x)),
+                    diagnostics.Where(d => !IsPermittedMissingTypeDiagnostic(d)),
                     diagnostics =>
                     {
-                        diagnostics.Should().BeEmpty("{0} should not have warnings or errors", file.FileUri.LocalPath);
+                        diagnostics.Should().BeEmpty("{0} should not have warnings or errors", file.FileHandle.Uri);
                     });
             }
 
@@ -70,28 +64,22 @@ namespace Bicep.Core.IntegrationTests
                     jsonFile.ShouldHaveExpectedJsonValue();
 
                     // validate that the template is parseable by the deployment engine
-                    TemplateHelper.TemplateShouldBeValid(stringWriter.ToString());
+                    UnitTests.Utils.TemplateHelper.TemplateShouldBeValid(stringWriter.ToString(), model.Features);
                 }
             }
         }
 
         [DataTestMethod]
-        [DynamicData(nameof(GetExampleData), DynamicDataSourceType.Method)]
+        [DynamicData(nameof(GetAllExampleData), DynamicDataSourceType.Method)]
         [TestCategory(BaselineHelper.BaselineTestCategory)]
-        public void ExampleIsValid(EmbeddedFile embeddedBicep)
-            => RunExampleTest(embeddedBicep, new(), ".json");
+        public Task ExampleIsValid(EmbeddedFile embeddedBicep)
+            => RunExampleTest(TestContext, embeddedBicep, new(TestContext), ".json");
 
         [DataTestMethod]
-        [DynamicData(nameof(GetExampleData), DynamicDataSourceType.Method)]
+        [DynamicData(nameof(GetAllExampleData), DynamicDataSourceType.Method)]
         [TestCategory(BaselineHelper.BaselineTestCategory)]
-        public void ExampleIsValid_using_experimental_symbolic_names(EmbeddedFile embeddedBicep)
-            => RunExampleTest(embeddedBicep, new(SymbolicNameCodegenEnabled: true), ".symbolicnames.json");
-
-        [DataTestMethod]
-        [DynamicData(nameof(GetExtensibilityExampleData), DynamicDataSourceType.Method)]
-        [TestCategory(BaselineHelper.BaselineTestCategory)]
-        public void ExampleIsValid_extensibility(EmbeddedFile embeddedBicep)
-            => RunExampleTest(embeddedBicep, new(ExtensibilityEnabled: true), ".json");
+        public Task ExampleIsValid_using_experimental_symbolic_names(EmbeddedFile embeddedBicep)
+            => RunExampleTest(TestContext, embeddedBicep, new(TestContext, SymbolicNameCodegenEnabled: true), ".symbolicnames.json");
 
         [DataTestMethod]
         [DynamicData(nameof(GetAllExampleData), DynamicDataSourceType.Method)]
@@ -102,9 +90,8 @@ namespace Bicep.Core.IntegrationTests
             var bicepFile = baselineFolder.EntryFile;
 
             var program = ParserHelper.Parse(embeddedBicep.Contents, out var lexingErrorLookup, out var parsingErrorLookup);
-            var printOptions = new PrettyPrintOptions(NewlineOption.LF, IndentKindOption.Space, 2, true);
-
-            var formattedContents = PrettyPrinter.PrintProgram(program, printOptions, lexingErrorLookup, parsingErrorLookup);
+            var context = PrettyPrinterV2Context.Create(PrettyPrinterV2Options.Default, lexingErrorLookup, parsingErrorLookup);
+            var formattedContents = PrettyPrinterV2.Print(program, context);
             formattedContents.Should().NotBeNull();
 
             bicepFile.WriteToOutputFolder(formattedContents);
@@ -117,17 +104,8 @@ namespace Bicep.Core.IntegrationTests
             GetAllExampleData().Should().HaveCountGreaterOrEqualTo(30, "sanity check to ensure we're finding examples to test");
         }
 
-        private static string GetParentStreamName(string streamName)
-            => Path.GetDirectoryName(streamName)!.Replace('\\', '/');
-
         private static IEnumerable<object[]> GetAllExampleData()
             => ExampleData.GetAllExampleData().Select(x => new object[] { x.BicepFile });
-
-        private static IEnumerable<object[]> GetExampleData()
-            => ExampleData.GetAllExampleData().Where(x => !x.IsExtensibilitySample).Select(x => new object[] { x.BicepFile });
-
-        private static IEnumerable<object[]> GetExtensibilityExampleData()
-            => ExampleData.GetAllExampleData().Where(x => x.IsExtensibilitySample).Select(x => new object[] { x.BicepFile });
 
         private static bool IsPermittedMissingTypeDiagnostic(IDiagnostic diagnostic)
         {
@@ -139,15 +117,14 @@ namespace Bicep.Core.IntegrationTests
             var permittedMissingTypeDiagnostics = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 // To exclude a particular type for BCP081 (if there are missing types), add an entry of format:
-                // "Resource type \"<type>\" does not have types available.",
+                // "Resource type \"<type>\" does not have types available. Bicep is unable to validate resource properties prior to deployment, but this will not block the resource from being deployed.",
             };
 
             return permittedMissingTypeDiagnostics.Contains(diagnostic.Message);
         }
 
         public record ExampleData(
-            EmbeddedFile BicepFile,
-            bool IsExtensibilitySample)
+            EmbeddedFile BicepFile)
         {
             public static IEnumerable<ExampleData> GetAllExampleData()
             {
@@ -158,11 +135,7 @@ namespace Bicep.Core.IntegrationTests
 
                 foreach (var bicepFile in embeddedFiles)
                 {
-                    var isExtensibilitySample = bicepFile.StreamPath.StartsWith($"Files/user_submitted/extensibility/", StringComparison.Ordinal);
-
-                    yield return new ExampleData(
-                        BicepFile: bicepFile,
-                        IsExtensibilitySample: isExtensibilitySample);
+                    yield return new ExampleData(bicepFile);
                 }
             }
         }

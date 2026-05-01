@@ -29,14 +29,9 @@ param vmAdminUsername string
 @secure()
 param vmSshKey string
 
-@allowed([
-  'Premium_LRS'
-  'StandardSSD_LRS'
-  'Standard_LRS'
-  'UltraSSD_LRS'
-])
+@allowed(['Premium_LRS', 'StandardSSD_LRS', 'Standard_LRS', 'UltraSSD_LRS'])
 @description('Specifies the storage account type for OS and data disk.')
-param diskStorageAccounType string = 'Premium_LRS'
+param diskStorageAccountType string = 'Premium_LRS'
 
 @minValue(0)
 @maxValue(64)
@@ -140,19 +135,21 @@ resource virtualMachines 'Microsoft.Compute/virtualMachines@2020-12-01' = {
         createOption: 'FromImage'
         diskSizeGB: osDiskSize
         managedDisk: {
-          storageAccountType: diskStorageAccounType
+          storageAccountType: diskStorageAccountType
         }
       }
-      dataDisks: [for j in range(0, numDataDisks): {
-        caching: dataDiskCaching
-        diskSizeGB: dataDiskSize
-        lun: j
-        name: '${vmName}-DataDisk${j}'
-        createOption: 'Empty'
-        managedDisk: {
-          storageAccountType: diskStorageAccounType
+      dataDisks: [
+        for j in range(0, numDataDisks): {
+          caching: dataDiskCaching
+          diskSizeGB: dataDiskSize
+          lun: j
+          name: '${vmName}-DataDisk${j}'
+          createOption: 'Empty'
+          managedDisk: {
+            storageAccountType: diskStorageAccountType
+          }
         }
-      }]
+      ]
     }
     networkProfile: {
       networkInterfaces: [
@@ -226,9 +223,7 @@ resource blobStorageAccountPrivateEndpoint 'Microsoft.Network/privateEndpoints@2
         name: blobStorageAccountPrivateEndpointName
         properties: {
           privateLinkServiceId: blobStorageAccount.id
-          groupIds: [
-            blobStorageAccountPrivateEndpointGroupName
-          ]
+          groupIds: [blobStorageAccountPrivateEndpointGroupName]
         }
       }
     ]

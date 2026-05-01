@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-
 namespace Bicep.LanguageServer.Completions
 {
     // TODO: investigating using https://learn.microsoft.com/en-us/dotnet/api/system.collections.bitarray?redirectedfrom=MSDN&view=net-6.0.
@@ -132,14 +130,14 @@ namespace Bicep.LanguageServer.Completions
         ObjectPropertyColonExists = 1UL << 22,
 
         /// <summary>
-        /// We're at this place in an import statement: 'import foo |'
+        /// We're at this place in an extension statement: 'extension foo |'
         /// </summary>
-        ExpectingImportWithOrAsKeyword = 1UL << 23,
+        ExpectingExtensionWithOrAsKeyword = 1UL << 23,
 
         /// <summary>
-        /// We're at this place in an import statement: 'import | as foo'
+        /// We're at this place in an extension statement: 'extension | as foo'
         /// </summary>
-        ExpectingImportSpecification = 1UL << 24,
+        ExpectingExtensionSpecification = 1UL << 24,
 
         /// <summary>
         /// We're inside a function parentheses: 'someFunc(|)'
@@ -149,7 +147,7 @@ namespace Bicep.LanguageServer.Completions
         /// <summary>
         /// The current location is after # sign.
         /// </summary>
-        DisableNextLineDiagnosticsDirectiveStart = 1UL << 26,
+        DirectiveStart = 1UL << 26,
 
         /// <summary>
         /// The current location is after '#disable-next-line |'.
@@ -157,9 +155,9 @@ namespace Bicep.LanguageServer.Completions
         DisableNextLineDiagnosticsCodes = 1UL << 27,
 
         /// <summary>
-        /// We're at this place in an import statement: 'import foo as bar |'
+        /// We're at this place in an extension statement: 'extension foo as bar |'
         /// </summary>
-        ExpectingImportConfig = 1UL << 28,
+        ExpectingExtensionConfig = 1UL << 28,
 
         /// <summary>
         /// The current location needs a bicep file path completion for using declaration
@@ -192,9 +190,9 @@ namespace Bicep.LanguageServer.Completions
         UnionTypeMember = 1UL << 34,
 
         /// <summary>
-        /// We're at this place in an import statement: 'import 'foo@1.0.0' with { foo: true } as |'
+        /// We're at this place in an extension statement: 'extension 'foo@1.0.0' with { foo: true } as |'
         /// </summary>
-        ExpectingImportAsKeyword = 1L << 35,
+        ExpectingExtensionAsKeyword = 1L << 35,
 
         /// <summary>
         /// The current location is after the output type.
@@ -204,6 +202,91 @@ namespace Bicep.LanguageServer.Completions
         /// <summary>
         /// The current location can accept a symbolic reference to a resource.
         /// </summary>
-        ExpectsResourceSymbolicReference = 1UL << 37
+        ExpectsResourceSymbolicReference = 1UL << 37,
+
+        /// <summary>
+        /// Cursor is on a typed lambda argument type.
+        /// </summary>
+        TypedLocalVariableType = 1UL << 38,
+
+        /// <summary>
+        /// Cursor is on a typed lambda output type.
+        /// </summary>
+        TypedLambdaOutputType = 1UL << 39,
+
+        /// <summary>
+        /// The current location needs a module path (local or remote)
+        /// </summary>
+        TestPath = 1UL << 40,
+
+        /// <summary>
+        /// The current location needs an assert value.
+        /// </summary>
+        AssertValue = 1UL << 41,
+
+        /// <summary>
+        /// The current location will accept an import identifier ('{}' or '* as foo')
+        /// </summary>
+        ImportIdentifier = 1UL << 42,
+
+        /// <summary>
+        /// The current location in an import statement can be completed with a symbol that can be imported from the statement target.
+        /// </summary>
+        ImportedSymbolIdentifier = 1UL << 43,
+
+        /// <summary>
+        /// The current location in an import statement requires the <code>from</code> contextual keyword
+        /// </summary>
+        ExpectingImportFromKeyword = 1UL << 44,
+
+        /// <summary>
+        /// The current location needs a test body.
+        /// </summary>
+        TestBody = 1UL << 10,
+
+        /// <summary>
+        /// We're inside the chevrons in a parameterized type: 'typeName&lt;|&gt;'
+        /// </summary>
+        TypeArgument = 1UL << 45,
+
+        /// <summary>
+        /// The current location is accessing properties or elements of a type.
+        /// </summary>
+        TypeMemberAccess = 1UL << 46,
+
+        /// <summary>
+        /// The current location needs a bicepparam file path completion for extends declaration
+        /// </summary>
+        ExtendsFilePath = 1UL << 47,
+
+        /// <summary>
+        /// The location immediately after a name in a variable declaration.
+        /// </summary>
+        VariableNameFollower = 1UL << 48,
+
+        /// <summary>
+        /// We're at this place: 'using 'main.bicep' |'
+        /// </summary>
+        UsingFollower = 1UL << 49,
+
+        /// <summary>
+        /// We're at this place: 'using 'main.bicep' with |'
+        /// </summary>
+        UsingWithFollower = 1UL << 50,
+
+        /// <summary>
+        /// The current location is in the index expression of a type array access (e.g., type foo = someType[|]).
+        /// </summary>
+        TypeArrayIndex = 1UL << 51,
+
+        /// <summary>
+        /// The current location is after '#disable-diagnostics |'.
+        /// </summary>
+        DisableDiagnosticsCodes = 1UL << 52,
+
+        /// <summary>
+        /// The current location is after '#restore-diagnostics |'.
+        /// </summary>
+        RestoreDiagnosticsCodes = 1UL << 53,
     }
 }

@@ -1,17 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Linq;
-using DiffPlex.DiffBuilder;
-using DiffPlex.DiffBuilder.Model;
 using FluentAssertions;
-using FluentAssertions.Execution;
-using FluentAssertions.Primitives;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Bicep.Core.Parsing;
-using System.Collections.Generic;
-using System;
 using FluentAssertions.Collections;
+using FluentAssertions.Execution;
+using Microsoft.WindowsAzure.ResourceStack.Common.Extensions;
 
 namespace Bicep.Core.UnitTests.Assertions
 {
@@ -34,6 +27,23 @@ namespace Bicep.Core.UnitTests.Assertions
             {
                 return path;
             }
+        }
+
+        [CustomAssertion]
+        public static AndConstraint<StringCollectionAssertions> NotContainAny(this StringCollectionAssertions instance, string[] collection, string because = "", params object[] becauseArgs)
+        {
+            foreach (var item in collection)
+            {
+                int index = Array.IndexOf(instance.Subject.ToArray(), item);
+                if (index >= 0)
+                {
+                    Execute.Assertion
+                        .BecauseOf(because, becauseArgs)
+                        .FailWith("Expected collection {context:collection} to not contain {0}{reason}, but found it at index {1}", item, index);
+                }
+            }
+
+            return new AndConstraint<StringCollectionAssertions>(instance);
         }
     }
 }

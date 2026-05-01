@@ -1,31 +1,25 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Text.RegularExpressions;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
-using Bicep.Core.Workspaces;
-using System;
-using System.Linq;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Text.RegularExpressions;
-using Bicep.Core.Semantics.Metadata;
 
 namespace Bicep.Core.Analyzers.Linter.Rules
 {
     // Mark decompiler imperfections that should be manually cleaned up
-    public sealed class DecompilerCleanupRule: LocationRuleBase
+    public sealed class DecompilerCleanupRule : LinterRuleBase
     {
         public new const string Code = "decompiler-cleanup";
 
-        private Regex regexResourceNameNeedsCleanup = new Regex("[a-zA-Z0-9]+_resource$");
-        private Regex regexVariableNameNeedsCleanup = new Regex("[a-zA-Z0-9]+_var$");
+        private Regex regexResourceNameNeedsCleanup = new("[a-zA-Z0-9]+_resource$");
+        private Regex regexVariableNameNeedsCleanup = new("[a-zA-Z0-9]+_var$");
 
         public DecompilerCleanupRule() : base(
             code: Code,
             description: CoreResources.DecompilerImperfectionsRule_Description,
-            docUri: new Uri($"https://aka.ms/bicep/linter/{Code}"))
+            LinterRuleCategory.BestPractice)
         {
         }
 

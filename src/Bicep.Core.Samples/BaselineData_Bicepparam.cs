@@ -1,14 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+
+using System.Reflection;
 using Bicep.Core.UnitTests.Baselines;
 using FluentAssertions;
 using FluentAssertions.Execution;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Reflection;
 
 namespace Bicep.Core.Samples
 {
@@ -35,7 +32,8 @@ namespace Bicep.Core.Samples
             {
                 var data = GetAllExampleData();
 
-                data = Filter switch {
+                data = Filter switch
+                {
                     TestDataFilterType.ValidOnly => data.Where(x => x.IsValid),
                     TestDataFilterType.InvalidOnly => data.Where(x => !x.IsValid),
                     _ => data,
@@ -48,7 +46,7 @@ namespace Bicep.Core.Samples
             {
                 var baselineData = (data?[0] as BaselineData_Bicepparam)!;
 
-                return $"{methodInfo.Name}({baselineData.paramsFile.StreamPath})";
+                return $"{methodInfo.Name} ({baselineData.paramsFile.StreamPath})";
             }
         }
 
@@ -94,17 +92,28 @@ namespace Bicep.Core.Samples
         private static IEnumerable<BaselineData_Bicepparam> GetAllExampleData()
         {
             var embeddedFiles = EmbeddedFile.LoadAll(
-                typeof(Bicep.Core.Samples.AssemblyInitializer).Assembly,
+                typeof(AssemblyInitializer).Assembly,
                 "baselines_bicepparam",
                 streamName => Path.GetFileName(streamName) == "parameters.bicepparam");
 
             // ensure this list is kept up-to-date to validate that we're picking all of the baseline tests
             embeddedFiles.Select(x => x.StreamPath).Should().BeEquivalentTo(
                 "Files/baselines_bicepparam/Expressions/parameters.bicepparam",
+                "Files/baselines_bicepparam/Extensions/parameters.bicepparam",
+                "Files/baselines_bicepparam/Imports/parameters.bicepparam",
+                "Files/baselines_bicepparam/Extends/parameters.bicepparam",
                 "Files/baselines_bicepparam/Invalid_Expressions/parameters.bicepparam",
+                "Files/baselines_bicepparam/Invalid_Extensions/parameters.bicepparam",
+                "Files/baselines_bicepparam/Invalid_Imports/parameters.bicepparam",
                 "Files/baselines_bicepparam/Invalid_Parameters/parameters.bicepparam",
+                "Files/baselines_bicepparam/Invalid_Variables/parameters.bicepparam",
                 "Files/baselines_bicepparam/Invalid_MismatchedTypes/parameters.bicepparam",
-                "Files/baselines_bicepparam/Parameters/parameters.bicepparam");
+                "Files/baselines_bicepparam/Parameters/parameters.bicepparam",
+                "Files/baselines_bicepparam/TypedVariables/parameters.bicepparam",
+                "Files/baselines_bicepparam/Variables/parameters.bicepparam",
+                "Files/baselines_bicepparam/External_Inputs/parameters.bicepparam",
+                "Files/baselines_bicepparam/External_Inputs_DeployCommands/parameters.bicepparam",
+                "Files/baselines_bicepparam/Invalid_ExternalInputs/parameters.bicepparam");
 
             foreach (var file in embeddedFiles)
             {

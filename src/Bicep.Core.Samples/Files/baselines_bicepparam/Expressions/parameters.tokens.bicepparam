@@ -150,7 +150,7 @@ param myObject = {
 //@[25:26) Identifier |i|
 //@[27:29) Arrow |=>|
 //@[30:31) Identifier |i|
-//@[32:33) LessThan |<|
+//@[32:33) LeftChevron |<|
 //@[34:35) Integer |2|
 //@[35:36) RightParen |)|
 //@[36:37) NewLine |\n|
@@ -471,7 +471,7 @@ param myObject = {
 //@[35:36) RightParen |)|
 //@[37:39) Arrow |=>|
 //@[40:41) Identifier |a|
-//@[42:43) LessThan |<|
+//@[42:43) LeftChevron |<|
 //@[44:45) Identifier |b|
 //@[45:46) RightParen |)|
 //@[46:47) NewLine |\n|
@@ -700,12 +700,12 @@ param myArray = [
 //@[08:09) NewLine |\n|
   1 < 2
 //@[02:03) Integer |1|
-//@[04:05) LessThan |<|
+//@[04:05) LeftChevron |<|
 //@[06:07) Integer |2|
 //@[07:08) NewLine |\n|
   1 > 2
 //@[02:03) Integer |1|
-//@[04:05) GreaterThan |>|
+//@[04:05) RightChevron |>|
 //@[06:07) Integer |2|
 //@[07:08) NewLine |\n|
   1 >= 2
@@ -725,7 +725,7 @@ param myString = '''
 //@[00:05) Identifier |param|
 //@[06:14) Identifier |myString|
 //@[15:16) Assignment |=|
-//@[17:72) MultilineString |'''\nTHis\n  is\n    a\n      multiline\n        string!\n'''|
+//@[17:72) StringComplete |'''\nTHis\n  is\n    a\n      multiline\n        string!\n'''|
 THis
   is
     a
@@ -733,5 +733,68 @@ THis
         string!
 '''
 //@[03:04) NewLine |\n|
+param kvSecret = az.getSecret('subId', 'rgName', 'kvName', 'secretName', 'secretVersion')
+//@[00:05) Identifier |param|
+//@[06:14) Identifier |kvSecret|
+//@[15:16) Assignment |=|
+//@[17:19) Identifier |az|
+//@[19:20) Dot |.|
+//@[20:29) Identifier |getSecret|
+//@[29:30) LeftParen |(|
+//@[30:37) StringComplete |'subId'|
+//@[37:38) Comma |,|
+//@[39:47) StringComplete |'rgName'|
+//@[47:48) Comma |,|
+//@[49:57) StringComplete |'kvName'|
+//@[57:58) Comma |,|
+//@[59:71) StringComplete |'secretName'|
+//@[71:72) Comma |,|
+//@[73:88) StringComplete |'secretVersion'|
+//@[88:89) RightParen |)|
+//@[89:90) NewLine |\n|
+param kvSecretExpression = az.getSecret(
+//@[00:05) Identifier |param|
+//@[06:24) Identifier |kvSecretExpression|
+//@[25:26) Assignment |=|
+//@[27:29) Identifier |az|
+//@[29:30) Dot |.|
+//@[30:39) Identifier |getSecret|
+//@[39:40) LeftParen |(|
+//@[40:41) NewLine |\n|
+  externalInput('subId'), 
+//@[02:15) Identifier |externalInput|
+//@[15:16) LeftParen |(|
+//@[16:23) StringComplete |'subId'|
+//@[23:24) RightParen |)|
+//@[24:25) Comma |,|
+//@[26:27) NewLine |\n|
+  externalInput('rgName'), 
+//@[02:15) Identifier |externalInput|
+//@[15:16) LeftParen |(|
+//@[16:24) StringComplete |'rgName'|
+//@[24:25) RightParen |)|
+//@[25:26) Comma |,|
+//@[27:28) NewLine |\n|
+  externalInput('kvName'), 
+//@[02:15) Identifier |externalInput|
+//@[15:16) LeftParen |(|
+//@[16:24) StringComplete |'kvName'|
+//@[24:25) RightParen |)|
+//@[25:26) Comma |,|
+//@[27:28) NewLine |\n|
+  externalInput('secretName'), 
+//@[02:15) Identifier |externalInput|
+//@[15:16) LeftParen |(|
+//@[16:28) StringComplete |'secretName'|
+//@[28:29) RightParen |)|
+//@[29:30) Comma |,|
+//@[31:32) NewLine |\n|
+  externalInput('secretVersion'))
+//@[02:15) Identifier |externalInput|
+//@[15:16) LeftParen |(|
+//@[16:31) StringComplete |'secretVersion'|
+//@[31:32) RightParen |)|
+//@[32:33) RightParen |)|
+//@[33:34) NewLine |\n|
 
 //@[00:00) EndOfFile ||

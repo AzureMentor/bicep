@@ -2,15 +2,12 @@
 // Licensed under the MIT License.
 
 using Bicep.Core.Diagnostics;
-using Bicep.Core.Navigation;
 using Bicep.Core.Semantics;
 using Bicep.Core.Semantics.Namespaces;
 using Bicep.Core.Syntax;
 using Bicep.Core.Syntax.Visitors;
-using Bicep.Core.TypeSystem;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using Bicep.Core.TypeSystem.Providers.Az;
+using Bicep.Core.TypeSystem.Types;
 
 namespace Bicep.Core.Analyzers.Linter.Rules
 {
@@ -19,7 +16,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
         // Finds insecure uses of parameters or list* functions inside outer-scpped nested deployments (resources of
         //   type "microsoft.resources/deployments").  Modules are inner-scoped so do not have this issue.
         //
-        // These nested deployments will evaluate expressions prior to being sent to the deployment engine.This means that all
+        // These nested deployments will evaluate expressions prior to being sent to the deployment engine. This means that all
         // properties are in the request in an evaluated state (clear text) and persisted on the deployment object.
 
         public new const string Code = "secure-params-in-nested-deploy";
@@ -27,8 +24,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
         public SecureParamsInNestedDeploymentsRule() : base(
             code: Code,
             description: CoreResources.SecureParamsInNestedDeployRule_Description,
-            docUri: new Uri($"https://aka.ms/bicep/linter/{Code}"),
-            diagnosticLevel: DiagnosticLevel.Warning)
+            LinterRuleCategory.Security)
         { }
 
         public override string FormatMessage(params object[] values)
@@ -39,6 +35,12 @@ namespace Bicep.Core.Analyzers.Linter.Rules
 
         override public IEnumerable<IDiagnostic> AnalyzeInternal(SemanticModel model, DiagnosticLevel diagnosticLevel)
         {
+            // outer scoped expression evaluation is blocked in symbolic name templates
+            if (model.EmitterSettings.EnableSymbolicNames)
+            {
+                yield break;
+            }
+
             foreach (ResourceSymbol resource in model.Root.ResourceDeclarations)
             {
                 if (GetPropertiesIfOuterScopedDeployment(resource) is ObjectSyntax propertiesObject)
@@ -65,7 +67,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
                             var message = string.Format(
                                 CoreResources.SecureParamsInNestedDeployRule_Message_ListFunction,
                                 resource.Name,
-                                listFunctionReference.ToText());
+                                listFunctionReference.ToString());
                             yield return CreateDiagnosticForSpan(diagnosticLevel, resource.NameSource.Span, message);
                         }
                     }
@@ -80,7 +82,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
                 return null;
             }
 
-            if (!resourceType.TypeReference.FormatType().Equals("microsoft.resources/deployments", LanguageConstants.ResourceTypeComparison))
+            if (!resourceType.TypeReference.FormatType().Equals(AzResourceTypeProvider.ResourceTypeDeployments, LanguageConstants.ResourceTypeComparison))
             {
                 // Not a deployment resource
                 return null;
@@ -94,7 +96,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
 
             // It's a valid deployment resource
             if (propertiesObject is not null
-                && propertiesObject.TryGetPropertyByNameRecursive(new[] { "expressionEvaluationOptions", "scope" })?.Value
+                && propertiesObject.TryGetPropertyByNameRecursive(["expressionEvaluationOptions", "scope"])?.Value
                 is StringSyntax scope)
             {
                 if (scope.TryGetLiteralValue()?.Equals("inner", StringComparison.InvariantCultureIgnoreCase) == true)

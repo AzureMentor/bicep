@@ -1,29 +1,34 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+using Bicep.Core;
+using Bicep.Core.Extensions;
+using Bicep.Core.FileSystem;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
-using Bicep.Core;
-using System.IO;
-using Bicep.Core.FileSystem;
 
 namespace Bicep.LangServer.IntegrationTests.Helpers
 {
     public static class TextDocumentParamHelper
     {
-        public static DidOpenTextDocumentParams CreateDidOpenDocumentParams(DocumentUri documentUri, string text, int version) =>
-            new DidOpenTextDocumentParams
+        public static DidOpenTextDocumentParams CreateDidOpenDocumentParams(DocumentUri documentUri, string text, int version)
+        {
+            var uri = documentUri.ToIOUri();
+            var languageId =
+                uri.HasBicepParamExtension() ? LanguageConstants.ParamsLanguageId :
+                uri.HasArmTemplateLikeExtension() ? LanguageConstants.ArmTemplateLanguageId :
+                LanguageConstants.LanguageId;
+
+            return new()
             {
                 TextDocument = new TextDocumentItem
                 {
-                    LanguageId =
-                        PathHelper.HasBicepparamsExension(documentUri.ToUri()) ? LanguageConstants.ParamsLanguageId :
-                        PathHelper.HasArmTemplateLikeExtension(documentUri.ToUri()) ? LanguageConstants.ArmTemplateLanguageId :
-                        LanguageConstants.LanguageId,
-                    Version = version,  
+                    LanguageId = languageId,
+                    Version = version,
                     Uri = documentUri,
                     Text = text,
                 },
             };
+        }
 
         public static DidOpenTextDocumentParams CreateDidOpenDocumentParamsFromFile(string filePath, int version) =>
             CreateDidOpenDocumentParams(
@@ -32,7 +37,7 @@ namespace Bicep.LangServer.IntegrationTests.Helpers
                 version);
 
         public static DidChangeTextDocumentParams CreateDidChangeTextDocumentParams(DocumentUri documentUri, string text, int version) =>
-            new DidChangeTextDocumentParams
+            new()
             {
                 TextDocument = new OptionalVersionedTextDocumentIdentifier
                 {

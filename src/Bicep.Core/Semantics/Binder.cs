@@ -1,14 +1,16 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
-using System.Linq;
+using Bicep.Core.Configuration;
+using Bicep.Core.Emit;
 using Bicep.Core.Extensions;
 using Bicep.Core.Features;
 using Bicep.Core.Semantics.Namespaces;
+using Bicep.Core.SourceGraph;
 using Bicep.Core.Syntax;
 using Bicep.Core.TypeSystem;
-using Bicep.Core.Workspaces;
+using Bicep.Core.TypeSystem.Providers;
 
 namespace Bicep.Core.Semantics
 {
@@ -16,24 +18,84 @@ namespace Bicep.Core.Semantics
     {
         private readonly BicepSourceFile bicepFile;
         private readonly ImmutableDictionary<DeclaredSymbol, ImmutableArray<DeclaredSymbol>> cyclesBySymbol;
+        private readonly ConcurrentDictionary<DeclaredSymbol, ImmutableHashSet<DeclaredSymbol>> symbolsDirectlyReferencedInDeclarations = new();
+        private readonly ConcurrentDictionary<DeclaredSymbol, ImmutableHashSet<DeclaredSymbol>> referencedSymbolClosures = new();
+        private readonly Stack<DeclaredSymbol> closureCalculationStack = new();
 
-        public Binder(INamespaceProvider namespaceProvider, IFeatureProvider features, BicepSourceFile sourceFile, ISymbolContext symbolContext)
+        public Binder(
+            INamespaceProvider namespaceProvider,
+            IArtifactFileLookup sourceFileLookup,
+            ISemanticModelLookup modelLookup,
+            BicepSourceFile sourceFile,
+            ISymbolContext symbolContext)
         {
             // TODO use lazy or some other pattern for init
             this.bicepFile = sourceFile;
             this.TargetScope = SyntaxHelper.GetTargetScope(sourceFile);
-            var (declarations, outermostScopes) = DeclarationVisitor.GetDeclarations(namespaceProvider, features, TargetScope, sourceFile, symbolContext);
-            var uniqueDeclarations = GetUniqueDeclarations(declarations);
-            this.NamespaceResolver = GetNamespaceResolver(features, namespaceProvider, sourceFile, this.TargetScope, uniqueDeclarations);
-            this.Bindings = NameBindingVisitor.GetBindings(sourceFile.ProgramSyntax, uniqueDeclarations, NamespaceResolver, outermostScopes);
+
+            var namespaceResults = namespaceProvider
+                .GetNamespaces(sourceFileLookup, sourceFile, TargetScope)
+                .ToImmutableArray();
+            this.NamespaceResolver = NamespaceResolver.Create(namespaceResults);
+
+            var fileScope = DeclarationVisitor.GetDeclarations(namespaceResults, sourceFile, symbolContext);
+
+            // Process extends & synthesize 'base' BEFORE name binding so variable accesses to 'base' bind correctly.
+            var extendsDeclarations = sourceFile.ProgramSyntax.Declarations.OfType<ExtendsDeclarationSyntax>().ToImmutableArray();
+            bool hasExtends = extendsDeclarations.Any();
+            var parentParameterAssignments = ImmutableArray<ParameterAssignmentSymbol>.Empty;
+
+            if (hasExtends)
+            {
+                foreach (var extendsDeclaration in extendsDeclarations)
+                {
+                    if (!(sourceFileLookup.TryGetSourceFile(extendsDeclaration).TryUnwrap() is { } extendedFile &&
+                        modelLookup.GetSemanticModel(extendedFile) is SemanticModel extendedModel))
+                    {
+                        continue;
+                    }
+
+                    var allParentAssignments = extendedModel.Root.ParameterAssignments;
+                    foreach (var assignment in allParentAssignments)
+                    {
+                        if (!parentParameterAssignments.Any(a => string.Equals(a.Name, assignment.Name, LanguageConstants.IdentifierComparison)))
+                        {
+                            parentParameterAssignments = parentParameterAssignments.Add(assignment);
+                        }
+                    }
+
+                    var nonConflicting = allParentAssignments.Where(a => !fileScope.Locals.Any(e => string.Equals(e.Name, a.Name, LanguageConstants.IdentifierComparison)));
+                    fileScope = fileScope.ReplaceLocals(fileScope.Locals.AddRange(nonConflicting));
+                }
+
+                if (parentParameterAssignments.Any())
+                {
+                    var localsWithoutOldBase = fileScope.Locals.Where(l => l is not BaseParametersSymbol).ToImmutableArray();
+                    fileScope = fileScope.ReplaceLocals(localsWithoutOldBase.Add(new BaseParametersSymbol(symbolContext, parentParameterAssignments)));
+                }
+            }
+
+            var baseBindings = NameBindingVisitor.GetBindings(sourceFile.ProgramSyntax, NamespaceResolver, fileScope).ToBuilder();
+
+            if (hasExtends && parentParameterAssignments.Any())
+            {
+                foreach (var parentAssignment in parentParameterAssignments)
+                {
+                    ProcessSyntaxForBinding(
+                        parentAssignment.DeclaringParameterAssignment.Value,
+                        parentAssignment.Context.Binder,
+                        baseBindings);
+                }
+            }
+
+            this.Bindings = baseBindings.ToImmutable();
             this.cyclesBySymbol = CyclicCheckVisitor.FindCycles(sourceFile.ProgramSyntax, this.Bindings);
 
             this.FileSymbol = new FileSymbol(
                 symbolContext,
                 sourceFile,
                 NamespaceResolver,
-                outermostScopes,
-                declarations);
+                fileScope);
         }
 
         public ResourceScope TargetScope { get; }
@@ -60,22 +122,76 @@ namespace Bicep.Core.Semantics
         public ImmutableArray<DeclaredSymbol>? TryGetCycle(DeclaredSymbol declaredSymbol)
             => this.cyclesBySymbol.TryGetValue(declaredSymbol, out var cycle) ? cycle : null;
 
-        private static ImmutableDictionary<string, DeclaredSymbol> GetUniqueDeclarations(IEnumerable<DeclaredSymbol> outermostDeclarations)
+        public ImmutableHashSet<DeclaredSymbol> GetSymbolsReferencedInDeclarationOf(DeclaredSymbol symbol)
+            => symbolsDirectlyReferencedInDeclarations.GetOrAdd(symbol,
+                s => [.. SymbolicReferenceCollector.CollectSymbolsReferenced(this, s.DeclaringSyntax).Keys]);
+
+        public ImmutableHashSet<DeclaredSymbol> GetReferencedSymbolClosureFor(DeclaredSymbol symbol)
+            => referencedSymbolClosures.GetOrAdd(symbol, CalculateReferencedSymbolClosure);
+
+        private ImmutableHashSet<DeclaredSymbol> CalculateReferencedSymbolClosure(DeclaredSymbol symbol)
         {
-            // in cases of duplicate declarations we will see multiple declaration symbols in the result list
-            // for simplicitly we will bind to the first one
-            // it may cause follow-on type errors, but there will also be errors about duplicate identifiers as well
-            return outermostDeclarations
-                .OrderBy(x => x is not OutputSymbol && x is not MetadataSymbol ? 0 : 1)
-                .ToLookup(x => x.Name, LanguageConstants.IdentifierComparer)
-                .ToImmutableDictionary(x => x.Key, x => x.First(), LanguageConstants.IdentifierComparer);
+            closureCalculationStack.Push(symbol);
+
+            var builder = ImmutableHashSet.CreateBuilder<DeclaredSymbol>();
+            foreach (var symbolReferencedInDeclaration in GetSymbolsReferencedInDeclarationOf(symbol))
+            {
+                builder.Add(symbolReferencedInDeclaration);
+                if (!closureCalculationStack.Contains(symbolReferencedInDeclaration))
+                {
+                    builder.UnionWith(GetReferencedSymbolClosureFor(symbolReferencedInDeclaration));
+                }
+            }
+
+            closureCalculationStack.Pop();
+
+            return builder.ToImmutable();
         }
 
-        private static NamespaceResolver GetNamespaceResolver(IFeatureProvider features, INamespaceProvider namespaceProvider, BicepSourceFile sourceFile, ResourceScope targetScope, ImmutableDictionary<string, DeclaredSymbol> uniqueDeclarations)
+        private void ProcessSyntaxForBinding(
+            SyntaxBase rootSyntax,
+            IBinder parentBinder,
+            IDictionary<SyntaxBase, Symbol> baseBindings)
         {
-            var importedNamespaces = uniqueDeclarations.Values.OfType<ImportedNamespaceSymbol>();
+            var stack = new Stack<SyntaxBase>();
+            stack.Push(rootSyntax);
 
-            return NamespaceResolver.Create(features, namespaceProvider, sourceFile, targetScope, importedNamespaces);
+            while (stack.Count > 0)
+            {
+                var current = stack.Pop();
+
+                if (current is VariableAccessSyntax || current == rootSyntax || current is PropertyAccessSyntax || current is ArrayAccessSyntax || current is FunctionCallSyntaxBase)
+                {
+                    var parentSymbol = parentBinder.GetSymbolInfo(current);
+                    if (parentSymbol is not null && !baseBindings.ContainsKey(current))
+                    {
+                        baseBindings[current] = parentSymbol;
+                    }
+                }
+
+                var childNodes = current switch
+                {
+                    ObjectSyntax obj => obj.Children,
+                    ArraySyntax arr => arr.Children,
+                    ObjectPropertySyntax objectProperty => [objectProperty.Key, objectProperty.Value],
+                    ArrayItemSyntax arrayItem => [arrayItem.Value],
+                    SpreadExpressionSyntax spread => [spread.Expression],
+                    PropertyAccessSyntax propAccess => [propAccess.BaseExpression],
+                    ArrayAccessSyntax arrayAccess => [arrayAccess.BaseExpression, arrayAccess.IndexExpression],
+                    FunctionCallSyntaxBase funcCall => funcCall.Arguments.Select(a => a.Expression),
+                    ParenthesizedExpressionSyntax paren => [paren.Expression],
+                    TernaryOperationSyntax ternary => [ternary.ConditionExpression, ternary.TrueExpression, ternary.FalseExpression],
+                    BinaryOperationSyntax binary => [binary.LeftExpression, binary.RightExpression],
+                    UnaryOperationSyntax unary => [unary.Expression],
+                    NonNullAssertionSyntax nonNull => [nonNull.BaseExpression],
+                    _ => []
+                };
+
+                foreach (var child in childNodes)
+                {
+                    stack.Push(child);
+                }
+            }
         }
     }
 }

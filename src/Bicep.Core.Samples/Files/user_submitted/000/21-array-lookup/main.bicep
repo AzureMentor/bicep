@@ -1,17 +1,8 @@
 //Array Lookup Sample
-@allowed([
-  'eastus'
-  'eastus2'
-  'centralus'
-  'northcentralus'
-  'southcentralus'
-  'westcentralus'
-  'westus'
-  'westus2'
-])
+@allowed(['eastus', 'eastus2', 'centralus', 'northcentralus', 'southcentralus', 'westcentralus', 'westus', 'westus2'])
 param azRegion string
 
-//Note that this could be extented to all regions
+//Note that this could be extended to all regions
 var regionToTimezone = {
   eastus: 'Eastern Standard Time'
   eastus2: 'Eastern Standard Time'

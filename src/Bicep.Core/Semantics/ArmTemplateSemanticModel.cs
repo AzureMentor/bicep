@@ -1,24 +1,24 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using Azure.Deployments.Core.Definitions.Schema;
 using Azure.Deployments.Core.Entities;
-using Azure.Deployments.Expression.Extensions;
 using Azure.Deployments.Templates.Engines;
 using Azure.Deployments.Templates.Exceptions;
-using Azure.Deployments.Templates.Extensions;
+using Bicep.Core.ArmHelpers;
 using Bicep.Core.Diagnostics;
-using Bicep.Core.Parsing;
+using Bicep.Core.Emit;
 using Bicep.Core.Resources;
 using Bicep.Core.Semantics.Metadata;
+using Bicep.Core.Semantics.Namespaces;
+using Bicep.Core.SourceGraph;
 using Bicep.Core.TypeSystem;
-using Bicep.Core.Workspaces;
+using Bicep.Core.TypeSystem.Types;
+using Microsoft.WindowsAzure.ResourceStack.Common.Extensions;
+using Microsoft.WindowsAzure.ResourceStack.Common.Json;
 using Newtonsoft.Json.Linq;
 
 namespace Bicep.Core.Semantics
@@ -26,14 +26,14 @@ namespace Bicep.Core.Semantics
     public class ArmTemplateSemanticModel : ISemanticModel
     {
         private readonly Lazy<ResourceScope> targetScopeLazy;
-
-        private readonly Lazy<ImmutableDictionary<string, ParameterMetadata>> parametersLazy;
-
+        private readonly Lazy<ImmutableSortedDictionary<string, ParameterMetadata>> parametersLazy;
+        private readonly Lazy<ImmutableSortedDictionary<string, ExtensionMetadata>> extensionsLazy;
+        private readonly Lazy<ImmutableSortedDictionary<string, ExportMetadata>> exportsLazy;
         private readonly Lazy<ImmutableArray<OutputMetadata>> outputsLazy;
 
         public ArmTemplateSemanticModel(ArmTemplateFile sourceFile)
         {
-            Trace.WriteLine($"Building semantic model for {sourceFile.FileUri}");
+            Trace.WriteLine($"Building semantic model for {sourceFile.FileHandle.Uri}");
 
             this.SourceFile = sourceFile;
 
@@ -49,7 +49,7 @@ namespace Bicep.Core.Semantics
                     return ResourceScope.None;
                 }
 
-                return (schemaUri.AbsolutePath) switch
+                return schemaUri.AbsolutePath switch
                 {
                     "/schemas/2019-08-01/tenantDeploymentTemplate.json" => ResourceScope.Tenant,
                     "/schemas/2019-08-01/managementGroupDeploymentTemplate.json" => ResourceScope.ManagementGroup,
@@ -65,7 +65,7 @@ namespace Bicep.Core.Semantics
             {
                 if (this.SourceFile.Template?.Parameters is null)
                 {
-                    return ImmutableDictionary<string, ParameterMetadata>.Empty;
+                    return ImmutableSortedDictionary<string, ParameterMetadata>.Empty;
                 }
 
                 // the source here is of type InsensitiveDictionary<TemplateInputParameter>,
@@ -75,29 +75,42 @@ namespace Bicep.Core.Semantics
                 // Ordinal key comparer, which looks purely at the key string code points
                 // without applying any additional rules
                 return this.SourceFile.Template.Parameters
-                    .ToImmutableDictionary(
+                    .ToImmutableSortedDictionary(
                         parameterProperty => parameterProperty.Key,
-                        parameterProperty => new ParameterMetadata(
-                            parameterProperty.Key,
-                            GetType(parameterProperty.Value),
-                            parameterProperty.Value.DefaultValue is null,
-                            GetMostSpecificDescription(parameterProperty.Value)),
+                        parameterProperty =>
+                        {
+                            var type = GetType(parameterProperty.Value);
+
+                            return new ParameterMetadata(
+                                parameterProperty.Key,
+                                type,
+                                parameterProperty.Value.DefaultValue is null && !TypeHelper.IsNullable(type.Type),
+                                GetMostSpecificDescription(parameterProperty.Value));
+                        },
                         LanguageConstants.IdentifierComparer);
             });
+
+            this.extensionsLazy = new(FindExtensions);
+
+            this.exportsLazy = new(FindExports);
 
             this.outputsLazy = new(() =>
             {
                 if (this.SourceFile.Template?.Outputs is null)
                 {
-                    return ImmutableArray<OutputMetadata>.Empty;
+                    return [];
                 }
 
-                return this.SourceFile.Template.Outputs
-                    .Select(outputProperty => new OutputMetadata(
-                        outputProperty.Key,
-                        GetType(outputProperty.Value),
-                        TryGetMetadataDescription(outputProperty.Value.Metadata)))
-                    .ToImmutableArray();
+                return [.. this.SourceFile.Template.Outputs
+                    .Select(outputProperty =>
+                    {
+                        var type = GetType(outputProperty.Value);
+                        return new OutputMetadata(
+                            outputProperty.Key,
+                            type,
+                            TryGetMetadataDescription(outputProperty.Value.Metadata),
+                            TypeHelper.IsOrContainsSecureType(type.Type));
+                    })];
             });
         }
 
@@ -107,7 +120,11 @@ namespace Bicep.Core.Semantics
             ? ResourceScope.ResourceGroup
             : this.targetScopeLazy.Value;
 
-        public ImmutableDictionary<string, ParameterMetadata> Parameters => this.parametersLazy.Value;
+        public ImmutableSortedDictionary<string, ParameterMetadata> Parameters => this.parametersLazy.Value;
+
+        public ImmutableSortedDictionary<string, ExtensionMetadata> Extensions => this.extensionsLazy.Value;
+
+        public ImmutableSortedDictionary<string, ExportMetadata> Exports => exportsLazy.Value;
 
         public ImmutableArray<OutputMetadata> Outputs => this.outputsLazy.Value;
 
@@ -139,7 +156,7 @@ namespace Bicep.Core.Semantics
             return diagnosticWriter.GetDiagnostics().Count > 0;
         }
 
-        private TypeSymbol GetType(TemplateInputParameter parameter) => parameter.Type?.Value switch
+        private ITypeReference GetType(TemplateInputParameter parameter) => parameter.Type?.Value switch
         {
             TemplateParameterType.String when TryCreateUnboundResourceTypeParameter(GetMetadata(parameter), out var resourceType) =>
                 resourceType,
@@ -147,37 +164,16 @@ namespace Bicep.Core.Semantics
             _ => GetType((ITemplateSchemaNode)parameter, allowLooseAssignment: true),
         };
 
-        private TypeSymbol GetType(ITemplateSchemaNode schemaNode, bool allowLooseAssignment = false)
+        private ITypeReference GetType(ITemplateSchemaNode schemaNode, bool allowLooseAssignment = false)
         {
-            try
+            if (SourceFile.Template is null)
             {
-                var resolved = TemplateEngine.ResolveSchemaReferences(SourceFile.Template, schemaNode);
-
-                var bicepType = resolved.Type.Value switch
-                {
-                    TemplateParameterType.String when TryCreateUnboundResourceTypeParameter(resolved.Metadata?.Value, out var resourceType) => resourceType,
-                    TemplateParameterType.String => GetStringType(resolved, allowLooseAssignment ? TypeSymbolValidationFlags.AllowLooseAssignment : default),
-                    TemplateParameterType.Int => GetIntegerType(resolved, allowLooseAssignment),
-                    TemplateParameterType.Bool => GetPrimitiveType(resolved, t => t.Type == JTokenType.Boolean, LanguageConstants.TypeNameBool, allowLooseAssignment ? LanguageConstants.LooseBool : LanguageConstants.Bool),
-                    TemplateParameterType.Array => GetArrayType(resolved),
-                    TemplateParameterType.Object => GetObjectType(SourceFile.Template!, resolved),
-                    TemplateParameterType.SecureString => GetStringType(resolved,
-                        TypeSymbolValidationFlags.IsSecure | (allowLooseAssignment ? TypeSymbolValidationFlags.AllowLooseAssignment : TypeSymbolValidationFlags.Default)),
-                    TemplateParameterType.SecureObject => GetObjectType(SourceFile.Template!, resolved, TypeSymbolValidationFlags.IsSecure),
-                    _ => ErrorType.Empty(),
-                };
-
-                if (resolved.Nullable?.Value == true)
-                {
-                    bicepType = TypeHelper.CreateTypeUnion(bicepType, LanguageConstants.Null);
-                }
-
-                return bicepType;
+                return ErrorType.Empty();
             }
-            catch (TemplateValidationException tve)
-            {
-                return ErrorType.Create(DiagnosticBuilder.ForDocumentStart().UnresolvableArmJsonType(tve.TemplateErrorAdditionalInfo.Path ?? "<unknown location>", tve.Message));
-            }
+
+            return ArmTemplateTypeLoader.ToTypeReference(SchemaValidationContext.ForTemplate(SourceFile.Template),
+                schemaNode,
+                allowLooseAssignment ? TypeSymbolValidationFlags.AllowLooseAssignment : TypeSymbolValidationFlags.Default);
         }
 
         /// <summary>
@@ -186,9 +182,11 @@ namespace Bicep.Core.Semantics
         /// <param name="schemaNode">The starting point for the search</param>
         /// <returns></returns>
         private string? GetMostSpecificDescription(ITemplateSchemaNode schemaNode)
+            => GetMetadata(schemaNode) is JObject metadataObject ? GetDescriptionFromMetadata(metadataObject) : null;
+
+        private static string? GetDescriptionFromMetadata(JObject metadataObject)
         {
-            if (GetMetadata(schemaNode) is JObject metadataObject &&
-                metadataObject.TryGetValue(LanguageConstants.MetadataDescriptionPropertyName, out var descriptionToken) &&
+            if (metadataObject.TryGetValue(LanguageConstants.MetadataDescriptionPropertyName, out var descriptionToken) &&
                 descriptionToken is JValue { Value: string description })
             {
                 return description;
@@ -196,10 +194,16 @@ namespace Bicep.Core.Semantics
 
             return null;
         }
+
         private JToken? GetMetadata(ITemplateSchemaNode schemaNode)
         {
             try
             {
+                if (SourceFile.Template is null)
+                {
+                    return null;
+                }
+
                 return TemplateEngine.ResolveSchemaReferences(SourceFile.Template, schemaNode).Metadata?.Value;
             }
             catch (TemplateValidationException)
@@ -208,190 +212,7 @@ namespace Bicep.Core.Semantics
             }
         }
 
-        private static TypeSymbol GetPrimitiveType(ITemplateSchemaNode schemaNode, Func<JToken, bool> isValidLiteralPredicate, string typeName, TypeSymbol type)
-        {
-            if (schemaNode.AllowedValues?.Value is JArray jArray)
-            {
-                return TryGetLiteralUnionType(jArray, isValidLiteralPredicate, b => b.InvalidUnionTypeMember(typeName));
-            }
-
-            return type;
-        }
-
-        private static TypeSymbol TryGetLiteralUnionType(JArray allowedValues, Func<JToken, bool> validator, DiagnosticBuilder.ErrorBuilderDelegate diagnosticOnMismatch)
-        {
-            List<TypeSymbol> literalTypeTargets = new();
-            foreach (var element in allowedValues)
-            {
-                if (!validator(element) || TypeHelper.TryCreateTypeLiteral(element) is not { } literal)
-                {
-                    return ErrorType.Create(diagnosticOnMismatch(DiagnosticBuilder.ForDocumentStart()));
-                }
-
-                literalTypeTargets.Add(literal);
-            }
-
-            return TypeHelper.CreateTypeUnion(literalTypeTargets);
-        }
-
-        private static TypeSymbol GetIntegerType(ITemplateSchemaNode schemaNode, bool allowLooseAssignment)
-        {
-            if (schemaNode.AllowedValues?.Value is JArray jArray)
-            {
-                return TryGetLiteralUnionType(jArray, t => t.Type == JTokenType.Integer, b => b.InvalidUnionTypeMember(LanguageConstants.TypeNameInt));
-            }
-
-            return TypeFactory.CreateIntegerType(schemaNode.MinValue?.Value,
-                schemaNode.MaxValue?.Value,
-                allowLooseAssignment ? TypeSymbolValidationFlags.AllowLooseAssignment : TypeSymbolValidationFlags.Default);
-        }
-
-        private static TypeSymbol GetStringType(ITemplateSchemaNode schemaNode, TypeSymbolValidationFlags flags)
-        {
-            if (schemaNode.AllowedValues?.Value is JArray jArray)
-            {
-                return TryGetLiteralUnionType(jArray, t => t.IsTextBasedJTokenType(), b => b.InvalidUnionTypeMember(LanguageConstants.TypeNameString));
-            }
-
-            return TypeFactory.CreateStringType(schemaNode.MinLength?.Value, schemaNode.MaxLength?.Value, flags);
-        }
-
-        private TypeSymbol GetArrayType(ITemplateSchemaNode schemaNode)
-        {
-            if (schemaNode.AllowedValues?.Value is JArray allowedValues)
-            {
-                return GetArrayLiteralType(allowedValues, schemaNode);
-            }
-
-            if (schemaNode.PrefixItems is { } prefixItems)
-            {
-                TupleTypeNameBuilder nameBuilder = new();
-                List<ITypeReference> tupleMembers = new();
-                foreach (var prefixItem in prefixItems)
-                {
-                    var (type, typeName) = GetDeferrableTypeInfo(prefixItem);
-                    nameBuilder.AppendItem(typeName);
-                    tupleMembers.Add(type);
-                }
-
-                return new TupleType(nameBuilder.ToString(), tupleMembers.ToImmutableArray(), default);
-            }
-
-            if (schemaNode.Items?.SchemaNode is { } items)
-            {
-                if (items.Ref?.Value is { } @ref)
-                {
-                    var (type, typeName) = GetDeferrableTypeInfo(items);
-                    return new TypedArrayType($"{typeName}[]", type, default, schemaNode.MinLength?.Value, schemaNode.MaxLength?.Value);
-                }
-
-                return new TypedArrayType(GetType(items), default, schemaNode.MinLength?.Value, schemaNode.MaxLength?.Value);
-            }
-
-            // TODO it's possible to encounter an array with a defined prefix and either a schema or a boolean for "items."
-            // TupleType does not support an "AdditionalItemsType" for items after the tuple, but when it does, update this type reader to handle the combination of "items" and "prefixItems"
-
-            return TypeFactory.CreateArrayType(schemaNode.MinLength?.Value, schemaNode.MaxLength?.Value);
-        }
-
-        private static TypeSymbol GetArrayLiteralType(JArray allowedValues, ITemplateSchemaNode schemaNode)
-        {
-            // For allowedValues on an array, either all or none of the allowed values need to be arrays.
-            if (allowedValues.Any(t => t.Type == JTokenType.Array))
-            {
-                // If any of the allowed values are arrays, it's a regular union of literals
-                return TryGetLiteralUnionType(allowedValues, t => t.Type == JTokenType.Array, b => b.InvalidUnionTypeMember(LanguageConstants.ArrayType));
-            }
-
-            // If no allowed values are arrays, the each element in the array must be one of the allowed values provided
-            List<TypeSymbol> elements = new();
-            foreach (var element in allowedValues)
-            {
-                // Arrays with constrained but mixed-type literal elements are the only place where `null` is a valid type literal
-                if (element.Type == JTokenType.Null)
-                {
-                    elements.Add(LanguageConstants.Null);
-                }
-                else if (element.Type == JTokenType.Comment)
-                {
-                    continue;
-                }
-                else if (TypeHelper.TryCreateTypeLiteral(element) is { } literal)
-                {
-                    elements.Add(literal);
-                }
-                else
-                {
-                    // TryCreateTypeLiteral is exhaustive, so this should never be reached
-                    return ErrorType.Create(DiagnosticBuilder.ForDocumentStart().TypeExpressionLiteralConversionFailed());
-                }
-            }
-
-            return new TypedArrayType(TypeHelper.CreateTypeUnion(elements), default, schemaNode.MinLength?.Value, schemaNode.MaxLength?.Value);
-        }
-
-        private TypeSymbol GetObjectType(Template template, ITemplateSchemaNode schemaNode, TypeSymbolValidationFlags symbolValidationFlags = TypeSymbolValidationFlags.Default)
-        {
-            if (schemaNode.AllowedValues?.Value is JArray jArray)
-            {
-                return TryGetLiteralUnionType(jArray, t => t.Type == JTokenType.Object, b => b.InvalidUnionTypeMember(LanguageConstants.ObjectType));
-            }
-
-            ObjectTypeNameBuilder nameBuilder = new();
-            List<TypeProperty> properties = new();
-            ITypeReference? additionalPropertiesType = LanguageConstants.Any;
-            TypePropertyFlags additionalPropertiesFlags = TypePropertyFlags.FallbackProperty;
-
-            if (schemaNode.Properties is { } propertySchemata)
-            {
-                foreach (var (propertyName, schema) in propertySchemata)
-                {
-                    // depending on the language version, either only properties included in schemaNode.Required are required,
-                    // or all of them are (but some may be nullable)
-                    var required = template.GetLanguageVersion().HasFeature(TemplateLanguageFeature.NullableParameters)
-                        ? true
-                        : schemaNode.Required?.Value.Contains(propertyName) ?? false;
-                    var flags = required ? TypePropertyFlags.Required : TypePropertyFlags.None;
-                    var description = GetMostSpecificDescription(schema);
-
-                    var (type, typeName) = GetDeferrableTypeInfo(schema);
-
-                    properties.Add(new(propertyName, type, flags, description));
-                    nameBuilder.AppendProperty(propertyName, typeName);
-                }
-            }
-
-            if (schemaNode.AdditionalProperties is { } addlProps)
-            {
-                additionalPropertiesFlags = TypePropertyFlags.None;
-
-                if (addlProps.SchemaNode is { } additionalPropertiesSchema)
-                {
-                    var typeInfo = GetDeferrableTypeInfo(additionalPropertiesSchema);
-                    additionalPropertiesType = typeInfo.type;
-                    nameBuilder.AppendPropertyMatcher("*", typeInfo.typeName);
-                }
-                else if (addlProps.BooleanValue == false)
-                {
-                    additionalPropertiesType = null;
-                }
-            }
-
-            if (properties.Count == 0 && schemaNode.AdditionalProperties is null)
-            {
-                return symbolValidationFlags.HasFlag(TypeSymbolValidationFlags.IsSecure) ? LanguageConstants.SecureObject : LanguageConstants.Object;
-            }
-
-            return new ObjectType(nameBuilder.ToString(), symbolValidationFlags, properties, additionalPropertiesType, additionalPropertiesFlags);
-        }
-
-        private (ITypeReference type, string typeName) GetDeferrableTypeInfo(ITemplateSchemaNode schemaNode) => schemaNode.Ref?.Value switch
-        {
-            string @ref => (new DeferredTypeReference(() => GetType(schemaNode)), @ref.Replace("#/definitions/", "")),
-            _ => GetType(schemaNode) switch { TypeSymbol concreteType => (concreteType, concreteType.Name) },
-        };
-
-        private TypeSymbol GetType(TemplateOutputParameter output)
+        private ITypeReference GetType(TemplateOutputParameter output)
         {
             return output.Type?.Value switch
             {
@@ -402,6 +223,112 @@ namespace Bicep.Core.Semantics
             };
         }
 
+        private ImmutableSortedDictionary<string, ExtensionMetadata> FindExtensions()
+        {
+            if (this.SourceFile.Template?.Extensions is null)
+            {
+                return ImmutableSortedDictionary<string, ExtensionMetadata>.Empty;
+            }
+
+            return this.SourceFile.Template.Extensions
+                .ToImmutableSortedDictionary(
+                    ext => ext.Key,
+                    ext =>
+                    {
+                        // TODO(kylealbert): Get namespace type.
+                        return new ExtensionMetadata(ext.Key, ext.Value.Name.Value, ext.Value.Version.Value, null, null);
+                    });
+        }
+
+        private ImmutableSortedDictionary<string, ExportMetadata> FindExports()
+        {
+            if (SourceFile.Template is not { } template || SourceFile.TemplateObject is not { } templateObject)
+            {
+                return ImmutableSortedDictionary<string, ExportMetadata>.Empty;
+            }
+
+            List<ExportMetadata> exports = new();
+
+            if (template.Definitions is { } typeDefinitions)
+            {
+                exports.AddRange(typeDefinitions.Where(kvp => IsExported(kvp.Value))
+                    .Select(kvp => new ExportedTypeMetadata(kvp.Key, AsTypeType(GetType(kvp.Value)), GetMostSpecificDescription(kvp.Value))));
+            }
+
+            if (template.Functions is { } userDefinedFunctions)
+            {
+                foreach (var @namespace in userDefinedFunctions)
+                {
+                    // User-defined functions in ARM *must* be namespaced -- a missing namespace name indicates an invalid or incomplete template.
+                    if (@namespace.Namespace?.Value is not string nsName)
+                    {
+                        continue;
+                    }
+
+                    // A user-defined function residing in the namespace used by the Bicep compiler must be imported by its unqualified name.
+                    // Functions in any other namespace must be imported using their fully qualified name ("<namespace name>.<function name>")
+                    var namePrefix = !nsName.Equals(EmitConstants.UserDefinedFunctionsNamespace) ? $"{nsName}." : string.Empty;
+
+                    exports.AddRange(@namespace.Members.Where(kvp => IsExported(kvp.Value))
+                        .Select(kvp => new ExportedFunctionMetadata(
+                            Name: $"{namePrefix}{kvp.Key}",
+                            Parameters: [.. kvp.Value.Parameters.CoalesceEnumerable().Select(p => new ExportedFunctionParameterMetadata(p.Name?.Value ?? string.Empty, GetType(p), GetMostSpecificDescription(p)))],
+                            Return: new(GetType(kvp.Value.Output), GetMostSpecificDescription(kvp.Value.Output)),
+                            Description: kvp.Value.Metadata?.Value is JObject metadataObject ? GetDescriptionFromMetadata(metadataObject) : null)));
+                }
+            }
+
+            if (template.Metadata?.TryGetValue(LanguageConstants.TemplateMetadataExportedVariablesName, out var exportedVariables) is true
+                && exportedVariables.Value is JArray exportedVariablesList)
+            {
+                TemplateVariablesEvaluator evaluator = new(template);
+
+                foreach (var exportedVariable in exportedVariablesList)
+                {
+                    if (exportedVariable is JObject exportedVariableObject &&
+                        exportedVariableObject.TryGetValue("name", StringComparison.OrdinalIgnoreCase, out var nameToken) &&
+                        nameToken is JValue { Value: string name } &&
+                        evaluator.TryGetEvaluatedVariableValue(name) is JToken evaluatedValue)
+                    {
+                        var declaredType = TryGetTypeFromDefinition(exportedVariableObject);
+                        exports.Add(new ExportedVariableMetadata(name, SystemNamespaceType.ConvertJsonToBicepType(evaluatedValue), GetDescription(exportedVariableObject), declaredType));
+                    }
+                }
+            }
+
+            var exportsBuilder = ImmutableSortedDictionary.CreateBuilder<string, ExportMetadata>();
+
+            foreach (var exportsByName in exports.ToLookup(e => e.Name))
+            {
+                // Each export needs a unique name, so if two or more exports of different types share a name, they are no longer uniquely identifiable by name
+                // This will never come up for templates authored in Bicep, but it may for templates authored directly in ARM JSON.
+                // A necessary consequence of skipping exports that share a name is that adding a second export of a given name (e.g., if there is already a
+                // type export named 'foo' and the template author exports a variable named 'foo') is a **backwards incompatible change**.
+                if (exportsByName.Count() == 1)
+                {
+                    exportsBuilder.Add(exportsByName.Key, exportsByName.Single());
+                }
+                else
+                {
+                    exportsBuilder.Add(exportsByName.Key, new DuplicatedExportMetadata(exportsByName.Key, [.. exportsByName.Select(e => e.Kind.ToString())]));
+                }
+            }
+
+            return exportsBuilder.ToImmutable();
+        }
+
+        private static ITypeReference AsTypeType(ITypeReference @ref) => @ref switch
+        {
+            DeferredTypeReference => new DeferredTypeReference(() => AsTypeType(@ref.Type)),
+            _ => AsTypeType(@ref.Type),
+        };
+
+        private static TypeSymbol AsTypeType(TypeSymbol type) => type switch
+        {
+            TypeType or ErrorType => type,
+            _ => new TypeType(type),
+        };
+
         private static bool TryCreateUnboundResourceTypeParameter(JToken? metadataToken, [NotNullWhen(true)] out TypeSymbol? type)
         {
             if (metadataToken is JObject metadata &&
@@ -410,7 +337,7 @@ namespace Bicep.Core.Semantics
             {
                 if (ResourceTypeReference.TryParse(resourceTypeRaw) is { } parsed)
                 {
-                    type = new UnboundResourceType(parsed);
+                    type = new UnresolvedResourceType(parsed);
                     return true;
                 }
 
@@ -432,5 +359,42 @@ namespace Bicep.Core.Semantics
             }
             return null;
         }
+
+        /// <summary>
+        /// Determines if the provided type definition should be allowlisted for use in <c>import</c> statements
+        /// </summary>
+        /// <remarks>
+        /// This method does not use <see cref="GetMetadata"/> because <see cref="GetMetadata"/> merges metadata across $refs.
+        /// We only want to look at the metadata explicitly applied to this type.
+        /// E.g., in the following, `public` should match the predicate and `private` should not:
+        /// <code>
+        ///   {
+        ///      "public": {"type": "string", "metadata": {"__bicep_export!": true}},
+        ///      "private": {"$ref": "#/definitions/public"}
+        ///   }
+        /// </code>
+        /// The above would be compiled from the following Bicep:
+        /// <code>
+        ///   @export()
+        ///   type public = string
+        ///   type private = public
+        /// </code>
+        /// </remarks>
+        private static bool IsExported(TemplateTypeDefinition type) => type.Metadata?.Value is JObject metadataDict && MetadataRequestsExport(metadataDict);
+
+        private static bool IsExported(TemplateFunction function) => function.Metadata?.Value is JObject metadataDict && MetadataRequestsExport(metadataDict);
+
+        private static bool MetadataRequestsExport(JObject metadataDict) =>
+            metadataDict.TryGetValue(LanguageConstants.MetadataExportedPropertyName, out var exportMarkerToken) &&
+            exportMarkerToken is JValue { Value: true };
+
+        private static string? GetDescription(JObject jObject)
+            => jObject.TryGetValue(LanguageConstants.MetadataDescriptionPropertyName, out var descriptionToken) && descriptionToken is JValue { Value: string description }
+                ? description
+                : null;
+
+        private ITypeReference? TryGetTypeFromDefinition(JObject jObject)
+            => (jObject.TryGetValue(LanguageConstants.TypeKeyword, out var typeToken) &&
+                typeToken.TryFromJToken<TemplateTypeDefinition>() is { } typeDefinition) ? GetType(typeDefinition) : null;
     }
 }

@@ -1,10 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using Bicep.LanguageServer.Configuration;
 using Bicep.LanguageServer.Handlers;
 using Newtonsoft.Json.Linq;
@@ -30,7 +26,7 @@ namespace Bicep.LanguageServer.Deploy
         // However, azure-sdk-for-net expects parameters to be of name and value pairs:
         // https://github.com/Azure/azure-sdk-for-net/blob/1e25b1bfc9b54df35d907aa7b2c10ff07082e845/sdk/resources/Azure.ResourceManager.Resources/src/Generated/Models/ArmDeploymentProperties.cs#L27
         // We'll work around the above issue by first detecting the format of the file.
-        // If it's in the format descibed in the docs, we'll extract the parameters value and use that for actual deployment.
+        // If it's in the format described in the docs, we'll extract the parameters value and use that for actual deployment.
         // If the user chose to create a new parameters file during the deployment flow, we'll follow the format
         // mentioned in the docs as a best practise.
         public static string GetUpdatedParametersFileContents(
@@ -56,9 +52,12 @@ namespace Bicep.LanguageServer.Deploy
                 var updatedParametersFileWithoutSecureParams = updatedParametersFile;
 
                 var jObject = GetParametersObjectValue(updatedParametersFile, out bool isArmStyleTemplate);
+                var hasUpdatedDeploymentParameter = false;
 
                 foreach (var updatedDeploymentParameter in updatedDeploymentParameters.Reverse())
                 {
+                    hasUpdatedDeploymentParameter = true;
+
                     var name = updatedDeploymentParameter.name;
 
                     // Check to make sure parameters mentioned in parameters file are not overwritten
@@ -86,7 +85,7 @@ namespace Bicep.LanguageServer.Deploy
                             updatedDeploymentParameter.value,
                             JObject.Parse("{}"));
 
-                        (int line, int column, string text)? insertion = jsonEditor.InsertIfNotExist(propertyPaths.ToArray(), valueObject);
+                        (int line, int column, string text)? insertion = jsonEditor.InsertIfNotExist([.. propertyPaths], valueObject);
 
                         if (insertion.HasValue)
                         {
@@ -102,7 +101,7 @@ namespace Bicep.LanguageServer.Deploy
                     }
                 }
 
-                if (updatedDeploymentParameters.Any())
+                if (hasUpdatedDeploymentParameter)
                 {
                     if (updateOrCreateParametersFile == ParametersFileUpdateOption.Update)
                     {

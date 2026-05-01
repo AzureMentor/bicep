@@ -1,6 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Bicep.Core.TypeSystem;
 
@@ -18,8 +17,9 @@ namespace Bicep.Core.Semantics
             IEnumerable<FixedFunctionParameter> fixedArgumentTypes,
             VariableFunctionParameter? variableArgumentType,
             EvaluatorDelegate? evaluator,
+            ArmExpressionEvaluatorDelegate? armExpressionEvaluator,
             FunctionFlags flags = FunctionFlags.Default)
-            : base(name, genericDescription, description, resultBuilder, returnType, fixedArgumentTypes, variableArgumentType, evaluator, flags)
+            : base(name, genericDescription, description, resultBuilder, returnType, fixedArgumentTypes, variableArgumentType, evaluator, armExpressionEvaluator, flags)
         {
             WildcardRegex = wildcardRegex;
         }

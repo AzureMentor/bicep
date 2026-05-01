@@ -1,14 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Diagnostics.CodeAnalysis;
 using Bicep.Core.Parsing;
 using Bicep.Core.Syntax;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Bicep.LanguageServer.Completions.SyntaxPatterns
 {

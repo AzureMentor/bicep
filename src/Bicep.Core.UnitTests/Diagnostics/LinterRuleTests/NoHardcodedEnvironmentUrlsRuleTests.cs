@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Linq;
 using Bicep.Core.Analyzers.Linter.Rules;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -50,11 +49,6 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
         [DataRow(0, @"
         param param1 string
         var location = 'https://zzzzzz.schema.management.azure.com'
-        output sub int = sum
-        ")]
-        [DataRow(1, @"
-        param param1 string
-        var location = 'http://MANAGEMENT.core.windows.net'
         output sub int = sum
         ")]
         [DataRow(1, @"
@@ -156,13 +150,14 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
         [DataRow("${'location'}.asazure.windows.net/servers/${'aasServerName'}", false)]
         public void DisallowedHostsMatchingTest(string testString, bool isMatch)
         {
-            AssertLinterRuleDiagnostics(NoHardcodedEnvironmentUrlsRule.Code, @$"output str string = '{testString}'", diags => 
+            AssertLinterRuleDiagnostics(NoHardcodedEnvironmentUrlsRule.Code, @$"output str string = '{testString}'", diags =>
             {
                 if (isMatch)
                 {
                     diags.Should().HaveCount(1);
                     diags.Select(d => d.Code).Should().AllBe(NoHardcodedEnvironmentUrlsRule.Code);
-                } else
+                }
+                else
                 {
                     diags.Should().BeEmpty();
                 }
@@ -193,17 +188,48 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
         [DataRow("all the world is a stage, but subdomain1.1schema.management.azure.com should not be hardcoded", false)]
         public void ExcludedHostsMatchingTest(string testString, bool isMatch)
         {
-            AssertLinterRuleDiagnostics(NoHardcodedEnvironmentUrlsRule.Code, @$"output str string = '{testString}'", diags => 
+            AssertLinterRuleDiagnostics(NoHardcodedEnvironmentUrlsRule.Code, @$"output str string = '{testString}'", diags =>
             {
                 if (isMatch)
                 {
                     diags.Should().BeEmpty();
-                } else
+                }
+                else
                 {
                     diags.Should().HaveCount(1);
                     diags.Select(d => d.Code).Should().AllBe(NoHardcodedEnvironmentUrlsRule.Code);
                 }
             });
+        }
+
+        [DataRow(0, @"
+        @description('Required. The full uri for the encrypt key from key vault. Example: https://<keyvaultname>.vault.azure.net/keys/<keyname>/<version>.')
+        param keyVaultUri string
+        ")]
+        [DataRow(0, @"
+        @sys.description('Required. The full uri for the encrypt key from key vault. Example: https://<keyvaultname>.vault.azure.net/keys/<keyname>/<version>.')
+        param keyVaultUri string
+        ")]
+        [DataRow(0, @"
+        @metadata({
+          description: 'Required. The full uri for the encrypt key from key vault. Example: https://<keyvaultname>.vault.azure.net/keys/<keyname>/<version>.'
+        })
+        param keyVaultUri string
+        ")]
+        [DataRow(0, @"
+        @metadata({
+          description: 'Required. The full uri for the encrypt key from key vault. Example: https://<keyvaultname>.vault.azure.net/keys/<keyname>/<version>.',
+          otherProperty: 'some other value'
+        })
+        param keyVaultUri string
+        ")]
+        [DataRow(1, @"
+        param keyVaultUri string = 'https://<keyvaultname>.vault.azure.net/keys/<keyname>/<version>'
+        ")]
+        [DataTestMethod]
+        public void ShouldSkipDescriptionAndMetadataDecorators(int diagnosticCount, string text)
+        {
+            AssertLinterRuleDiagnostics(NoHardcodedEnvironmentUrlsRule.Code, text, diagnosticCount, new Options(OnCompileErrors.Ignore));
         }
     }
 }

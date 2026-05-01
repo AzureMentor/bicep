@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using Bicep.Core.FileSystem;
@@ -20,18 +18,18 @@ namespace Bicep.Core.UnitTests.Assertions
         public static bool ShouldSetBaseline(TestContext testContext) =>
             testContext.Properties.Contains(SetBaseLineSettingName) && string.Equals(testContext.Properties[SetBaseLineSettingName] as string, bool.TrueString, StringComparison.OrdinalIgnoreCase);
 
-        public static void SetBaseline(string actualLocation, string expectedLocation)
+        public static void SetBaseline(string actualPath, string expectedPath)
         {
-            actualLocation = GetAbsolutePathRelativeToRepoRoot(actualLocation);
-            expectedLocation = GetAbsolutePathRelativeToRepoRoot(expectedLocation);
+            actualPath = GetAbsolutePathRelativeToRepoRoot(actualPath);
+            expectedPath = GetAbsolutePathRelativeToRepoRoot(expectedPath);
 
-            if (Path.GetDirectoryName(expectedLocation) is { } parentDir &&
+            if (Path.GetDirectoryName(expectedPath) is { } parentDir &&
                 !Directory.Exists(parentDir))
             {
                 Directory.CreateDirectory(parentDir);
             }
 
-            File.Copy(actualLocation, expectedLocation, overwrite: true);
+            File.Copy(actualPath, expectedPath, overwrite: true);
         }
 
         public static string GetAbsolutePathRelativeToRepoRoot(string path)
@@ -41,12 +39,16 @@ namespace Bicep.Core.UnitTests.Assertions
         {
             var currentDir = new DirectoryInfo(Environment.CurrentDirectory);
 
-            while (currentDir.Parent is {} parentDir)
+            while (currentDir.Parent is { } parentDir)
             {
                 // search upwards for the .git directory. This should only exist at the repository root.
                 if (Directory.Exists(Path.Join(currentDir.FullName, ".git")))
                 {
-                    return currentDir.FullName;
+                    // If TF_BUILD is not null, the code is running in the official build pipeline in ADO,
+                    // and bicep is a Git submodule in the BicepMirror repo.
+                    return Environment.GetEnvironmentVariable("TF_BUILD") is not null
+                        ? Path.Join(currentDir.FullName, "bicep")
+                        : currentDir.FullName;
                 }
 
                 currentDir = parentDir;
@@ -85,7 +87,7 @@ Overwrite the single baseline:
     xcopy /yq {1} {2}
 
 Overwrite all baselines:
-    dotnet test --filter ""TestCategory=Baseline"" -- 'TestRunParameters.Parameter(name=\""SetBaseLine\"", value=\""true\"")'
+    dotnet test -- --filter ""TestCategory=Baseline"" --test-parameter SetBaseLine=true
 
 See https://github.com/Azure/bicep/blob/main/CONTRIBUTING.md#updating-test-baselines for more information on how to fix this error.
 ");
@@ -97,7 +99,7 @@ Overwrite the single baseline:
     cp {1} {2}
 
 Overwrite all baselines:
-    dotnet test --filter ""TestCategory=Baseline"" -- 'TestRunParameters.Parameter(name=""SetBaseLine"", value=""true"")'
+    dotnet test -- --filter ""TestCategory=Baseline"" --test-parameter SetBaseLine=true
 
 See https://github.com/Azure/bicep/blob/main/CONTRIBUTING.md#updating-test-baselines for more information on how to fix this error.
 ");

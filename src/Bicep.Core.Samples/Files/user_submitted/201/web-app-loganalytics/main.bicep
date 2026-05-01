@@ -1,6 +1,7 @@
 param skuName string = 'S1'
 param skuCapacity int = 1
 param location string = resourceGroup().location
+@minLength(1)
 param appName string = uniqueString(resourceGroup().id)
 
 var appServicePlanName = toLower('asp-${appName}')
@@ -67,16 +68,11 @@ resource appServiceAppSettings 'Microsoft.Web/sites/config@2020-06-01' = {
   properties: {
     APPINSIGHTS_INSTRUMENTATIONKEY: appInsights.properties.InstrumentationKey
   }
-  dependsOn: [
-    appInsights
-    appServiceSiteExtension
-  ]
+  dependsOn: [appInsights, appServiceSiteExtension]
 }
 resource appServiceSiteExtension 'Microsoft.Web/sites/siteextensions@2020-06-01' = {
   name: '${appService.name}/Microsoft.ApplicationInsights.AzureWebsites'
-  dependsOn: [
-    appInsights
-  ]
+  dependsOn: [appInsights]
 }
 resource appInsights 'microsoft.insights/components@2020-02-02-preview' = {
   name: appInsightName

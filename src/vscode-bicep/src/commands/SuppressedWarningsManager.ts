@@ -5,15 +5,14 @@ import { ConfigurationTarget, WorkspaceConfiguration } from "vscode";
 import { getBicepConfiguration } from "../language/getBicepConfiguration";
 
 export class SuppressedWarningsManager {
-  public static readonly suppressedWarningsConfigurationKey =
-    "suppressedWarnings";
+  public static readonly suppressedWarningsConfigurationKey = "suppressedWarnings";
 
   public static readonly keys = {
     decompileOnPasteWarning: "Decompile on paste",
   };
 
   public constructor(
-    private readonly provideBicepConfiguration: () => WorkspaceConfiguration = getBicepConfiguration // override for unit testing
+    private readonly provideBicepConfiguration: () => WorkspaceConfiguration = getBicepConfiguration, // override for unit testing
   ) {
     // noop
   }
@@ -32,7 +31,7 @@ export class SuppressedWarningsManager {
     await this.provideBicepConfiguration().update(
       SuppressedWarningsManager.suppressedWarningsConfigurationKey,
       suppressedWarnings,
-      ConfigurationTarget.Global
+      ConfigurationTarget.Global,
     );
   }
 
@@ -43,13 +42,13 @@ export class SuppressedWarningsManager {
     await this.provideBicepConfiguration().update(
       SuppressedWarningsManager.suppressedWarningsConfigurationKey,
       suppressedWarnings,
-      ConfigurationTarget.Global
+      ConfigurationTarget.Global,
     );
   }
 
   private getSuppressedWarnings(): string[] {
     const currentSuppressedKeys = this.provideBicepConfiguration().get(
-      SuppressedWarningsManager.suppressedWarningsConfigurationKey
+      SuppressedWarningsManager.suppressedWarningsConfigurationKey,
     );
 
     return Array.isArray(currentSuppressedKeys) ? currentSuppressedKeys : [];

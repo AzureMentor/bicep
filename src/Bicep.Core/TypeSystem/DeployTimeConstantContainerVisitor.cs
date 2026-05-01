@@ -1,9 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
+using Bicep.Core.TypeSystem.Types;
 
 namespace Bicep.Core.TypeSystem
 {
@@ -28,6 +28,13 @@ namespace Bicep.Core.TypeSystem
             visitor.Visit(semanticModel.Root.Syntax);
 
             return visitor.deployTimeConstantContainers;
+        }
+
+        public override void VisitFunctionDeclarationSyntax(FunctionDeclarationSyntax syntax)
+        {
+            this.deployTimeConstantContainers.Add(syntax);
+
+            base.VisitFunctionDeclarationSyntax(syntax);
         }
 
         public override void VisitResourceDeclarationSyntax(ResourceDeclarationSyntax syntax)
@@ -80,24 +87,50 @@ namespace Bicep.Core.TypeSystem
 
         public override void VisitFunctionCallSyntax(FunctionCallSyntax syntax)
         {
-            this.CollectIfFunctionRequiresInlining(syntax);
-
-            base.VisitFunctionCallSyntax(syntax);
+            VisitFunctionCallSyntaxBase(syntax);
         }
 
         public override void VisitInstanceFunctionCallSyntax(InstanceFunctionCallSyntax syntax)
         {
-            this.CollectIfFunctionRequiresInlining(syntax);
+            this.Visit(syntax.BaseExpression);
 
-            base.VisitInstanceFunctionCallSyntax(syntax);
+            VisitFunctionCallSyntaxBase(syntax);
         }
 
-        private void CollectIfFunctionRequiresInlining(FunctionCallSyntaxBase syntax)
+        public override void VisitExtensionWithClauseSyntax(ExtensionWithClauseSyntax syntax)
+        {
+            if (this.semanticModel.Binder.GetParent(syntax) is ExtensionDeclarationSyntax)
+            {
+                deployTimeConstantContainers.Add(syntax);
+            }
+
+            base.VisitExtensionWithClauseSyntax(syntax);
+        }
+
+        private void VisitFunctionCallSyntaxBase(FunctionCallSyntaxBase syntax)
         {
             if (this.semanticModel.GetSymbolInfo(syntax) is FunctionSymbol functionSymbol &&
                 functionSymbol.FunctionFlags.HasFlag(FunctionFlags.RequiresInlining))
             {
                 this.deployTimeConstantContainers.Add(syntax);
+                return;
+            }
+
+            var overload = this.semanticModel.TypeManager.GetMatchedFunctionOverload(syntax);
+
+            for (int i = 0; i < syntax.Arguments.Length; i++)
+            {
+                var parameterFlags = i < overload?.FixedParameters.Length
+                    ? overload.FixedParameters[i].Flags
+                    : overload?.VariableParameter?.Flags;
+                if (parameterFlags?.HasFlag(FunctionParameterFlags.DeployTimeConstant) is true)
+                {
+                    this.deployTimeConstantContainers.Add(syntax.Arguments[i]);
+                }
+                else
+                {
+                    this.Visit(syntax.Arguments[i]);
+                }
             }
         }
     }

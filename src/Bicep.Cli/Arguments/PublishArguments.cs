@@ -1,10 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
+using Bicep.Cli.Extensions;
 
 namespace Bicep.Cli.Arguments
 {
-    public class PublishArguments : ArgumentsBase
+    public class PublishArguments : ArgumentsBase, IInputArguments
     {
         public PublishArguments(string[] args) : base(Constants.Command.Publish)
         {
@@ -32,25 +32,29 @@ namespace Bicep.Cli.Arguments
                         i++;
                         break;
 
-                    case "--documentationuri":
+                    case "--documentation-uri":
                         if (isLast)
                         {
-                            throw new CommandLineException("The --documentationUri parameter expects an argument.");
+                            throw new CommandLineException("The --documentation-uri parameter expects an argument.");
                         }
 
                         if (this.DocumentationUri is not null)
                         {
-                            throw new CommandLineException("The --documentationUri parameter cannot be specified more than once.");
+                            throw new CommandLineException("The --documentation-uri parameter cannot be specified more than once.");
                         }
 
                         DocumentationUri = args[i + 1];
 
                         if (!Uri.IsWellFormedUriString(DocumentationUri, UriKind.Absolute))
                         {
-                            throw new CommandLineException("The --documentationUri should be a well formed uri string.");
+                            throw new CommandLineException("The --documentation-uri should be a well formed uri string.");
                         }
 
                         i++;
+                        break;
+
+                    case "--with-source":
+                        WithSource = true;
                         break;
 
                     case "--force":
@@ -93,5 +97,7 @@ namespace Bicep.Cli.Arguments
         public bool NoRestore { get; }
 
         public bool Force { get; }
+
+        public bool WithSource { get; }
     }
 }

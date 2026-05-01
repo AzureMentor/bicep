@@ -1,7 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-
 namespace Bicep.Core.Syntax.Rewriters
 {
     /// <summary>
@@ -17,6 +15,15 @@ namespace Bicep.Core.Syntax.Rewriters
             var rewriter = new CallbackRewriter(callback);
 
             return rewriter.Rewrite(syntax);
+        }
+
+        public static TOutSyntax? Rewrite<TSyntax, TOutSyntax>(TSyntax syntax, Func<SyntaxBase, SyntaxBase> callback)
+            where TSyntax : SyntaxBase
+            where TOutSyntax : SyntaxBase
+        {
+            var rewriter = new CallbackRewriter(callback);
+
+            return rewriter.Rewrite<TSyntax, TOutSyntax>(syntax);
         }
 
         /// <summary>

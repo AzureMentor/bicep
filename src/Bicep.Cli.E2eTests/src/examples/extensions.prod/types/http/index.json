@@ -1,0 +1,14 @@
+{
+    "resources": {
+      "request@v1": {
+        "$ref": "v1/types.json#/7"
+      }
+    },
+    "resourceFunctions": {},
+    "namespaceFunctions": [],
+    "settings": {
+      "name": "http",
+      "version": "1.2.3",
+      "isSingleton": false
+    }
+  }

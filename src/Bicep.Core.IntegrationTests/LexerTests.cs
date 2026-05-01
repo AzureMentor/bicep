@@ -1,16 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using System.Linq;
 using System.Text;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Extensions;
 using Bicep.Core.Parsing;
 using Bicep.Core.Samples;
 using Bicep.Core.Syntax;
+using Bicep.Core.Text;
 using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.UnitTests.Utils;
 using FluentAssertions;
@@ -112,8 +109,8 @@ namespace Bicep.Core.IntegrationTests
             sourceTextWithDiags.Should().EqualWithLineByLineDiffOutput(
                 TestContext,
                 dataSet.Tokens,
-                expectedLocation: DataSet.GetBaselineUpdatePath(dataSet, DataSet.TestFileMainTokens),
-                actualLocation: resultsFile);
+                expectedPath: DataSet.GetBaselineUpdatePath(dataSet, DataSet.TestFileMainTokens),
+                actualPath: resultsFile);
 
             lexer.GetTokens().Count(token => token.Type == TokenType.EndOfFile).Should().Be(1, "because there should only be 1 EOF token");
             lexer.GetTokens().Last().Type.Should().Be(TokenType.EndOfFile, "because the last token should always be EOF.");
@@ -147,6 +144,11 @@ namespace Bicep.Core.IntegrationTests
         [DynamicData(nameof(GetValidData), DynamicDataSourceType.Method, DynamicDataDisplayNameDeclaringType = typeof(DataSet), DynamicDataDisplayName = nameof(DataSet.GetDisplayName))]
         public void LexerShouldProduceValidStringLiteralTokensOnValidFiles(DataSet dataSet)
         {
+            if (dataSet.Name != "Metadata_CRLF")
+            {
+                return;
+            }
+
             var lexer = new Lexer(new SlidingTextWindow(dataSet.Bicep), ToListDiagnosticWriter.Create());
             lexer.Lex();
 

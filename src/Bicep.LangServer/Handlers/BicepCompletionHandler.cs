@@ -1,16 +1,12 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Bicep.Core.Features;
-using Bicep.Core.Workspaces;
 using Bicep.LanguageServer.CompilationManager;
 using Bicep.LanguageServer.Completions;
 using Bicep.LanguageServer.Utils;
 using Microsoft.Extensions.Logging;
+using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
@@ -22,24 +18,22 @@ namespace Bicep.LanguageServer.Handlers
         private readonly ILogger<BicepCompletionHandler> logger;
         private readonly ICompilationManager compilationManager;
         private readonly ICompletionProvider completionProvider;
-        private readonly IFeatureProviderFactory featureProviderFactory;
+        private readonly DocumentSelectorFactory documentSelectorFactory;
 
-        public BicepCompletionHandler(ILogger<BicepCompletionHandler> logger, ICompilationManager compilationManager, ICompletionProvider completionProvider, IFeatureProviderFactory featureProviderFactory)
+        public BicepCompletionHandler(ILogger<BicepCompletionHandler> logger, ICompilationManager compilationManager, ICompletionProvider completionProvider, DocumentSelectorFactory documentSelectorFactory)
         {
             this.logger = logger;
             this.compilationManager = compilationManager;
             this.completionProvider = completionProvider;
-            this.featureProviderFactory = featureProviderFactory;
+            this.documentSelectorFactory = documentSelectorFactory;
         }
 
         public override async Task<CompletionList> Handle(CompletionParams request, CancellationToken cancellationToken)
         {
             var completions = Enumerable.Empty<CompletionItem>();
 
-            var featureProvider = featureProviderFactory.GetFeatureProvider(request.TextDocument.Uri.ToUri());
             var compilationContext = this.compilationManager.GetCompilation(request.TextDocument.Uri);
-            if (compilationContext is null ||
-                (compilationContext.SourceFileKind == BicepSourceFileKind.ParamsFile && !featureProvider.ParamsFilesEnabled))
+            if (compilationContext is null)
             {
                 // no compilation context or this is a param file and params are disabled
                 return new CompletionList();
@@ -47,7 +41,7 @@ namespace Bicep.LanguageServer.Handlers
 
             int offset = PositionHelper.GetOffset(compilationContext.LineStarts, request.Position);
 
-            var completionContext = BicepCompletionContext.Create(featureProvider, compilationContext.Compilation, offset);
+            var completionContext = BicepCompletionContext.Create(compilationContext.Compilation, offset);
 
             try
             {
@@ -63,14 +57,14 @@ namespace Bicep.LanguageServer.Handlers
 
         public override Task<CompletionItem> Handle(CompletionItem request, CancellationToken cancellationToken)
         {
-            return Task.FromResult(request);
+            return this.completionProvider.Resolve(request, cancellationToken);
         }
 
         protected override CompletionRegistrationOptions CreateRegistrationOptions(CompletionCapability capability, ClientCapabilities clientCapabilities) => new()
         {
-            DocumentSelector = DocumentSelectorFactory.CreateForBicepAndParams(),
+            DocumentSelector = documentSelectorFactory.CreateForBicepAndParams(),
             AllCommitCharacters = new Container<string>(),
-            ResolveProvider = false,
+            ResolveProvider = true,
             TriggerCharacters = new Container<string>(":", " ", ".", "/", "'", "@", "{", "#", "?")
         };
     }

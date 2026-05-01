@@ -1,4 +1,4 @@
-// coverted from: https://github.com/Azure/azure-quickstart-templates/tree/master/201-vm-push-certificate-windows
+// converted from: https://github.com/Azure/azure-quickstart-templates/tree/master/201-vm-push-certificate-windows
 param location string = resourceGroup().location
 
 param vmName string = 'WindowsVM'
@@ -55,9 +55,7 @@ resource vnet 'microsoft.network/virtualNetworks@2020-06-01' = {
   location: location
   properties: {
     addressSpace: {
-      addressPrefixes: [
-        '10.0.0.0/16'
-      ]
+      addressPrefixes: ['10.0.0.0/16']
     }
     subnets: [
       {

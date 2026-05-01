@@ -1,7 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Linq;
 using System.Text;
 using Bicep.Core.Syntax;
 using Bicep.Core.UnitTests.Utils;
@@ -81,6 +79,18 @@ namespace Bicep.Core.UnitTests.Parsing
         }
 
         [DataTestMethod]
+        [DataRow("$'''${abc}def'''", "$'''${abc}def'''")]
+        [DataRow("$'''abc${def}'''", "$'''abc${def}'''")]
+        [DataRow("$'''${abc}def${ghi}'''", "$'''${abc}def${ghi}'''")]
+        [DataRow("$'''abc${def}ghi${klm}nop'''", "$'''abc${def}ghi${klm}nop'''")]
+        [DataRow("$'''abc${1234}def'''", "$'''abc${1234}def'''")]
+        [DataRow("$'''abc${true}def'''", "$'''abc${true}def'''")]
+        public void Multiline_string_interpolation_should_parse_correctly(string text, string expected)
+        {
+            RunExpressionTest(text, expected, typeof(StringSyntax));
+        }
+
+        [DataTestMethod]
         // empty
         [DataRow("''''''", "")]
         [DataRow("'''\r\n'''", "")]
@@ -122,6 +132,22 @@ namespace Bicep.Core.UnitTests.Parsing
         }
 
         [DataTestMethod]
+        [DataRow("$'''${>}def'''")]
+        [DataRow("$'''${concat)}def'''")]
+        [DataRow("$'''${'nest\\ed'}def'''")]
+        [DataRow("$'''${a b c}def'''")]
+        [DataRow("$'''abc${}'''")]
+        [DataRow("$'''def${>}'''")]
+        [DataRow("$'''abc${>}def${=}'''")]
+        [DataRow("$'''${>}def${=}abc'''")]
+        [DataRow("$'''${>}def${=}'''")]
+        public void Multiline_interpolation_with_bad_expressions_should_parse_successfully(string text)
+        {
+            var expression = ParseAndVerifyType<StringSyntax>(text);
+            expression.Expressions.Should().Contain(x => x is SkippedTriviaSyntax || x is BinaryOperationSyntax);
+        }
+
+        [DataTestMethod]
         [DataRow("'${!}def'")]
         [DataRow("'${ -}def'")]
         [DataRow("'${b+}def'")]
@@ -131,6 +157,21 @@ namespace Bicep.Core.UnitTests.Parsing
         [DataRow("'${true ? : }def'")]
         [DataRow("'${true ? : null}def'")]
         public void Interpolation_with_incomplete_expressions_should_parse_successfully(string text)
+        {
+            var expression = ParseAndVerifyType<StringSyntax>(text);
+            expression.Expressions.Should().Contain(x => x is UnaryOperationSyntax || x is BinaryOperationSyntax || x is TernaryOperationSyntax);
+        }
+
+        [DataTestMethod]
+        [DataRow("$'''${!}def'''")]
+        [DataRow("$'''${ -}def'''")]
+        [DataRow("$'''${b+}def'''")]
+        [DataRow("$'''${b + (d /}def'''")]
+        [DataRow("$'''${true ? }def'''")]
+        [DataRow("$'''${true ? false }def'''")]
+        [DataRow("$'''${true ? : }def'''")]
+        [DataRow("$'''${true ? : null}def'''")]
+        public void Multiline_interpolation_with_incomplete_expressions_should_parse_successfully(string text)
         {
             var expression = ParseAndVerifyType<StringSyntax>(text);
             expression.Expressions.Should().Contain(x => x is UnaryOperationSyntax || x is BinaryOperationSyntax || x is TernaryOperationSyntax);
@@ -378,30 +419,29 @@ type foo = {
     unionProp: 'several'|'string'|'literals'
 }";
 
-            var parsed = ParserHelper.Parse(typeDeclaration);
-            parsed.Should().BeOfType<ProgramSyntax>();
-            (parsed as ProgramSyntax).Declarations.Should().HaveCount(1);
-            (parsed as ProgramSyntax).Declarations.Single().Should().BeOfType<TypeDeclarationSyntax>();
-            var declaration = (TypeDeclarationSyntax) (parsed as ProgramSyntax).Declarations.Single();
+            var parsed = ParserHelper.Parse(typeDeclaration).Should().BeOfType<ProgramSyntax>().Subject;
+            parsed.Declarations.Should().HaveCount(1);
+            parsed.Declarations.Single().Should().BeOfType<TypeDeclarationSyntax>();
+            var declaration = (TypeDeclarationSyntax)parsed.Declarations.Single();
             declaration.Decorators.Should().HaveCount(2);
 
             declaration.Value.Should().BeOfType<ObjectTypeSyntax>();
-            var declaredObject = (ObjectTypeSyntax) declaration.Value;
+            var declaredObject = (ObjectTypeSyntax)declaration.Value;
             declaredObject.Properties.Should().HaveCount(3);
             declaredObject.Properties.First().Decorators.Should().HaveCount(2);
-            declaredObject.Properties.First().Value.Should().BeOfType<VariableAccessSyntax>();
+            declaredObject.Properties.First().Value.Should().BeOfType<TypeVariableAccessSyntax>();
             declaredObject.Properties.Skip(1).First().Value.Should().BeOfType<ObjectTypeSyntax>();
 
-            var objectProp = (ObjectTypeSyntax) declaredObject.Properties.Skip(1).First().Value;
+            var objectProp = (ObjectTypeSyntax)declaredObject.Properties.Skip(1).First().Value;
             objectProp.Properties.Should().HaveCount(2);
             objectProp.Properties.Last().Value.Should().BeOfType<ArrayTypeSyntax>();
 
-            var arrayProp = (ArrayTypeSyntax) objectProp.Properties.Last().Value;
+            var arrayProp = (ArrayTypeSyntax)objectProp.Properties.Last().Value;
             arrayProp.Item.Value.Should().BeOfType<ArrayTypeSyntax>();
-            var intermediateArray = (ArrayTypeSyntax) arrayProp.Item.Value;
+            var intermediateArray = (ArrayTypeSyntax)arrayProp.Item.Value;
             intermediateArray.Item.Value.Should().BeOfType<ArrayTypeSyntax>();
-            var innerArray = (ArrayTypeSyntax) intermediateArray.Item.Value;
-            innerArray.Item.Value.Should().BeOfType<VariableAccessSyntax>();
+            var innerArray = (ArrayTypeSyntax)intermediateArray.Item.Value;
+            innerArray.Item.Value.Should().BeOfType<TypeVariableAccessSyntax>();
         }
 
         [TestMethod]
@@ -420,13 +460,13 @@ type aTuple = [
             var parsed = ParserHelper.Parse(typeDeclaration);
             parsed.Declarations.Should().HaveCount(1);
             parsed.Declarations.Single().Should().BeOfType<TypeDeclarationSyntax>();
-            var declaration = (TypeDeclarationSyntax) parsed.Declarations.Single();
+            var declaration = (TypeDeclarationSyntax)parsed.Declarations.Single();
 
             declaration.Value.Should().BeOfType<TupleTypeSyntax>();
-            var declaredTuple = (TupleTypeSyntax) declaration.Value;
+            var declaredTuple = (TupleTypeSyntax)declaration.Value;
             declaredTuple.Items.Should().HaveCount(2);
             declaredTuple.Items.First().Decorators.Should().HaveCount(2);
-            declaredTuple.Items.First().Value.Should().BeOfType<VariableAccessSyntax>();
+            declaredTuple.Items.First().Value.Should().BeOfType<TypeVariableAccessSyntax>();
             declaredTuple.Items.Last().Decorators.Should().HaveCount(1);
             declaredTuple.Items.Last().Value.Should().BeOfType<UnionTypeSyntax>();
         }
@@ -443,7 +483,7 @@ type multilineUnion = 'a'
             var parsed = ParserHelper.Parse(typeDeclaration);
             parsed.Declarations.Should().HaveCount(1);
             parsed.Declarations.Single().Should().BeOfType<TypeDeclarationSyntax>();
-            var declaration = (TypeDeclarationSyntax) parsed.Declarations.Single();
+            var declaration = (TypeDeclarationSyntax)parsed.Declarations.Single();
 
             declaration.Value.Should().BeOfType<UnionTypeSyntax>();
 
@@ -453,8 +493,9 @@ type multilineUnion = 'a'
 
             for (int i = 0; i < expectedMemberValues.Length; i++)
             {
-                actualMembers[i].Value.Should().BeOfType<StringSyntax>();
-                actualMembers[i].Value.As<StringSyntax>().TryGetLiteralValue().Should().Be(expectedMemberValues[i]);
+                var stringMember = actualMembers[i].Value.Should().BeOfType<StringTypeLiteralSyntax>().Subject;
+                stringMember.SegmentValues.Should().HaveCount(1);
+                stringMember.SegmentValues[0].Should().Be(expectedMemberValues[i]);
             }
         }
 
@@ -467,6 +508,107 @@ type multilineUnion = 'a'
         public void NonNullAssertionShouldHaveCorrectPrecedence(string text, string expected, Type expectedRootType)
         {
             RunExpressionTest(text, expected, expectedRootType);
+        }
+
+        [TestMethod]
+        public void Cherry_pick_import_should_parse_successfully()
+        {
+            var importStatement = """
+                import {foo, bar as baz} from 'other.bicep'
+                """;
+
+            var parsed = ParserHelper.Parse(importStatement);
+            var statement = parsed.Declarations.Single().Should().BeOfType<CompileTimeImportDeclarationSyntax>().Subject;
+
+            var imported = statement.ImportExpression.Should().BeOfType<ImportedSymbolsListSyntax>().Subject;
+            imported.ImportedSymbols.Should().SatisfyRespectively(
+                item =>
+                {
+                    item.OriginalSymbolName.As<IdentifierSyntax>().IdentifierName.Should().Be("foo");
+                    item.AsClause.Should().BeNull();
+                    item.Name.IdentifierName.Should().Be("foo");
+                },
+                item =>
+                {
+                    item.OriginalSymbolName.As<IdentifierSyntax>().IdentifierName.Should().Be("bar");
+                    var asClause = item.AsClause.Should().BeOfType<AliasAsClauseSyntax>().Subject;
+                    asClause.Alias.IdentifierName.Should().Be("baz");
+                    item.Name.IdentifierName.Should().Be("baz");
+                });
+
+            var fromClause = statement.FromClause.Should().BeOfType<CompileTimeImportFromClauseSyntax>().Subject;
+            var fromPath = fromClause.Path.Should().BeOfType<StringSyntax>().Subject;
+            fromPath.TryGetLiteralValue().Should().Be("other.bicep");
+        }
+
+        [TestMethod]
+        public void Empty_cherry_pick_import_should_parse_successfully()
+        {
+            var importStatement = """
+                import {} from 'other.bicep'
+                """;
+
+            var parsed = ParserHelper.Parse(importStatement);
+            var statement = parsed.Declarations.Single().Should().BeOfType<CompileTimeImportDeclarationSyntax>().Subject;
+
+            var imported = statement.ImportExpression.Should().BeOfType<ImportedSymbolsListSyntax>().Subject;
+            imported.ImportedSymbols.Should().BeEmpty();
+
+            var fromClause = statement.FromClause.Should().BeOfType<CompileTimeImportFromClauseSyntax>().Subject;
+            var fromPath = fromClause.Path.Should().BeOfType<StringSyntax>().Subject;
+            fromPath.TryGetLiteralValue().Should().Be("other.bicep");
+        }
+
+        [TestMethod]
+        public void Wildcard_import_should_parse_successfully()
+        {
+            var importStatement = """
+                import * as foo from 'other.bicep'
+                """;
+
+            var parsed = ParserHelper.Parse(importStatement);
+            var statement = parsed.Declarations.Single().Should().BeOfType<CompileTimeImportDeclarationSyntax>().Subject;
+
+            var imported = statement.ImportExpression.Should().BeOfType<WildcardImportSyntax>().Subject;
+            imported.Name.IdentifierName.Should().Be("foo");
+
+            var fromClause = statement.FromClause.Should().BeOfType<CompileTimeImportFromClauseSyntax>().Subject;
+            var fromPath = fromClause.Path.Should().BeOfType<StringSyntax>().Subject;
+            fromPath.TryGetLiteralValue().Should().Be("other.bicep");
+        }
+
+        [TestMethod]
+        public void Parameterized_type_should_parse_successfully()
+        {
+            var typeStatement = "type saType = resourceInput<'Microsoft.Storage/storageAccounts@2022-09-01'>";
+
+            var parsed = ParserHelper.Parse(typeStatement);
+            var statement = parsed.Declarations.Single().Should().BeOfType<TypeDeclarationSyntax>().Subject;
+
+            var imported = statement.Value.Should().BeOfType<ParameterizedTypeInstantiationSyntax>().Subject;
+            imported.Name.IdentifierName.Should().Be("resourceInput");
+            imported.Arguments.Should().HaveCount(1);
+
+            var singleParam = imported.Arguments.Single().Expression.Should().BeOfType<StringTypeLiteralSyntax>().Subject;
+            singleParam.SegmentValues.Should().HaveCount(1);
+            singleParam.SegmentValues[0].Should().Be("Microsoft.Storage/storageAccounts@2022-09-01");
+        }
+
+        [TestMethod]
+        public void Qualified_parameterized_type_should_parse_successfully()
+        {
+            var typeStatement = "type saType = sys.resourceInput<'Microsoft.Storage/storageAccounts@2022-09-01'>";
+
+            var parsed = ParserHelper.Parse(typeStatement);
+            var statement = parsed.Declarations.Single().Should().BeOfType<TypeDeclarationSyntax>().Subject;
+
+            var imported = statement.Value.Should().BeOfType<InstanceParameterizedTypeInstantiationSyntax>().Subject;
+            imported.PropertyName.IdentifierName.Should().Be("resourceInput");
+            imported.Arguments.Should().HaveCount(1);
+
+            var singleParam = imported.Arguments.Single().Expression.Should().BeOfType<StringTypeLiteralSyntax>().Subject;
+            singleParam.SegmentValues.Should().HaveCount(1);
+            singleParam.SegmentValues[0].Should().Be("Microsoft.Storage/storageAccounts@2022-09-01");
         }
 
         private static SyntaxBase RunExpressionTest(string text, string expected, Type expectedRootType)

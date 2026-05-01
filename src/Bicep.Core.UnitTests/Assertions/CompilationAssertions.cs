@@ -1,9 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
+
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Semantics;
+using Bicep.Core.UnitTests.Extensions;
 using FluentAssertions;
+using FluentAssertions.Execution;
 using FluentAssertions.Primitives;
 
 namespace Bicep.Core.UnitTests.Assertions
@@ -48,6 +50,24 @@ namespace Bicep.Core.UnitTests.Assertions
         public AndConstraint<CompilationAssertions> NotHaveAnyDiagnostics(string because = "", params object[] becauseArgs)
         {
             Subject.GetEntrypointSemanticModel().GetAllDiagnostics().Should().BeEmpty(because, becauseArgs);
+
+            return new AndConstraint<CompilationAssertions>(this);
+        }
+
+        public AndConstraint<CompilationAssertions> NotHaveAnyDiagnostics_WithAssertionScoping(Func<IDiagnostic, bool>? diagnosticFilter = null, string because = "", params object[] becauseArgs)
+        {
+            var diagnosticsByFile = this.Subject.GetAllDiagnosticsByBicepFile();
+
+            using (new AssertionScope())
+            {
+                foreach (var (file, diagnostics) in diagnosticsByFile)
+                {
+                    using var fileDiagScope = new AssertionScope(file.FileHandle.Uri.ToUriString());
+                    this.Subject.GetSourceFileDiagnostics(file).Where(diagnosticFilter ?? (_ => true)).Should().BeEmpty(because, becauseArgs);
+                }
+
+                this.Subject.HasErrors().Should().BeFalse();
+            }
 
             return new AndConstraint<CompilationAssertions>(this);
         }

@@ -6,7 +6,6 @@ using Bicep.Core.Analyzers.Linter.Rules;
 using Bicep.Core.UnitTests.Assertions;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System.Linq;
 
 namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
 {
@@ -28,9 +27,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             {
                 diags.Should().HaveCount(1, $"expected one fix per testcase");
 
-                diags.First().As<IBicepAnalyerFixableDiagnostic>().Fixes.Should().HaveCount(1);
-                diags.First().As<IBicepAnalyerFixableDiagnostic>().Fixes.First().Replacements.Should().HaveCount(1);
-                diags.First().As<IBicepAnalyerFixableDiagnostic>().Fixes.First().Replacements.First().Text.Should().Be(expectedFix);
+                diags.First().Fixes.Should().HaveCount(1);
+                diags.First().Fixes.First().Replacements.Should().HaveCount(1);
+                diags.First().Fixes.First().Replacements.First().Text.Should().Be(expectedFix);
             });
         }
 

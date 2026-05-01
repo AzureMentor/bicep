@@ -1,8 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Bicep.Core.Navigation;
 using Bicep.Core.Semantics;
 using Bicep.LanguageServer.Providers;
@@ -13,27 +10,21 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace Bicep.LanguageServer.Handlers
 {
-    public class BicepReferencesHandler : ReferencesHandlerBase
+    public class BicepReferencesHandler(ISymbolResolver symbolResolver, DocumentSelectorFactory documentSelectorFactory) : ReferencesHandlerBase
     {
-        private readonly ISymbolResolver symbolResolver;
-
-        public BicepReferencesHandler(ISymbolResolver symbolResolver)
+        public override async Task<LocationContainer?> Handle(ReferenceParams request, CancellationToken cancellationToken)
         {
-            this.symbolResolver = symbolResolver;
-        }
-
-        public override Task<LocationContainer> Handle(ReferenceParams request, CancellationToken cancellationToken)
-        {
-            var result = this.symbolResolver.ResolveSymbol(request.TextDocument.Uri, request.Position);
+            await Task.CompletedTask;
+            var result = symbolResolver.ResolveSymbol(request.TextDocument.Uri, request.Position);
             if (result == null)
             {
-                return Task.FromResult(new LocationContainer());
+                return null;
             }
 
             if (result.Symbol is PropertySymbol)
             {
                 // TODO: Implement for PropertySymbol
-                return Task.FromResult(new LocationContainer());
+                return null;
             }
 
             var references = result.Context.Compilation.GetEntrypointSemanticModel()
@@ -45,12 +36,12 @@ namespace Bicep.LanguageServer.Handlers
                     Range = PositionHelper.GetNameRange(result.Context.LineStarts, referenceSyntax),
                 });
 
-            return Task.FromResult(new LocationContainer(references));
+            return new(references);
         }
 
         protected override ReferenceRegistrationOptions CreateRegistrationOptions(ReferenceCapability capability, ClientCapabilities clientCapabilities) => new()
         {
-            DocumentSelector = DocumentSelectorFactory.CreateForBicepAndParams()
+            DocumentSelector = documentSelectorFactory.CreateForBicepAndParams()
         };
     }
 }

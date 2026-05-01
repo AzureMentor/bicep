@@ -20,3 +20,4 @@ resource keyVaultName_add 'Microsoft.KeyVault/vaults/accessPolicies@2019-09-01' 
     ]
   }
 }
+

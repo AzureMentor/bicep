@@ -1,13 +1,12 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "languageVersion": "1.10-experimental",
+  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
     "_generator": {
       "name": "bicep",
       "version": "dev",
-      "templateHash": "10319507846578421190"
+      "templateHash": "17570527802199842537"
     }
   },
   "parameters": {
@@ -89,7 +88,7 @@
         "count": "[length(parameters('sqlLogicalServers'))]"
       },
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2022-09-01",
+      "apiVersion": "2025-04-01",
       "name": "[format('sqlLogicalServer-{0}', copyIndex())]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -114,14 +113,13 @@
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "languageVersion": "1.10-experimental",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
-            "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
             "_generator": {
               "name": "bicep",
               "version": "dev",
-              "templateHash": "17904364761423502628"
+              "templateHash": "6127464773493944112"
             }
           },
           "parameters": {
@@ -263,11 +261,12 @@
                   "emails": "[parameters('sqlLogicalServer').azureDefender.vulnerabilityAssessments.emails]"
                 },
                 "storageContainerPath": "[if(not(empty(parameters('sqlLogicalServer').azureDefender.vulnerabilityAssessments.storageAccount.name)), format('{0}{1}', reference('storageAccountVulnerabilityAssessments').primaryEndpoints.blob, parameters('sqlLogicalServer').azureDefender.vulnerabilityAssessments.storageAccount.containerName), '')]",
-                "storageAccountAccessKey": "[if(not(empty(parameters('sqlLogicalServer').azureDefender.vulnerabilityAssessments.storageAccount.name)), listKeys(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sqlLogicalServer').azureDefender.vulnerabilityAssessments.storageAccount.resourceGroupName), 'Microsoft.Storage/storageAccounts', parameters('sqlLogicalServer').azureDefender.vulnerabilityAssessments.storageAccount.name), '2021-04-01').keys[0].value, '')]"
+                "storageAccountAccessKey": "[if(not(empty(parameters('sqlLogicalServer').azureDefender.vulnerabilityAssessments.storageAccount.name)), listKeys('storageAccountVulnerabilityAssessments', '2021-04-01').keys[0].value, '')]"
               },
               "dependsOn": [
                 "azureDefender",
-                "sqlLogicalServerRes"
+                "sqlLogicalServerRes",
+                "storageAccountVulnerabilityAssessments"
               ]
             },
             "auditSettings": {
@@ -332,9 +331,9 @@
             },
             "auditDiagnosticSettings": {
               "condition": "[parameters('sqlLogicalServer').diagnosticLogsAndMetrics.auditLogs]",
-              "type": "Microsoft.Insights/diagnosticSettings",
+              "type": "microsoft.insights/diagnosticSettings",
               "apiVersion": "2017-05-01-preview",
-              "scope": "[format('Microsoft.Sql/servers/{0}/databases/{1}', parameters('sqlLogicalServer').name, 'master')]",
+              "scope": "[resourceId('Microsoft.Sql/servers/databases', parameters('sqlLogicalServer').name, 'master')]",
               "name": "SQLSecurityAuditEvents_3d229c42-c7e7-4c97-9a99-ec0d0d8b86c1",
               "properties": {
                 "workspaceId": "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', parameters('sqlLogicalServer').diagnosticLogsAndMetrics.subscriptionId, parameters('sqlLogicalServer').diagnosticLogsAndMetrics.resourceGroupName), 'Microsoft.OperationalInsights/workspaces', parameters('sqlLogicalServer').diagnosticLogsAndMetrics.name)]",
@@ -358,9 +357,9 @@
             },
             "diagnosticSettings": {
               "condition": "[not(empty(parameters('sqlLogicalServer').diagnosticLogsAndMetrics.name))]",
-              "type": "Microsoft.Insights/diagnosticSettings",
+              "type": "microsoft.insights/diagnosticSettings",
               "apiVersion": "2017-05-01-preview",
-              "scope": "[format('Microsoft.Sql/servers/{0}/databases/{1}', parameters('sqlLogicalServer').name, 'master')]",
+              "scope": "[resourceId('Microsoft.Sql/servers/databases', parameters('sqlLogicalServer').name, 'master')]",
               "name": "sendLogsAndMetrics",
               "properties": {
                 "copy": [
@@ -369,14 +368,6 @@
                     "count": "[length(parameters('sqlLogicalServer').diagnosticLogsAndMetrics.logs)]",
                     "input": {
                       "category": "[parameters('sqlLogicalServer').diagnosticLogsAndMetrics.logs[copyIndex('logs')]]",
-                      "enabled": true
-                    }
-                  },
-                  {
-                    "name": "metrics",
-                    "count": "[length(parameters('sqlLogicalServer').diagnosticLogsAndMetrics.metrics)]",
-                    "input": {
-                      "category": "[parameters('sqlLogicalServer').diagnosticLogsAndMetrics.metrics[copyIndex('metrics')]]",
                       "enabled": true
                     }
                   }
@@ -395,7 +386,7 @@
                 "count": "[length(parameters('sqlLogicalServer').firewallRules)]"
               },
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2022-09-01",
+              "apiVersion": "2025-04-01",
               "name": "[format('sqlFirewallRule-{0}-{1}', uniqueString(parameters('sqlLogicalServer').name), copyIndex())]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -412,14 +403,13 @@
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "languageVersion": "1.10-experimental",
+                  "languageVersion": "2.0",
                   "contentVersion": "1.0.0.0",
                   "metadata": {
-                    "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
                     "_generator": {
                       "name": "bicep",
                       "version": "dev",
-                      "templateHash": "7079575420009602366"
+                      "templateHash": "8266269890409448991"
                     }
                   },
                   "parameters": {
@@ -459,7 +449,7 @@
                 "count": "[length(parameters('sqlLogicalServer').databases)]"
               },
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2022-09-01",
+              "apiVersion": "2025-04-01",
               "name": "[format('sqlDb-{0}-{1}', uniqueString(parameters('sqlLogicalServer').name), copyIndex())]",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -479,14 +469,13 @@
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "languageVersion": "1.10-experimental",
+                  "languageVersion": "2.0",
                   "contentVersion": "1.0.0.0",
                   "metadata": {
-                    "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
                     "_generator": {
                       "name": "bicep",
                       "version": "dev",
-                      "templateHash": "17114950105215420528"
+                      "templateHash": "2992718586342086485"
                     }
                   },
                   "parameters": {
@@ -576,11 +565,12 @@
                           "emails": "[parameters('sqlDatabase').azureDefender.vulnerabilityAssessments.emails]"
                         },
                         "storageContainerPath": "[if(not(empty(parameters('sqlDatabase').azureDefender.vulnerabilityAssessments.storageAccount.name)), format('{0}{1}', reference('storageAccountVulnerabilityAssessments').primaryEndpoints.blob, parameters('sqlDatabase').azureDefender.vulnerabilityAssessments.storageAccount.containerName), '')]",
-                        "storageAccountAccessKey": "[if(not(empty(parameters('sqlDatabase').azureDefender.vulnerabilityAssessments.storageAccount.name)), listKeys(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sqlDatabase').azureDefender.vulnerabilityAssessments.storageAccount.resourceGroupName), 'Microsoft.Storage/storageAccounts', parameters('sqlDatabase').azureDefender.vulnerabilityAssessments.storageAccount.name), '2021-04-01').keys[0].value, '')]"
+                        "storageAccountAccessKey": "[if(not(empty(parameters('sqlDatabase').azureDefender.vulnerabilityAssessments.storageAccount.name)), listKeys('storageAccountVulnerabilityAssessments', '2021-04-01').keys[0].value, '')]"
                       },
                       "dependsOn": [
                         "azureDefender",
                         "sqlDb",
+                        "storageAccountVulnerabilityAssessments",
                         "transparentDataEncryption"
                       ]
                     },
@@ -595,9 +585,9 @@
                     },
                     "auditDiagnosticSettings": {
                       "condition": "[parameters('sqlDatabase').diagnosticLogsAndMetrics.auditLogs]",
-                      "type": "Microsoft.Insights/diagnosticSettings",
+                      "type": "microsoft.insights/diagnosticSettings",
                       "apiVersion": "2017-05-01-preview",
-                      "scope": "[format('Microsoft.Sql/servers/{0}/databases/{1}', split(format('{0}/{1}', parameters('sqlServerName'), parameters('sqlDatabase').name), '/')[0], split(format('{0}/{1}', parameters('sqlServerName'), parameters('sqlDatabase').name), '/')[1])]",
+                      "scope": "[resourceId('Microsoft.Sql/servers/databases', split(format('{0}/{1}', parameters('sqlServerName'), parameters('sqlDatabase').name), '/')[0], split(format('{0}/{1}', parameters('sqlServerName'), parameters('sqlDatabase').name), '/')[1])]",
                       "name": "SQLSecurityAuditEvents_3d229c42-c7e7-4c97-9a99-ec0d0d8b86c1",
                       "properties": {
                         "workspaceId": "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', parameters('sqlDatabase').diagnosticLogsAndMetrics.subscriptionId, parameters('sqlDatabase').diagnosticLogsAndMetrics.resourceGroupName), 'Microsoft.OperationalInsights/workspaces', parameters('sqlDatabase').diagnosticLogsAndMetrics.name)]",
@@ -616,9 +606,9 @@
                     },
                     "diagnosticSettings": {
                       "condition": "[not(empty(parameters('sqlDatabase').diagnosticLogsAndMetrics.name))]",
-                      "type": "Microsoft.Insights/diagnosticSettings",
+                      "type": "microsoft.insights/diagnosticSettings",
                       "apiVersion": "2017-05-01-preview",
-                      "scope": "[format('Microsoft.Sql/servers/{0}/databases/{1}', split(format('{0}/{1}', parameters('sqlServerName'), parameters('sqlDatabase').name), '/')[0], split(format('{0}/{1}', parameters('sqlServerName'), parameters('sqlDatabase').name), '/')[1])]",
+                      "scope": "[resourceId('Microsoft.Sql/servers/databases', split(format('{0}/{1}', parameters('sqlServerName'), parameters('sqlDatabase').name), '/')[0], split(format('{0}/{1}', parameters('sqlServerName'), parameters('sqlDatabase').name), '/')[1])]",
                       "name": "sendLogsAndMetrics",
                       "properties": {
                         "copy": [
@@ -627,14 +617,6 @@
                             "count": "[length(parameters('sqlDatabase').diagnosticLogsAndMetrics.logs)]",
                             "input": {
                               "category": "[parameters('sqlDatabase').diagnosticLogsAndMetrics.logs[copyIndex('logs')]]",
-                              "enabled": true
-                            }
-                          },
-                          {
-                            "name": "metrics",
-                            "count": "[length(parameters('sqlDatabase').diagnosticLogsAndMetrics.metrics)]",
-                            "input": {
-                              "category": "[parameters('sqlDatabase').diagnosticLogsAndMetrics.metrics[copyIndex('metrics')]]",
                               "enabled": true
                             }
                           }
@@ -649,7 +631,7 @@
                     "shortTermBackup": {
                       "condition": "[not(equals(parameters('sqlDatabase').shortTermBackupRetention, 0))]",
                       "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2022-09-01",
+                      "apiVersion": "2025-04-01",
                       "name": "[format('shortTermBackup-{0}', uniqueString(parameters('sqlServerName'), parameters('sqlDatabase').name))]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -666,14 +648,13 @@
                         },
                         "template": {
                           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                          "languageVersion": "1.10-experimental",
+                          "languageVersion": "2.0",
                           "contentVersion": "1.0.0.0",
                           "metadata": {
-                            "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
                             "_generator": {
                               "name": "bicep",
                               "version": "dev",
-                              "templateHash": "9682486117571712728"
+                              "templateHash": "12930936431556641663"
                             }
                           },
                           "parameters": {
@@ -703,7 +684,7 @@
                     },
                     "azureDefender": {
                       "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2022-09-01",
+                      "apiVersion": "2025-04-01",
                       "name": "[format('azureDefender-{0}', uniqueString(parameters('sqlServerName'), parameters('sqlDatabase').name))]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -720,14 +701,13 @@
                         },
                         "template": {
                           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                          "languageVersion": "1.10-experimental",
+                          "languageVersion": "2.0",
                           "contentVersion": "1.0.0.0",
                           "metadata": {
-                            "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
                             "_generator": {
                               "name": "bicep",
                               "version": "dev",
-                              "templateHash": "2014792371563287107"
+                              "templateHash": "9874473470709068255"
                             }
                           },
                           "parameters": {
@@ -760,7 +740,7 @@
                     },
                     "auditSettings": {
                       "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2022-09-01",
+                      "apiVersion": "2025-04-01",
                       "name": "[format('auditSettings-{0}', uniqueString(parameters('sqlServerName'), parameters('sqlDatabase').name))]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -777,14 +757,13 @@
                         },
                         "template": {
                           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                          "languageVersion": "1.10-experimental",
+                          "languageVersion": "2.0",
                           "contentVersion": "1.0.0.0",
                           "metadata": {
-                            "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
                             "_generator": {
                               "name": "bicep",
                               "version": "dev",
-                              "templateHash": "11818408786239638984"
+                              "templateHash": "11389157987123374691"
                             }
                           },
                           "parameters": {

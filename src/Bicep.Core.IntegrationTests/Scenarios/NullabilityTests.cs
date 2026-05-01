@@ -1,11 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
-using System.Linq;
 using Bicep.Core.CodeAction;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.TypeSystem;
+using Bicep.Core.TypeSystem.Types;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.UnitTests.Utils;
@@ -17,8 +16,6 @@ namespace Bicep.Core.IntegrationTests.Scenarios;
 [TestClass]
 public class NullabilityTests
 {
-    private static ServiceBuilder Services => new ServiceBuilder();
-
     [DataTestMethod]
     [DynamicData(nameof(GetTemplatesWithSingleUnexpectedlyNullableValue), DynamicDataSourceType.Method)]
     public void Unexpectedly_nullable_types_raise_fixable_warning(string templateWithNullablyTypedValue, string templateWithNonNullAssertion, TypeSymbol expectedType, TypeSymbol actualType)
@@ -38,13 +35,13 @@ public class NullabilityTests
 
     private static IEnumerable<object[]> GetTemplatesWithSingleUnexpectedlyNullableValue()
     {
-        static object[] Case(string templateWithNullablyTypedValue, string templateWithNonNullAssertion, TypeSymbol expectedType, TypeSymbol actualType) => new object[]
-        {
+        static object[] Case(string templateWithNullablyTypedValue, string templateWithNonNullAssertion, TypeSymbol expectedType, TypeSymbol actualType) =>
+        [
             templateWithNullablyTypedValue,
             templateWithNonNullAssertion,
             expectedType,
             actualType,
-        };
+        ];
 
         return new[]
         {
@@ -128,7 +125,7 @@ param input array
 var nullableAtIndex = [for i in input: i != null]
 
 resource sa 'Microsoft.Storage/storageAccounts@2022-09-01' existing = if (first(nullableAtIndex)) {
-  name: 'sa'
+  name: 'storageacct'
 }
 ",
 @"
@@ -137,7 +134,7 @@ param input array
 var nullableAtIndex = [for i in input: i != null]
 
 resource sa 'Microsoft.Storage/storageAccounts@2022-09-01' existing = if (first(nullableAtIndex)!) {
-  name: 'sa'
+  name: 'storageacct'
 }
 ",
                 LanguageConstants.Bool,
@@ -215,7 +212,7 @@ param anotherParam string = first(filter(split(csv, ','), x => true))!
     [TestMethod]
     public void Function_overload_with_multiple_nullability_violations_still_finds_match_and_raises_no_errors()
     {
-        var result = CompilationHelper.Compile(Services.WithFeatureOverrides(new(UserDefinedTypesEnabled: true)), @"
+        var result = CompilationHelper.Compile(@"
 param input string[]
 
 output out array = split(first(input), last(input))
@@ -232,7 +229,7 @@ output out array = split(first(input), last(input))
     [TestMethod]
     public void Function_overload_mismatch_even_with_nullability_tweaks_raises_no_nullability_warnings()
     {
-        var result = CompilationHelper.Compile(Services.WithFeatureOverrides(new(UserDefinedTypesEnabled: true)), @"
+        var result = CompilationHelper.Compile(@"
 param input string[]
 
 output out array = split(first(input), 21)

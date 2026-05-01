@@ -2,26 +2,24 @@
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="FluentAssertions" Version="6.10.0" />
-    <PackageReference Include="JsonDiffPatch.Net" Version="2.3.0" />
-    <PackageReference Include="DiffPlex" Version="1.7.1" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.5.0" />
-    <PackageReference Include="Moq" Version="4.18.4" />
-    <PackageReference Include="MSTest.TestAdapter" Version="3.0.2" />
-    <PackageReference Include="MSTest.TestFramework" Version="3.0.2" />
-    <PackageReference Include="coverlet.collector" Version="3.2.0">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="System.IO.Abstractions.TestingHelpers" Version="19.2.11" />
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="JsonDiffPatch.Net" />
+    <PackageReference Include="DiffPlex" />
+    <PackageReference Include="Moq" />
+    <PackageReference Include="MSTest" />
+    <PackageReference Include="Newtonsoft.Json.Schema" />
+    <PackageReference Include="RichardSzalay.MockHttp" />
+    <PackageReference Include="TestableIO.System.IO.Abstractions.TestingHelpers" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Bicep.Core\Bicep.Core.csproj" />
     <ProjectReference Include="..\Bicep.LangServer\Bicep.LangServer.csproj" />
+    <ProjectReference Include="..\Bicep.TestFixtures\Bicep.TextFixtures\Bicep.TextFixtures.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -29,5 +27,19 @@
       <Link>bicepconfig.schema.json</Link>
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Configuration\Links\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\docs\experimental-features.md" Link="Configuration\Links\experimental-features.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Nerdbank.GitVersioning" />
   </ItemGroup>
 </Project>

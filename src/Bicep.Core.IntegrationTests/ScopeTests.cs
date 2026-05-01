@@ -1,15 +1,16 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using Bicep.Core.UnitTests.Assertions;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using FluentAssertions;
-using Bicep.Core.UnitTests;
-using Bicep.Core.UnitTests.Utils;
-using FluentAssertions.Execution;
-using Bicep.Core.Diagnostics;
-using Bicep.Core.TypeSystem;
-using Bicep.Core.Resources;
 using System.Diagnostics.CodeAnalysis;
+using Bicep.Core.Diagnostics;
+using Bicep.Core.Resources;
+using Bicep.Core.TypeSystem;
+using Bicep.Core.TypeSystem.Types;
+using Bicep.Core.UnitTests;
+using Bicep.Core.UnitTests.Assertions;
+using Bicep.Core.UnitTests.Utils;
+using FluentAssertions;
+using FluentAssertions.Execution;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Bicep.Core.IntegrationTests
 {
@@ -24,23 +25,23 @@ namespace Bicep.Core.IntegrationTests
         [NotNull]
         public TestContext? TestContext { get; set; }
 
-        [DataRow("tenant", "tenant()", "tenant", ExpectedTenantSchema, "[reference(tenantResourceId('Microsoft.Resources/deployments', 'myMod'), '2022-09-01').outputs.hello.value]", "[tenantResourceId('Microsoft.Resources/deployments', 'myMod')]")]
-        [DataRow("tenant", "managementGroup('abc')", "managementGroup", ExpectedTenantSchema, "[reference(extensionResourceId(tenantResourceId('Microsoft.Management/managementGroups', 'abc'), 'Microsoft.Resources/deployments', 'myMod'), '2022-09-01').outputs.hello.value]", "[extensionResourceId(tenantResourceId('Microsoft.Management/managementGroups', 'abc'), 'Microsoft.Resources/deployments', 'myMod')]")]
-        [DataRow("tenant", "subscription('abc')", "subscription", ExpectedTenantSchema, "[reference(subscriptionResourceId('abc', 'Microsoft.Resources/deployments', 'myMod'), '2022-09-01').outputs.hello.value]", "[subscriptionResourceId('abc', 'Microsoft.Resources/deployments', 'myMod')]")]
-        [DataRow("tenant", "resourceGroup('abc', 'def')", "resourceGroup", ExpectedTenantSchema, "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', 'abc', 'def'), 'Microsoft.Resources/deployments', 'myMod'), '2022-09-01').outputs.hello.value]", "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', 'abc', 'def'), 'Microsoft.Resources/deployments', 'myMod')]")]
-        [DataRow("managementGroup", "managementGroup()", "managementGroup", ExpectedMgSchema, "[reference(extensionResourceId(managementGroup().id, 'Microsoft.Resources/deployments', 'myMod'), '2022-09-01').outputs.hello.value]", "[extensionResourceId(managementGroup().id, 'Microsoft.Resources/deployments', 'myMod')]")]
-        [DataRow("managementGroup", "subscription('abc')", "subscription", ExpectedMgSchema, "[reference(subscriptionResourceId('abc', 'Microsoft.Resources/deployments', 'myMod'), '2022-09-01').outputs.hello.value]", "[subscriptionResourceId('abc', 'Microsoft.Resources/deployments', 'myMod')]")]
-        [DataRow("managementGroup", "resourceGroup('abc', 'def')", "resourceGroup", ExpectedMgSchema, "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', 'abc', 'def'), 'Microsoft.Resources/deployments', 'myMod'), '2022-09-01').outputs.hello.value]", "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', 'abc', 'def'), 'Microsoft.Resources/deployments', 'myMod')]")]
-        [DataRow("subscription", "subscription()", "subscription", ExpectedSubSchema, "[reference(subscriptionResourceId('Microsoft.Resources/deployments', 'myMod'), '2022-09-01').outputs.hello.value]", "[subscriptionResourceId('Microsoft.Resources/deployments', 'myMod')]")]
-        [DataRow("subscription", "subscription('abc')", "subscription", ExpectedSubSchema, "[reference(subscriptionResourceId('abc', 'Microsoft.Resources/deployments', 'myMod'), '2022-09-01').outputs.hello.value]", "[subscriptionResourceId('abc', 'Microsoft.Resources/deployments', 'myMod')]")]
-        [DataRow("subscription", "resourceGroup('abc')", "resourceGroup", ExpectedSubSchema, "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, 'abc'), 'Microsoft.Resources/deployments', 'myMod'), '2022-09-01').outputs.hello.value]", "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, 'abc'), 'Microsoft.Resources/deployments', 'myMod')]")]
-        [DataRow("subscription", "tenant()", "tenant", ExpectedSubSchema, "[reference(tenantResourceId('Microsoft.Resources/deployments', 'myMod'), '2022-09-01').outputs.hello.value]", "[tenantResourceId('Microsoft.Resources/deployments', 'myMod')]")]
-        [DataRow("resourceGroup", "subscription()", "subscription", ExpectedRgSchema, "[reference(subscriptionResourceId('Microsoft.Resources/deployments', 'myMod'), '2022-09-01').outputs.hello.value]", "[subscriptionResourceId('Microsoft.Resources/deployments', 'myMod')]")]
-        [DataRow("resourceGroup", "subscription('abc')", "subscription", ExpectedRgSchema, "[reference(subscriptionResourceId('abc', 'Microsoft.Resources/deployments', 'myMod'), '2022-09-01').outputs.hello.value]", "[subscriptionResourceId('abc', 'Microsoft.Resources/deployments', 'myMod')]")]
-        [DataRow("resourceGroup", "resourceGroup()", "resourceGroup", ExpectedRgSchema, "[reference(resourceId('Microsoft.Resources/deployments', 'myMod'), '2022-09-01').outputs.hello.value]", "[resourceId('Microsoft.Resources/deployments', 'myMod')]")]
-        [DataRow("resourceGroup", "resourceGroup('abc')", "resourceGroup", ExpectedRgSchema, "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, 'abc'), 'Microsoft.Resources/deployments', 'myMod'), '2022-09-01').outputs.hello.value]", "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, 'abc'), 'Microsoft.Resources/deployments', 'myMod')]")]
-        [DataRow("resourceGroup", "resourceGroup('abc', 'def')", "resourceGroup", ExpectedRgSchema, "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', 'abc', 'def'), 'Microsoft.Resources/deployments', 'myMod'), '2022-09-01').outputs.hello.value]", "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', 'abc', 'def'), 'Microsoft.Resources/deployments', 'myMod')]")]
-        [DataRow("resourceGroup", "tenant()", "tenant", ExpectedRgSchema, "[reference(tenantResourceId('Microsoft.Resources/deployments', 'myMod'), '2022-09-01').outputs.hello.value]", "[tenantResourceId('Microsoft.Resources/deployments', 'myMod')]")]
+        [DataRow("tenant", "tenant()", "tenant", ExpectedTenantSchema, "[reference(tenantResourceId('Microsoft.Resources/deployments', 'myMod'), '2025-04-01').outputs.hello.value]", "[tenantResourceId('Microsoft.Resources/deployments', 'myMod')]")]
+        [DataRow("tenant", "managementGroup('abc')", "managementGroup", ExpectedTenantSchema, "[reference(extensionResourceId(tenantResourceId('Microsoft.Management/managementGroups', 'abc'), 'Microsoft.Resources/deployments', 'myMod'), '2025-04-01').outputs.hello.value]", "[extensionResourceId(tenantResourceId('Microsoft.Management/managementGroups', 'abc'), 'Microsoft.Resources/deployments', 'myMod')]")]
+        [DataRow("tenant", "subscription('abc')", "subscription", ExpectedTenantSchema, "[reference(subscriptionResourceId('abc', 'Microsoft.Resources/deployments', 'myMod'), '2025-04-01').outputs.hello.value]", "[subscriptionResourceId('abc', 'Microsoft.Resources/deployments', 'myMod')]")]
+        [DataRow("tenant", "resourceGroup('abc', 'def')", "resourceGroup", ExpectedTenantSchema, "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', 'abc', 'def'), 'Microsoft.Resources/deployments', 'myMod'), '2025-04-01').outputs.hello.value]", "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', 'abc', 'def'), 'Microsoft.Resources/deployments', 'myMod')]")]
+        [DataRow("managementGroup", "managementGroup()", "managementGroup", ExpectedMgSchema, "[reference(extensionResourceId(managementGroup().id, 'Microsoft.Resources/deployments', 'myMod'), '2025-04-01').outputs.hello.value]", "[extensionResourceId(managementGroup().id, 'Microsoft.Resources/deployments', 'myMod')]")]
+        [DataRow("managementGroup", "subscription('abc')", "subscription", ExpectedMgSchema, "[reference(subscriptionResourceId('abc', 'Microsoft.Resources/deployments', 'myMod'), '2025-04-01').outputs.hello.value]", "[subscriptionResourceId('abc', 'Microsoft.Resources/deployments', 'myMod')]")]
+        [DataRow("managementGroup", "resourceGroup('abc', 'def')", "resourceGroup", ExpectedMgSchema, "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', 'abc', 'def'), 'Microsoft.Resources/deployments', 'myMod'), '2025-04-01').outputs.hello.value]", "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', 'abc', 'def'), 'Microsoft.Resources/deployments', 'myMod')]")]
+        [DataRow("subscription", "subscription()", "subscription", ExpectedSubSchema, "[reference(subscriptionResourceId('Microsoft.Resources/deployments', 'myMod'), '2025-04-01').outputs.hello.value]", "[subscriptionResourceId('Microsoft.Resources/deployments', 'myMod')]")]
+        [DataRow("subscription", "subscription('abc')", "subscription", ExpectedSubSchema, "[reference(subscriptionResourceId('abc', 'Microsoft.Resources/deployments', 'myMod'), '2025-04-01').outputs.hello.value]", "[subscriptionResourceId('abc', 'Microsoft.Resources/deployments', 'myMod')]")]
+        [DataRow("subscription", "resourceGroup('abc')", "resourceGroup", ExpectedSubSchema, "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, 'abc'), 'Microsoft.Resources/deployments', 'myMod'), '2025-04-01').outputs.hello.value]", "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, 'abc'), 'Microsoft.Resources/deployments', 'myMod')]")]
+        [DataRow("subscription", "tenant()", "tenant", ExpectedSubSchema, "[reference(tenantResourceId('Microsoft.Resources/deployments', 'myMod'), '2025-04-01').outputs.hello.value]", "[tenantResourceId('Microsoft.Resources/deployments', 'myMod')]")]
+        [DataRow("resourceGroup", "subscription()", "subscription", ExpectedRgSchema, "[reference(subscriptionResourceId('Microsoft.Resources/deployments', 'myMod'), '2025-04-01').outputs.hello.value]", "[subscriptionResourceId('Microsoft.Resources/deployments', 'myMod')]")]
+        [DataRow("resourceGroup", "subscription('abc')", "subscription", ExpectedRgSchema, "[reference(subscriptionResourceId('abc', 'Microsoft.Resources/deployments', 'myMod'), '2025-04-01').outputs.hello.value]", "[subscriptionResourceId('abc', 'Microsoft.Resources/deployments', 'myMod')]")]
+        [DataRow("resourceGroup", "resourceGroup()", "resourceGroup", ExpectedRgSchema, "[reference(resourceId('Microsoft.Resources/deployments', 'myMod'), '2025-04-01').outputs.hello.value]", "[resourceId('Microsoft.Resources/deployments', 'myMod')]")]
+        [DataRow("resourceGroup", "resourceGroup('abc')", "resourceGroup", ExpectedRgSchema, "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, 'abc'), 'Microsoft.Resources/deployments', 'myMod'), '2025-04-01').outputs.hello.value]", "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, 'abc'), 'Microsoft.Resources/deployments', 'myMod')]")]
+        [DataRow("resourceGroup", "resourceGroup('abc', 'def')", "resourceGroup", ExpectedRgSchema, "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', 'abc', 'def'), 'Microsoft.Resources/deployments', 'myMod'), '2025-04-01').outputs.hello.value]", "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', 'abc', 'def'), 'Microsoft.Resources/deployments', 'myMod')]")]
+        [DataRow("resourceGroup", "tenant()", "tenant", ExpectedRgSchema, "[reference(tenantResourceId('Microsoft.Resources/deployments', 'myMod'), '2025-04-01').outputs.hello.value]", "[tenantResourceId('Microsoft.Resources/deployments', 'myMod')]")]
         [DataTestMethod]
         public void Emitter_should_generate_correct_module_output_scope_strings(string targetScope, string moduleScope, string moduleTargetScope, string expectedSchema, string expectedOutput, string expectedResourceDependsOn)
         {
@@ -139,18 +140,61 @@ resource resourceC 'My.Rp/myResource@2020-01-01' = {
 
             using (new AssertionScope())
             {
-                template.Should().HaveValueAtPath("$.resources[?(@.name == 'resourceB')].scope", "[format('My.Rp/myResource/{0}', 'resourceA')]");
+                template.Should().HaveValueAtPath("$.resources[?(@.name == 'resourceB')].scope", "[resourceId('My.Rp/myResource', 'resourceA')]");
                 template.Should().HaveValueAtPath("$.resources[?(@.name == 'resourceB')].dependsOn[0]", "[resourceId('My.Rp/myResource', 'resourceA')]");
 
-                template.Should().HaveValueAtPath("$.resources[?(@.name == 'resourceC')].scope", "[extensionResourceId(format('My.Rp/myResource/{0}', 'resourceA'), 'My.Rp/myResource', 'resourceB')]");
+                template.Should().HaveValueAtPath("$.resources[?(@.name == 'resourceC')].scope", "[extensionResourceId(resourceId('My.Rp/myResource', 'resourceA'), 'My.Rp/myResource', 'resourceB')]");
                 template.Should().HaveValueAtPath("$.resources[?(@.name == 'resourceC')].dependsOn[0]", "[extensionResourceId(resourceId('My.Rp/myResource', 'resourceA'), 'My.Rp/myResource', 'resourceB')]");
             }
         }
 
-        [DataRow("tenant", "[format('My.Rp/myResource/{0}', 'resourceA')]", "[reference(tenantResourceId('My.Rp/myResource', 'resourceA'), '2020-01-01').myProp]")]
-        [DataRow("managementGroup", "[format('My.Rp/myResource/{0}', 'resourceA')]", "[reference(extensionResourceId(managementGroup().id, 'My.Rp/myResource', 'resourceA'), '2020-01-01').myProp]")]
-        [DataRow("subscription", "[format('My.Rp/myResource/{0}', 'resourceA')]", "[reference(subscriptionResourceId('My.Rp/myResource', 'resourceA'), '2020-01-01').myProp]")]
-        [DataRow("resourceGroup", "[format('My.Rp/myResource/{0}', 'resourceA')]", "[reference(resourceId('My.Rp/myResource', 'resourceA'), '2020-01-01').myProp]")]
+        //https://github.com/Azure/bicep/issues/18097
+        [TestMethod]
+        public void Emitter_should_generate_fullyQualifiedResourceId_in_extension_scope_property_and_correct_dependsOn()
+        {
+            //tenant scope resource and its extension resource can be deployed from anywhere
+            var (template, _, _) = CompilationHelper.Compile(@"
+resource resourceA 'My.Rp/myResource@2020-01-01' = {
+  name: 'resourceA'
+  scope: tenant()
+}
+
+resource resourceB 'My.Rp/myResource@2020-01-01' = {
+  scope: resourceA
+  name: 'resourceB'
+}");
+
+            using (new AssertionScope())
+            {
+                template.Should().HaveValueAtPath("$.resources[?(@.name == 'resourceA')].scope", "/");
+                template.Should().HaveValueAtPath("$.resources[?(@.name == 'resourceB')].scope", "[tenantResourceId('My.Rp/myResource', 'resourceA')]");
+                template.Should().HaveValueAtPath("$.resources[?(@.name == 'resourceB')].dependsOn[0]", "[tenantResourceId('My.Rp/myResource', 'resourceA')]");
+            }
+
+            // existing tenant resource and its extension resource can be deployed from anywhere
+            var (template1, _, _) = CompilationHelper.Compile(@"
+resource resourceA 'My.Rp/myResource@2020-01-01' existing = {
+  name: 'resourceA'
+  scope: tenant()
+}
+
+resource resourceB 'My.Rp/myResource@2020-01-01' = {
+  scope: resourceA
+  name: 'resourceB'
+}");
+
+            using (new AssertionScope())
+            {
+                template1.Should().HaveValueAtPath("$.resources[?(@.name == 'resourceB')].scope", "[tenantResourceId('My.Rp/myResource', 'resourceA')]");
+            }
+
+
+        }
+
+        [DataRow("tenant", "[tenantResourceId('My.Rp/myResource', 'resourceA')]", "[reference(tenantResourceId('My.Rp/myResource', 'resourceA'), '2020-01-01').myProp]")]
+        [DataRow("managementGroup", "[extensionResourceId(managementGroup().id, 'My.Rp/myResource', 'resourceA')]", "[reference(extensionResourceId(managementGroup().id, 'My.Rp/myResource', 'resourceA'), '2020-01-01').myProp]")]
+        [DataRow("subscription", "[subscriptionResourceId('My.Rp/myResource', 'resourceA')]", "[reference(subscriptionResourceId('My.Rp/myResource', 'resourceA'), '2020-01-01').myProp]")]
+        [DataRow("resourceGroup", "[resourceId('My.Rp/myResource', 'resourceA')]", "[reference(resourceId('My.Rp/myResource', 'resourceA'), '2020-01-01').myProp]")]
         [DataTestMethod]
         public void Emitter_should_generate_correct_references_for_existing_resources(string targetScope, string expectedScopeExpression, string expectedReferenceExpression)
         {
@@ -182,10 +226,10 @@ output resourceARef string = resourceA.properties.myProp
         public void Existing_resources_can_be_referenced_at_other_scopes()
         {
             var typeReference = ResourceTypeReference.Parse("My.Rp/myResource@2020-01-01");
-            var typeLoader = TestTypeHelper.CreateAzResourceTypeLoaderWithTypes(new[] {
+            var typeLoader = TestTypeHelper.CreateResourceTypeLoaderWithTypes(new[] {
                 new ResourceTypeComponents(typeReference, ResourceScope.ResourceGroup, ResourceScope.None, ResourceFlags.None, new ObjectType(typeReference.FormatName(), TypeSymbolValidationFlags.Default, new [] {
-                    new TypeProperty("name", LanguageConstants.String, TypePropertyFlags.DeployTimeConstant, "name property"),
-                    new TypeProperty("kind", LanguageConstants.String, TypePropertyFlags.ReadOnly, "kind property"),
+                    new NamedTypeProperty("name", LanguageConstants.String, TypePropertyFlags.DeployTimeConstant, "name property"),
+                    new NamedTypeProperty("kind", LanguageConstants.String, TypePropertyFlags.ReadOnly, "kind property"),
                 }, null))
             });
 
@@ -225,9 +269,9 @@ output resourceARef string = resourceA.kind
         public void Errors_are_raised_for_existing_resources_at_invalid_scopes()
         {
             var typeReference = ResourceTypeReference.Parse("My.Rp/myResource@2020-01-01");
-            var typeLoader = TestTypeHelper.CreateAzResourceTypeLoaderWithTypes(new[] {
+            var typeLoader = TestTypeHelper.CreateResourceTypeLoaderWithTypes(new[] {
                 new ResourceTypeComponents(typeReference, ResourceScope.ResourceGroup, ResourceScope.None, ResourceFlags.None, new ObjectType(typeReference.FormatName(), TypeSymbolValidationFlags.Default, new [] {
-                    new TypeProperty("name", LanguageConstants.String, TypePropertyFlags.DeployTimeConstant, "name property"),
+                    new NamedTypeProperty("name", LanguageConstants.String, TypePropertyFlags.DeployTimeConstant, "name property"),
                 }, null))
             });
 
@@ -263,9 +307,9 @@ resource resourceA 'My.Rp/myResource@2020-01-01' existing = {
         public void Errors_are_raised_for_extensions_of_existing_resources_at_invalid_scopes()
         {
             var typeReference = ResourceTypeReference.Parse("My.Rp/myResource@2020-01-01");
-            var typeLoader = TestTypeHelper.CreateAzResourceTypeLoaderWithTypes(new[] {
+            var typeLoader = TestTypeHelper.CreateResourceTypeLoaderWithTypes(new[] {
                 new ResourceTypeComponents(typeReference, ResourceScope.ResourceGroup | ResourceScope.Resource, ResourceScope.None, ResourceFlags.None, new ObjectType(typeReference.FormatName(), TypeSymbolValidationFlags.Default, new [] {
-                    new TypeProperty("name", LanguageConstants.String, TypePropertyFlags.DeployTimeConstant, "name property"),
+                    new NamedTypeProperty("name", LanguageConstants.String, TypePropertyFlags.DeployTimeConstant, "name property"),
                 }, null))
             });
 
@@ -291,9 +335,9 @@ resource resourceB 'My.Rp/myResource@2020-01-01' = {
         public void Extensions_of_existing_resources_are_permitted()
         {
             var typeReference = ResourceTypeReference.Parse("My.Rp/myResource@2020-01-01");
-            var typeLoader = TestTypeHelper.CreateAzResourceTypeLoaderWithTypes(new[] {
+            var typeLoader = TestTypeHelper.CreateResourceTypeLoaderWithTypes(new[] {
                 new ResourceTypeComponents(typeReference, ResourceScope.ResourceGroup | ResourceScope.Resource, ResourceScope.None, ResourceFlags.None, new ObjectType(typeReference.FormatName(), TypeSymbolValidationFlags.Default, new [] {
-                    new TypeProperty("name", LanguageConstants.String, TypePropertyFlags.DeployTimeConstant, "name property"),
+                    new NamedTypeProperty("name", LanguageConstants.String, TypePropertyFlags.DeployTimeConstant, "name property"),
                 }, null))
             });
 
@@ -313,7 +357,7 @@ resource resourceB 'My.Rp/myResource@2020-01-01' = {
             {
                 diags.Should().BeEmpty();
 
-                template.Should().HaveValueAtPath("$.resources[?(@.name == 'resourceB')].scope", "[format('My.Rp/myResource/{0}', 'resourceA')]");
+                template.Should().HaveValueAtPath("$.resources[?(@.name == 'resourceB')].scope", "[resourceId('My.Rp/myResource', 'resourceA')]");
             }
         }
 
@@ -325,9 +369,9 @@ resource resourceB 'My.Rp/myResource@2020-01-01' = {
         public void Tenant_scope_resources_can_be_deployed_from_anywhere(string targetScope, bool tenantScopeExpected)
         {
             var typeReference = ResourceTypeReference.Parse("My.Rp/myResource@2020-01-01");
-            var typeLoader = TestTypeHelper.CreateAzResourceTypeLoaderWithTypes(new[] {
+            var typeLoader = TestTypeHelper.CreateResourceTypeLoaderWithTypes(new[] {
                 new ResourceTypeComponents(typeReference, ResourceScope.Tenant, ResourceScope.None, ResourceFlags.None, new ObjectType(typeReference.FormatName(), TypeSymbolValidationFlags.Default, new [] {
-                    new TypeProperty("name", LanguageConstants.String, TypePropertyFlags.DeployTimeConstant, "name property"),
+                    new NamedTypeProperty("name", LanguageConstants.String, TypePropertyFlags.DeployTimeConstant, "name property"),
                 }, null))
             });
 
@@ -392,6 +436,66 @@ output tiers array = [for (account, i) in accounts: storage[i].properties.access
 
                 template.Should().HaveValueAtPath("$.resources.storage.existing", true);
                 template.Should().HaveValueAtPath("$.resources.storage.resourceGroup", "[variables('accounts')[copyIndex()].rg]");
+            }
+        }
+
+        [TestMethod]
+        public void Existing_policy_definitions_can_use_tenant_scope_from_management_group()
+        {
+            // Regression test for https://github.com/Azure/bicep/issues/18166
+            // Microsoft.Authorization/policyDefinitions should allow existing resources to use tenant() scope
+            var (template, diagnostics, _) = CompilationHelper.Compile(@"
+targetScope = 'managementGroup'
+
+var input array = [
+  {policyDefinitionId: '0a914e76-4921-4c19-b460-a2d36003525a'}
+]
+
+// Get all builtin policies as defined in the input parameter
+resource builtin 'Microsoft.Authorization/policyDefinitions@2023-04-01' existing = [for policy in input: {
+  scope: tenant()
+  name: policy.policyDefinitionId
+}]
+");
+
+            using (new AssertionScope())
+            {
+                diagnostics.ExcludingLinterDiagnostics().Should().BeEmpty();
+                template.Should().NotBeNull();
+            }
+        }
+
+        [TestMethod]
+        public void Policy_definitions_can_use_scope_property_for_deployment()
+        {
+            // Regression test for https://github.com/Azure/bicep/issues/18163
+            var (template, diagnostics, _) = CompilationHelper.Compile(@"
+targetScope = 'subscription'
+
+resource policyDef 'Microsoft.Authorization/policyDefinitions@2021-06-01' = {
+  name: 'test-policy'
+  scope: subscription()
+  properties: {
+    displayName: 'Test Policy'
+    description: 'Test policy for regression test'
+    mode: 'All'
+    policyRule: {
+      if: {
+        field: 'type'
+        equals: 'Microsoft.Storage/storageAccounts'
+      }
+      then: {
+        effect: 'audit'
+      }
+    }
+  }
+}
+");
+
+            using (new AssertionScope())
+            {
+                diagnostics.ExcludingLinterDiagnostics().Should().BeEmpty();
+                template.Should().NotBeNull();
             }
         }
     }

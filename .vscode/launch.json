@@ -12,7 +12,7 @@
             ],
             "env": {
                 "BICEP_TRACING_ENABLED": "true",
-
+                "BICEP_TRACING_VERBOSITY": "basic",
                 // Defaulting to "verbose" when debugging so that new telemetry IDs during development aren't accidentally sent and created before they're finalized
                 "DEBUGTELEMETRY": "v", // "" or "0" or "false": send telemetry as normal; "1": debug mode (no telemetry sent); "verbose": telemetry in console, don't send (from microsoft/vscode-azext-utils)
             },
@@ -27,16 +27,31 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "Build CLI",
-            "program": "${workspaceFolder}/src/Bicep.Cli/bin/Debug/net7.0/bicep",
+            "program": "${workspaceFolder}/src/Bicep.Cli/bin/Debug/net10.0/bicep",
             "args": [
                 "build",
                 "${file}"
             ],
             "env": {
-                "BICEP_TRACING_ENABLED": "true"
+                "BICEP_TRACING_ENABLED": "true",
+                "BICEP_TRACING_VERBOSITY": "basic",
             },
             "cwd": "${workspaceFolder}/src/Bicep.Cli",
             "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": "REPL",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "Build CLI",
+            "program": "${workspaceFolder}/src/Bicep.Cli/bin/Debug/net10.0/bicep",
+            "args": [
+                "console",
+            ],
+            "env": {},
+            "cwd": "${workspaceFolder}/src/Bicep.Cli",
+            "console": "integratedTerminal",
             "stopAtEntry": false
         },
         {
@@ -77,6 +92,23 @@
             "type": "coreclr",
             "request": "attach",
             "processId": "${command:pickProcess}"
-        }
+        },
+        {
+            "name": "PowerShell Launch Current File",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${file}",
+            "cwd": "${cwd}"
+        },
+        {
+            "name": "Deploy Pane Tests",
+            "type": "node",
+            "request": "launch",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": [
+                "test"
+            ],
+            "cwd": "${workspaceFolder}/src/vscode-bicep-ui/apps/deploy-pane"
+        },
     ]
 }

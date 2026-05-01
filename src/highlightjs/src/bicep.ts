@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { Mode, Language, HLJSApi } from 'highlight.js';
+import { Mode, Language, HLJSApi } from "highlight.js";
 
 const bounded = (text: string) => `\\b${text}\\b`;
 const after = (regex: string) => `(?<=${regex})`;
@@ -18,43 +18,40 @@ const directive = bounded(`[_a-zA-Z-0-9]+`);
 const ws = `(?:[ \\t\\r\\n]|\\/\\*(?:\\*(?!\\/)|[^*])*\\*\\/)*`;
 
 const KEYWORDS = {
-  $pattern: '[A-Za-z$_][0-9A-Za-z$_]*',
+  $pattern: "[A-Za-z$_][0-9A-Za-z$_]*",
   keyword: [
-    'metadata',
-    'targetScope',
-    'resource',
-    'module',
-    'param',
-    'var',
-    'output',
-    'for',
-    'in',
-    'if',
-    'existing',
-    'import',
-    'as',
-    'type',
-    'with',
-    'using',
+    "metadata",
+    "targetScope",
+    "resource",
+    "module",
+    "param",
+    "var",
+    "output",
+    "for",
+    "in",
+    "if",
+    "existing",
+    "import",
+    "as",
+    "type",
+    "with",
+    "using",
+    "extends",
+    "func",
+    "assert",
+    "extension",
   ],
-  literal: [
-    "true",
-    "false",
-    "null",
-  ],
-  built_in: [
-    'az',
-    'sys',
-  ]
+  literal: ["true", "false", "null"],
+  built_in: ["az", "sys"],
 };
 
 const lineComment: Mode = {
-  className: 'comment',
+  className: "comment",
   match: `//.*${before(`$`)}`,
 };
 
 const blockComment: Mode = {
-  className: 'comment',
+  className: "comment",
   begin: `/\\*`,
   end: `\\*/`,
 };
@@ -64,7 +61,7 @@ const comments: Mode = {
 };
 
 function withComments(input: Mode[]): Mode[] {
-  return [...input, comments]
+  return [...input, comments];
 }
 
 const expression: Mode = {
@@ -77,27 +74,52 @@ const escapeChar: Mode = {
   match: `\\\\(u{[0-9A-Fa-f]+}|n|r|t|\\\\|'|\\\${)`,
 };
 
-const stringVerbatim: Mode = {
-  className: 'string',
-  begin: `'''`,
-  end: `'''`,
-}
-
 const stringSubstitution: Mode = {
-  className: 'subst',
+  className: "subst",
   begin: `${notAfter(`\\\\`)}(\\\${)`,
   end: `(})`,
   contains: withComments([expression]),
 };
 
+const multiLine1StringSubstitution: Mode = {
+  className: "subst",
+  begin: `(\\\${)`,
+  end: `(})`,
+  contains: withComments([expression]),
+};
+
+const multiLine2StringSubstitution: Mode = {
+  className: "subst",
+  begin: `(\\$\\\${)`,
+  end: `(})`,
+  contains: withComments([expression]),
+};
+
+const multiLineString: Mode = {
+  className: "string",
+  begin: `'''`,
+  end: `'''${notBefore(`'`)}`,
+};
+
+const multiLineString1Interpolation: Mode = {
+  className: "string",
+  begin: `${notAfter(`\\$`)}\\$'''`,
+  end: `'''${notBefore(`'`)}`,
+  contains: [multiLine1StringSubstitution],
+};
+
+const multiLineString2Interpolation: Mode = {
+  className: "string",
+  begin: `\\$\\$'''`,
+  end: `'''${notBefore(`'`)}`,
+  contains: [multiLine2StringSubstitution],
+};
+
 const stringLiteral: Mode = {
-  className: 'string',
+  className: "string",
   begin: `'${notBefore(`''`)}`,
   end: `'`,
-  contains: [
-    escapeChar,
-    stringSubstitution
-  ],
+  contains: [escapeChar, stringSubstitution],
 };
 
 const numericLiteral: Mode = {
@@ -106,7 +128,7 @@ const numericLiteral: Mode = {
 };
 
 const namedLiteral: Mode = {
-  className: 'literal',
+  className: "literal",
   match: bounded(`(true|false|null)`),
   relevance: 0,
 };
@@ -126,9 +148,9 @@ const objectLiteral: Mode = {
       match: `${identifier}${before(`${ws}:`)}`,
       relevance: 0,
     },
-    expression
+    expression,
   ]),
-}
+};
 
 const arrayLiteral: Mode = {
   begin: `\\[${notBefore(`${ws}${bounded(`for`)}`)}`,
@@ -137,41 +159,40 @@ const arrayLiteral: Mode = {
 };
 
 const functionCall: Mode = {
-  className: 'function',
+  className: "function",
   begin: `(${identifier})${ws}\\(`,
   end: `\\)`,
   contains: withComments([expression]),
 };
 
 const decorator: Mode = {
-  className: 'meta',
+  className: "meta",
   begin: `@${ws}${before(identifier)}`,
   end: ``,
   contains: withComments([functionCall]),
 };
 
-const lambdaStart = `(` +
+const lambdaStart =
+  `(` +
   `\\(${ws}${identifier}${ws}(,${ws}${identifier}${ws})*\\)|` +
   `\\(${ws}\\)|` +
   `${ws}${identifier}${ws}` +
-`)${before(`${ws}=>`)}`;
+  `)${before(`${ws}=>`)}`;
 
 const lambda: Mode = {
   begin: lambdaStart,
   returnBegin: true,
   end: `${ws}=>`,
-  contains: withComments([
-    identifierExpression,
-  ]),
+  contains: withComments([identifierExpression]),
 };
 
 const directiveStatement: Mode = {
   begin: `${after(`^${ws}`)}#${directive}`,
   end: `$`,
-  className: 'meta',
+  className: "meta",
   contains: withComments([
     {
-      className: 'variable',
+      className: "variable",
       match: directive,
     },
   ]),
@@ -179,7 +200,9 @@ const directiveStatement: Mode = {
 
 expression.variants = [
   stringLiteral,
-  stringVerbatim,
+  multiLineString,
+  multiLineString1Interpolation,
+  multiLineString2Interpolation,
   numericLiteral,
   namedLiteral,
   objectLiteral,
@@ -192,11 +215,11 @@ expression.variants = [
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export default function(hljs?: HLJSApi): Language {
+export default function (hljs?: HLJSApi): Language {
   return {
-    aliases: ['bicep'],
+    aliases: ["bicep"],
     case_insensitive: true,
     keywords: KEYWORDS,
     contains: withComments([expression]),
-  }
+  };
 }

@@ -36,10 +36,7 @@ param backendIPAddresses array = [
 ]
 
 @description('Cookie based affinity')
-@allowed([
-  'Enabled'
-  'Disabled'
-])
+@allowed(['Enabled', 'Disabled'])
 param cookieBasedAffinity string = 'Disabled'
 
 @description('Location for all resources.')
@@ -53,9 +50,7 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2020-06-01' = {
   location: location
   properties: {
     addressSpace: {
-      addressPrefixes: [
-        vnetAddressPrefix
-      ]
+      addressPrefixes: [vnetAddressPrefix]
     }
     subnets: [
       {
@@ -162,10 +157,18 @@ resource applicationGateway 'Microsoft.Network/applicationGateways@2020-06-01' =
         name: 'appGatewayHttpListener'
         properties: {
           frontendIPConfiguration: {
-            id: resourceId('Microsoft.Network/applicationGateways/frontendIPConfigurations', applicationGatewayName, 'appGatewayFrontendIP')
+            id: resourceId(
+              'Microsoft.Network/applicationGateways/frontendIPConfigurations',
+              applicationGatewayName,
+              'appGatewayFrontendIP'
+            )
           }
           frontendPort: {
-            id: resourceId('Microsoft.Network/applicationGateways/frontendPorts', applicationGatewayName, 'appGatewayFrontendPort')
+            id: resourceId(
+              'Microsoft.Network/applicationGateways/frontendPorts',
+              applicationGatewayName,
+              'appGatewayFrontendPort'
+            )
           }
           protocol: 'Http'
         }
@@ -177,13 +180,25 @@ resource applicationGateway 'Microsoft.Network/applicationGateways@2020-06-01' =
         properties: {
           ruleType: 'Basic'
           httpListener: {
-            id: resourceId('Microsoft.Network/applicationGateways/httpListeners', applicationGatewayName, 'appGatewayHttpListener')
+            id: resourceId(
+              'Microsoft.Network/applicationGateways/httpListeners',
+              applicationGatewayName,
+              'appGatewayHttpListener'
+            )
           }
           backendAddressPool: {
-            id: resourceId('Microsoft.Network/applicationGateways/backendAddressPools', applicationGatewayName, 'appGatewayBackendPool')
+            id: resourceId(
+              'Microsoft.Network/applicationGateways/backendAddressPools',
+              applicationGatewayName,
+              'appGatewayBackendPool'
+            )
           }
           backendHttpSettings: {
-            id: resourceId('Microsoft.Network/applicationGateways/backendHttpSettingsCollection', applicationGatewayName, 'appGatewayBackendHttpSettings')
+            id: resourceId(
+              'Microsoft.Network/applicationGateways/backendHttpSettingsCollection',
+              applicationGatewayName,
+              'appGatewayBackendHttpSettings'
+            )
           }
         }
       }

@@ -1,41 +1,37 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
+using System.Diagnostics;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 using Azure.Deployments.Core.Comparers;
 using Azure.Deployments.Core.Definitions.Identifiers;
+using Bicep.Core;
 using Bicep.Core.CodeAction;
-using Bicep.Core.Diagnostics;
+using Bicep.Core.Configuration;
+using Bicep.Core.Extensions;
+using Bicep.Core.Navigation;
 using Bicep.Core.Parsing;
+using Bicep.Core.PrettyPrintV2;
 using Bicep.Core.Resources;
+using Bicep.Core.Rewriters;
 using Bicep.Core.Semantics;
+using Bicep.Core.Semantics.Namespaces;
+using Bicep.Core.SourceGraph;
 using Bicep.Core.Syntax;
-using Bicep.Core.TypeSystem.Az;
+using Bicep.Core.Text;
+using Bicep.IO.InMemory;
 using Bicep.LanguageServer.CompilationManager;
 using Bicep.LanguageServer.Extensions;
-using MediatR;
-using OmniSharp.Extensions.JsonRpc;
-using OmniSharp.Extensions.LanguageServer.Protocol.Models;
-using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
-using Bicep.Core.Extensions;
-using Bicep.Core.PrettyPrint;
-using Bicep.Core.PrettyPrint.Options;
-using Bicep.Core.Workspaces;
-using Bicep.LanguageServer.Utils;
-using OmniSharp.Extensions.LanguageServer.Protocol.Server;
-using OmniSharp.Extensions.LanguageServer.Protocol;
-using Bicep.Core.Navigation;
-using Bicep.Core.Rewriters;
-using System.Text.RegularExpressions;
 using Bicep.LanguageServer.Providers;
 using Bicep.LanguageServer.Telemetry;
-using System.Diagnostics;
+using Bicep.LanguageServer.Utils;
+using MediatR;
+using OmniSharp.Extensions.JsonRpc;
+using OmniSharp.Extensions.LanguageServer.Protocol;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using OmniSharp.Extensions.LanguageServer.Protocol.Server;
+using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
 
 namespace Bicep.LanguageServer.Handlers
 {
@@ -45,25 +41,32 @@ namespace Bicep.LanguageServer.Handlers
         public string? ResourceId { get; init; }
     }
 
-    public class InsertResourceHandler : IJsonRpcNotificationHandler<InsertResourceParams>
+    public partial class InsertResourceHandler : IJsonRpcNotificationHandler<InsertResourceParams>
     {
+        private readonly BicepCompiler compiler;
         private readonly ILanguageServerFacade server;
         private readonly ICompilationManager compilationManager;
         private readonly IAzResourceProvider azResourceProvider;
-        private readonly IAzResourceTypeLoader azResourceTypeLoader;
         private readonly TelemetryAndErrorHandlingHelper<Unit> helper;
 
-        public InsertResourceHandler(ILanguageServerFacade server, ICompilationManager compilationManager, IAzResourceProvider azResourceProvider, IAzResourceTypeLoader azResourceTypeLoader, ITelemetryProvider telemetryProvider)
+        public InsertResourceHandler(
+            BicepCompiler compiler,
+            ILanguageServerFacade server,
+            ICompilationManager compilationManager,
+            IAzResourceProvider azResourceProvider,
+            ITelemetryProvider telemetryProvider,
+            ISourceFileFactory sourceFileFactory)
         {
+            this.compiler = compiler;
             this.server = server;
             this.compilationManager = compilationManager;
             this.azResourceProvider = azResourceProvider;
-            this.azResourceTypeLoader = azResourceTypeLoader;
             this.helper = new TelemetryAndErrorHandlingHelper<Unit>(server.Window, telemetryProvider);
         }
 
         public Task<Unit> Handle(InsertResourceParams request, CancellationToken cancellationToken)
-            => helper.ExecuteWithTelemetryAndErrorHandling(async () => {
+            => helper.ExecuteWithTelemetryAndErrorHandling(async () =>
+            {
                 var context = compilationManager.GetCompilation(request.TextDocument.Uri);
                 if (context is null)
                 {
@@ -80,9 +83,12 @@ namespace Bicep.LanguageServer.Handlers
                         Unit.Value);
                 }
 
-                var matchedType = azResourceTypeLoader.GetAvailableTypes()
+                var nsResolver = model.Binder.NamespaceResolver;
+                var namespaces = nsResolver.GetNamespaceNames().Select(nsResolver.TryGetNamespace).WhereNotNull();
+                var azResourceTypeProvider = namespaces.First(ns => ns?.ExtensionName == AzNamespaceType.BuiltInName).ResourceTypeProvider;
+                var matchedType = azResourceTypeProvider.GetAvailableTypes()
                     .Where(x => StringComparer.OrdinalIgnoreCase.Equals(resourceId.FullyQualifiedType, x.FormatType()))
-                    .OrderByDescending(x => x.ApiVersion, ApiVersionComparer.Instance)
+                    .OrderByDescending(x => x.ApiVersion ?? "", ApiVersionComparer.Instance)
                     .FirstOrDefault();
 
                 if (matchedType is null || matchedType.ApiVersion is null)
@@ -134,7 +140,7 @@ namespace Bicep.LanguageServer.Handlers
 
                 var resourceDeclaration = CreateResourceSyntax(resource.Value, resourceId, matchedType);
                 var insertContext = GetInsertContext(context, request.Position);
-                var replacement = GenerateCodeReplacement(context.Compilation, resourceDeclaration, insertContext);
+                var replacement = GenerateCodeReplacement(compiler, model.Configuration, resourceDeclaration, insertContext);
 
                 await server.Workspace.ApplyWorkspaceEdit(new ApplyWorkspaceEditParams
                 {
@@ -182,32 +188,49 @@ namespace Bicep.LanguageServer.Handlers
             return new(startNewline, endNewline, insertOffset);
         }
 
-        private static CodeReplacement GenerateCodeReplacement(Compilation prevCompilation, ResourceDeclarationSyntax resourceDeclaration, InsertContext insertContext)
+        private static CodeReplacement GenerateCodeReplacement(BicepCompiler compiler, RootConfiguration configuration, ResourceDeclarationSyntax resourceDeclaration, InsertContext insertContext)
         {
             // Create a new document containing the resource to insert.
             // This allows us to apply syntax rewriters and formatting, before generating the code replacement.
-            var printOptions = new PrettyPrintOptions(NewlineOption.LF, IndentKindOption.Space, 2, false);
             var program = new ProgramSyntax(
-                new[] { resourceDeclaration },
-                SyntaxFactory.CreateToken(TokenType.EndOfFile));
+                [resourceDeclaration],
+                SyntaxFactory.EndOfFileToken);
 
-            var printed = PrettyPrinter.PrintValidProgram(program, printOptions);
-            var bicepFile = RewriterHelper.RewriteMultiple(
-                prevCompilation,
-                SourceFileFactory.CreateBicepFile(new Uri("inmemory:///generated.bicep"), printed),
+            BicepSourceFile bicepFile = compiler.SourceFileFactory.CreateBicepFile(DummyFileHandle.Default, program.ToString());
+
+            var workspace = new ActiveSourceFileSet();
+            workspace.UpsertSourceFile(bicepFile);
+            var compilation = compiler.CreateCompilationWithoutRestore(bicepFile.FileHandle.Uri, workspace);
+
+            bicepFile = RewriterHelper.RewriteMultiple(
+                compiler,
+                compilation,
+                bicepFile,
                 rewritePasses: 5,
                 model => new TypeCasingFixerRewriter(model),
                 model => new ReadOnlyPropertyRemovalRewriter(model));
 
-            printed = PrettyPrinter.PrintValidProgram(bicepFile.ProgramSyntax, printOptions);
-            if (insertContext.StartWithNewline)
+            var printerOptions = configuration.Formatting.Data;
+            var printed = PrettyPrinterV2.PrintValid(bicepFile.ProgramSyntax, printerOptions);
+
+            var newline = printerOptions.NewlineKind.ToEscapeSequence();
+            var newlineCharacters = newline.ToCharArray();
+            var hasLeadingNewline = printed.StartsWith(newline, StringComparison.Ordinal);
+            var hasTrailingNewline = printed.EndsWith(newline, StringComparison.Ordinal);
+
+            printed = (insertContext.StartWithNewline, hasLeadingNewline) switch
             {
-                printed = "\n" + printed;
-            }
-            if (insertContext.EndWithNewline)
+                (true, false) => $"{newline}{printed}",
+                (false, true) => printed.TrimStart(newlineCharacters),
+                _ => printed,
+            };
+
+            printed = (insertContext.EndWithNewline, hasTrailingNewline) switch
             {
-                printed = printed + "\n";
-            }
+                (true, false) => $"{printed}{newline}",
+                (false, true) => printed.TrimEnd(newlineCharacters),
+                _ => printed,
+            };
 
             return new CodeReplacement(new TextSpan(insertContext.InsertOffset, 0), printed);
         }
@@ -244,11 +267,12 @@ namespace Bicep.LanguageServer.Handlers
 
             return new ResourceDeclarationSyntax(
                 new SyntaxBase[] { description, SyntaxFactory.NewlineToken, },
-                SyntaxFactory.CreateIdentifierToken("resource"),
-                SyntaxFactory.CreateIdentifier(Regex.Replace(resourceId.UnqualifiedName, "[^a-zA-Z]", "")),
+                SyntaxFactory.ResourceKeywordToken,
+                SyntaxFactory.CreateIdentifierWithTrailingSpace(UnifiedNamePattern().Replace(resourceId.UnqualifiedName, "")),
                 SyntaxFactory.CreateStringLiteral(typeReference.FormatName()),
                 null,
                 SyntaxFactory.CreateToken(TokenType.Assignment),
+                [],
                 SyntaxFactory.CreateObject(properties));
         }
 
@@ -324,5 +348,8 @@ namespace Bicep.LanguageServer.Handlers
                     throw new InvalidOperationException($"Failed to deserialize JSON");
             }
         }
+
+        [GeneratedRegex("[^a-zA-Z]")]
+        private static partial Regex UnifiedNamePattern();
     }
 }

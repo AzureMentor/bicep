@@ -1,14 +1,15 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Azure.ResourceManager.Resources.Models;
+using Bicep.Core.Analyzers.Linter;
+
 namespace Bicep.Core.Configuration
 {
     public static class AnalyzersConfigurationExtensions
     {
-        public static AnalyzersConfiguration WithAllAnalyzersDisabled(this AnalyzersConfiguration analyzersConfiguration)
-        {
-            return AnalyzersConfiguration.Empty;
-        }
+        public static AnalyzersConfiguration WithAllAnalyzersDisabled(this AnalyzersConfiguration _) =>
+            AnalyzersConfiguration.Empty;
 
         public static AnalyzersConfiguration WithAnalyzersDisabled(this AnalyzersConfiguration analyzersConfiguration, params string[] analyzerCodesToDisable)
         {
@@ -21,28 +22,58 @@ namespace Bicep.Core.Configuration
             return config;
         }
 
-        public static RootConfiguration WithAllAnalyzersDisabled(this RootConfiguration analyzersConfiguration)
+        public static AnalyzersConfiguration WithAllAnalyzers(this AnalyzersConfiguration analyzersConfiguration)
         {
-            return new RootConfiguration(
-                analyzersConfiguration.Cloud,
-                analyzersConfiguration.ModuleAliases,
-                analyzersConfiguration.Analyzers.WithAllAnalyzersDisabled(),
-                analyzersConfiguration.CacheRootDirectory,
-                analyzersConfiguration.ExperimentalFeaturesEnabled,
-                analyzersConfiguration.ConfigurationPath,
-                analyzersConfiguration.DiagnosticBuilders);
+            var config = analyzersConfiguration;
+            foreach (var (code, ruleInfo) in new LinterRulesProvider().GetLinterRules())
+            {
+                if (ruleInfo.defaultDiagnosticLevel == Diagnostics.DiagnosticLevel.Off)
+                {
+                    config = config.SetValue($"core.rules.{code}.level", "warning");
+                }
+            }
+
+            return config;
         }
 
-        public static RootConfiguration WithAnalyzersDisabled(this RootConfiguration analyzersConfiguration, params string[] analyzerCodesToDisable)
-        {
-            return new RootConfiguration(
-                analyzersConfiguration.Cloud,
-                analyzersConfiguration.ModuleAliases,
-                analyzersConfiguration.Analyzers.WithAnalyzersDisabled(analyzerCodesToDisable),
-                analyzersConfiguration.CacheRootDirectory,
-                analyzersConfiguration.ExperimentalFeaturesEnabled,
-                analyzersConfiguration.ConfigurationPath,
-                analyzersConfiguration.DiagnosticBuilders);
-        }
+        public static RootConfiguration WithAnalyzersConfiguration(this RootConfiguration current, AnalyzersConfiguration analyzersConfiguration) =>
+            new(
+                current.Cloud,
+                current.ModuleAliases,
+                current.Extensions,
+                current.ImplicitExtensions,
+                analyzersConfiguration,
+                current.CacheRootDirectory,
+                current.ExperimentalFeaturesWarning,
+                current.ExperimentalFeaturesEnabled,
+                current.Formatting,
+                current.ConfigFileUri,
+                current.Diagnostics,
+                current.Security);
+
+        public static RootConfiguration WithAllAnalyzersDisabled(this RootConfiguration current) =>
+            current.WithAnalyzersConfiguration(current.Analyzers.WithAllAnalyzersDisabled());
+
+        public static RootConfiguration WithAnalyzersDisabled(this RootConfiguration current, params string[] analyzerCodesToDisable) =>
+            current.WithAnalyzersConfiguration(current.Analyzers.WithAnalyzersDisabled(analyzerCodesToDisable));
+
+        public static RootConfiguration WithAllAnalyzers(this RootConfiguration current) =>
+            current.WithAnalyzersConfiguration(current.Analyzers.WithAllAnalyzers());
+
+        public static RootConfiguration WithCloudConfiguration(this RootConfiguration current, CloudConfiguration cloudConfiguration) =>
+        new(
+            cloudConfiguration,
+            current.ModuleAliases,
+            current.Extensions,
+            current.ImplicitExtensions,
+            current.Analyzers,
+            current.CacheRootDirectory,
+            current.ExperimentalFeaturesWarning,
+            current.ExperimentalFeaturesEnabled,
+            current.Formatting,
+            current.ConfigFileUri,
+            current.Diagnostics,
+            current.Security);
+
     }
 }

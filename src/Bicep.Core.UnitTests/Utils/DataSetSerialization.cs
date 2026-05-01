@@ -1,6 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.IO;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
@@ -26,7 +25,7 @@ namespace Bicep.Core.UnitTests.Utils
             return settings;
         }
 
-        public static StringEnumConverter CreateEnumConverter() => new StringEnumConverter { NamingStrategy = new CamelCaseNamingStrategy(), AllowIntegerValues = false };
+        public static StringEnumConverter CreateEnumConverter() => new() { NamingStrategy = new CamelCaseNamingStrategy(), AllowIntegerValues = false };
 
         public static JsonSerializer CreateSerializer() => JsonSerializer.Create(CreateSerializerSettings());
 

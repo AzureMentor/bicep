@@ -1,21 +1,43 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Linq;
-using Bicep.Core.Semantics.Namespaces;
+using Bicep.Core.Diagnostics;
+using Bicep.Core.Navigation;
+using Bicep.Core.SourceGraph;
 using Bicep.Core.Syntax;
+using Bicep.Core.Syntax.Visitors;
 using Bicep.Core.TypeSystem;
+using Bicep.Core.TypeSystem.Types;
+using Bicep.Core.Utils;
 
 namespace Bicep.Core.Semantics
 {
     public static class SemanticModelHelper
     {
+        public static IEnumerable<FunctionCallSyntaxBase> GetFunctionsByName(SemanticModel model, string @namespace, string functionName, SyntaxBase syntax)
+        {
+            return SyntaxAggregator.AggregateByType<FunctionCallSyntaxBase>(syntax)
+                .Where(s => s.NameEquals(functionName))
+                .Where(s => SemanticModelHelper.TryGetFunctionInNamespace(model, @namespace, s) is { });
+        }
+
+        public static FunctionCallSyntaxBase? TryGetNamedFunction(SemanticModel model, string @namespace, string functionName, SyntaxBase syntax)
+        {
+            if (syntax is FunctionCallSyntaxBase functionCall &&
+                functionCall.NameEquals(functionName) &&
+                SemanticModelHelper.TryGetFunctionInNamespace(model, @namespace, functionCall) is { })
+            {
+                return functionCall;
+            }
+
+            return null;
+        }
+
         public static FunctionCallSyntaxBase? TryGetFunctionInNamespace(SemanticModel semanticModel, string @namespace, SyntaxBase syntax)
         {
             if (semanticModel.GetSymbolInfo(syntax) is FunctionSymbol function &&
                 function.DeclaringObject is NamespaceType namespaceType &&
-                LanguageConstants.IdentifierComparer.Equals(namespaceType.ProviderName, @namespace))
+                LanguageConstants.IdentifierComparer.Equals(namespaceType.ExtensionName, @namespace))
             {
                 return syntax as FunctionCallSyntaxBase;
             }
@@ -36,30 +58,9 @@ namespace Bicep.Core.Semantics
                     return false;
                 }
 
-                return LanguageConstants.IdentifierComparer.Equals(namespaceType.ProviderName, @namespace) &&
+                return LanguageConstants.IdentifierComparer.Equals(namespaceType.ExtensionName, @namespace) &&
                     LanguageConstants.IdentifierComparer.Equals(functionSymbol.Name, decoratorName);
             });
-        }
-
-        public static string? TryGetDescription(SemanticModel semanticModel, DecorableSyntax decorable)
-            => TryGetDescription(semanticModel.Binder, semanticModel.TypeManager.GetDeclaredType, decorable);
-
-        public static string? TryGetDescription(IBinder binder, Func<SyntaxBase, TypeSymbol?> getDeclaredTypeFunc, DecorableSyntax decorable)
-        {
-            var decorator = SemanticModelHelper.TryGetDecoratorInNamespace(binder,
-                getDeclaredTypeFunc,
-                decorable,
-                SystemNamespaceType.BuiltInName,
-                LanguageConstants.MetadataDescriptionPropertyName);
-
-            if (decorator is not null &&
-                decorator.Arguments.FirstOrDefault()?.Expression is StringSyntax stringSyntax
-                && stringSyntax.TryGetLiteralValue() is string description)
-            {
-                return description;
-            }
-
-            return null;
         }
     }
 }

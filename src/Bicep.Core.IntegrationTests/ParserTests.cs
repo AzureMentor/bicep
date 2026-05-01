@@ -1,20 +1,17 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
+using System.Text;
 using Bicep.Core.Extensions;
-using Bicep.Core.Navigation;
-using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.Parsing;
 using Bicep.Core.Samples;
 using Bicep.Core.Syntax;
+using Bicep.Core.Text;
+using Bicep.Core.UnitTests.Assertions;
+using Bicep.Core.UnitTests.Syntax;
 using Bicep.Core.UnitTests.Utils;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System.Linq;
-using System.Text;
-using Bicep.Core.UnitTests.Syntax;
 
 namespace Bicep.Core.IntegrationTests
 {
@@ -70,8 +67,8 @@ namespace Bicep.Core.IntegrationTests
             sourceTextWithDiags.Should().EqualWithLineByLineDiffOutput(
                 TestContext,
                 dataSet.Syntax,
-                expectedLocation: DataSet.GetBaselineUpdatePath(dataSet, DataSet.TestFileMainSyntax),
-                actualLocation: resultsFile);
+                expectedPath: DataSet.GetBaselineUpdatePath(dataSet, DataSet.TestFileMainSyntax),
+                actualPath: resultsFile);
         }
 
         [DataTestMethod]
@@ -102,7 +99,7 @@ namespace Bicep.Core.IntegrationTests
             var program = ParserHelper.Parse(contents);
             program.Should().BeOfType<ProgramSyntax>();
 
-            program.ToTextPreserveFormatting().Should().Be(contents);
+            program.ToString().Should().Be(contents);
         }
 
         private static void RunSpanConsistencyTest(string text)
@@ -124,7 +121,8 @@ namespace Bicep.Core.IntegrationTests
             foreach (var ancestor in syntax.GetAncestors().Reverse().Skip(1))
             {
                 var isLast = (ancestor.Depth > 0 && ancestor == syntaxByParent[ancestor.Parent].Last());
-                graphPrefix.Append(isLast switch {
+                graphPrefix.Append(isLast switch
+                {
                     true => "  ",
                     _ => "| ",
                 });
@@ -133,13 +131,15 @@ namespace Bicep.Core.IntegrationTests
             if (syntax.Depth > 0)
             {
                 var isLast = syntax == syntaxByParent[syntax.Parent].Last();
-                graphPrefix.Append(isLast switch {
+                graphPrefix.Append(isLast switch
+                {
                     true => "└─",
                     _ => "├─",
                 });
             }
 
-            return syntax.Syntax switch {
+            return syntax.Syntax switch
+            {
                 Token token => $"{graphPrefix}Token({token.Type}) |{OutputHelper.EscapeWhitespace(token.Text)}|",
                 _ => $"{graphPrefix}{syntax.Syntax.GetType().Name}",
             };
@@ -173,4 +173,3 @@ namespace Bicep.Core.IntegrationTests
         }
     }
 }
-

@@ -1,15 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-import NodeEnvironment = require("jest-environment-node");
+import NodeEnvironment from "jest-environment-node";
 import * as vscode from "vscode";
 
 class VSCodeEnvironment extends NodeEnvironment {
   async setup(): Promise<void> {
     await super.setup();
 
-    const bicepExtension = vscode.extensions.getExtension(
-      "ms-azuretools.vscode-bicep"
-    );
+    const bicepExtension = vscode.extensions.getExtension("ms-azuretools.vscode-bicep");
 
     if (!bicepExtension) {
       throw Error("Extension not found.");

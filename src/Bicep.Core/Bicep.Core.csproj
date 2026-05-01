@@ -3,6 +3,8 @@
     <AssemblyName>Azure.Bicep.Core</AssemblyName>
     <RootNamespace>Bicep.Core</RootNamespace>
     <EnableNuget>true</EnableNuget>
+    <!-- Disable CS1591 Missing XML comment for publicly visible type or member for generated code -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
     <PackageTags>Azure;ResourceManager;ARM;Deployments;Templates;Bicep</PackageTags>
     <Description>
       Bicep compiler core functionality.
@@ -18,33 +20,40 @@
   </ItemGroup>
 
   <ItemGroup>
+    <AdditionalFiles Include="BannedSymbols.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Include="Configuration\bicepconfig.json" WithCulture="false" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.Containers.ContainerRegistry" Version="1.1.0-beta.9" />
-    <PackageReference Include="Azure.Identity" Version="1.8.2" />
-    <PackageReference Include="Azure.ResourceManager.Resources" Version="1.4.0" />
-    <PackageReference Include="JetBrains.Annotations" Version="2022.3.1">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="JsonPatch.Net" Version="2.0.6" />
-    <PackageReference Include="JsonPath.Net" Version="0.5.1" />
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="7.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="7.0.4" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="7.0.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="SharpYaml" Version="2.1.0" />
-    <PackageReference Include="System.Collections.Immutable" Version="7.0.0" />
-    <PackageReference Include="Azure.Deployments.Core" Version="1.0.872" />
-    <PackageReference Include="Azure.Deployments.Templates" Version="1.0.872" />
-    <PackageReference Include="Azure.Deployments.Expression" Version="1.0.872" />
-    <PackageReference Include="Azure.Bicep.Types" Version="0.3.99" />
-    <PackageReference Include="Azure.Bicep.Types.Az" Version="0.2.407" />
-    <PackageReference Include="Azure.Bicep.Types.K8s" Version="0.1.233" />
-    <PackageReference Include="System.IO.Abstractions" Version="19.2.11" />
-    <PackageReference Include="System.Text.Json" Version="8.0.0-preview.2.23128.3" />
-    <PackageReference Include="Azure.Bicep.Internal.RoslynAnalyzers" Version="0.1.31" PrivateAssets="all" />
+    <PackageReference Include="Azure.Containers.ContainerRegistry" />
+    <PackageReference Include="Azure.Identity" />
+    <PackageReference Include="Azure.ResourceManager.Resources" />
+    <PackageReference Include="JetBrains.Annotations" PrivateAssets="All" />
+    <PackageReference Include="JsonPatch.Net" />
+    <PackageReference Include="JsonPath.Net" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <PackageReference Include="Microsoft.PowerPlatform.ResourceStack" />
+    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="Semver" />
+    <PackageReference Include="SharpYaml" />
+    <PackageReference Include="Azure.Deployments.Templates" />
+    <PackageReference Include="Azure.Bicep.Types" />
+    <PackageReference Include="Azure.Bicep.Types.Az" />
+    <PackageReference Include="Azure.Bicep.Types.K8s" />
+    <PackageReference Include="TestableIO.System.IO.Abstractions.Wrappers" />
+    <PackageReference Include="Azure.Bicep.Internal.RoslynAnalyzers" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.VisualStudio.Threading" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Bicep.IO\Bicep.IO.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Update="CoreResources.Designer.cs">
@@ -59,5 +68,14 @@
       <LastGenOutput>CoreResources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Update="Nerdbank.GitVersioning" />
+  </ItemGroup>
   <ProjectExtensions><VisualStudio><UserProperties configuration_4bicepconfig_1json__JsonSchema="https://appsemble.app/api.json" /></VisualStudio></ProjectExtensions>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Bicep.Core.UnitTests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
 </Project>

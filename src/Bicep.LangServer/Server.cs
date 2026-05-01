@@ -1,39 +1,34 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Diagnostics;
+using System.Net;
+using System.ServiceProcess;
 using Bicep.Core.Features;
-using Bicep.Core.Registry.Auth;
+using Bicep.Core.Registry.Catalog;
 using Bicep.Core.Tracing;
-using Bicep.Core.Workspaces;
-using Bicep.LanguageServer.CompilationManager;
-using Bicep.LanguageServer.Completions;
-using Bicep.LanguageServer.Configuration;
-using Bicep.LanguageServer.Deploy;
+using Bicep.Core.Utils;
 using Bicep.LanguageServer.Handlers;
+using Bicep.LanguageServer.Options;
 using Bicep.LanguageServer.Providers;
 using Bicep.LanguageServer.Registry;
-using Bicep.LanguageServer.Snippets;
-using Bicep.LanguageServer.Telemetry;
+using Bicep.LanguageServer.Settings;
 using Bicep.LanguageServer.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using OmniSharp.Extensions.JsonRpc;
 using OmniSharp.Extensions.LanguageServer.Protocol.Window;
 using OmniSharp.Extensions.LanguageServer.Server;
-using System;
-using System.Diagnostics;
-using System.Threading;
-using System.Threading.Tasks;
 using OmnisharpLanguageServer = OmniSharp.Extensions.LanguageServer.Server.LanguageServer;
-using Bicep.LanguageServer.Settings;
 
 namespace Bicep.LanguageServer
 {
     public class Server : IDisposable
     {
         private readonly OmnisharpLanguageServer server;
-
-        public Server(Action<LanguageServerOptions> onOptionsFunc)
+        private readonly IEnvironment environment;
+        public Server(BicepLangServerOptions bicepLangServerOptions, Action<LanguageServerOptions> onOptionsFunc)
         {
+            environment = new Core.Utils.Environment();
             server = OmnisharpLanguageServer.PreInit(options =>
             {
                 options
@@ -41,13 +36,16 @@ namespace Bicep.LanguageServer
                     .WithHandler<BicepDocumentSymbolHandler>()
                     .WithHandler<BicepDefinitionHandler>()
                     .WithHandler<BicepDeploymentGraphHandler>()
+                    .WithHandler<GetDeploymentDataHandler>()
                     .WithHandler<BicepReferencesHandler>()
+                    .WithHandler<BicepExternalSourceDocumentLinkHandler>()
                     .WithHandler<BicepDocumentHighlightHandler>()
                     .WithHandler<BicepDocumentFormattingHandler>()
                     .WithHandler<BicepRenameHandler>()
                     .WithHandler<BicepHoverHandler>()
                     .WithHandler<BicepCompletionHandler>()
                     .WithHandler<BicepCodeActionHandler>()
+                    .WithHandler<BicepCodeLensHandler>()
                     .WithHandler<BicepCreateConfigFileHandler>()
                     .WithHandler<BicepDidChangeWatchedFilesHandler>()
                     .WithHandler<BicepEditLinterRuleCommandHandler>()
@@ -57,6 +55,7 @@ namespace Bicep.LanguageServer
                     .WithHandler<BicepTelemetryHandler>()
                     .WithHandler<BicepBuildCommandHandler>()
                     .WithHandler<BicepGenerateParamsCommandHandler>()
+                    .WithHandler<BicepBuildParamsCommandHandler>()
                     .WithHandler<BicepDeploymentStartCommandHandler>()
                     // Base handler (ExecuteTypedResponseCommandHandlerBase) is serial. This blocks other commands on the client side.
                     // To avoid the above issue, we'll change the RequestProcessType to parallel
@@ -64,14 +63,16 @@ namespace Bicep.LanguageServer
                     .WithHandler<BicepDecompileCommandHandler>()
                     .WithHandler<BicepDecompileSaveCommandHandler>()
                     .WithHandler<BicepDecompileForPasteCommandHandler>()
+                    .WithHandler<BicepDecompileParamsCommandHandler>()
                     .WithHandler<BicepDeploymentScopeRequestHandler>()
                     .WithHandler<BicepDeploymentParametersHandler>()
                     .WithHandler<ImportKubernetesManifestHandler>()
                     .WithHandler<BicepForceModulesRestoreCommandHandler>()
-                    .WithHandler<BicepRegistryCacheRequestHandler>()
+                    .WithHandler<BicepExternalSourceRequestHandler>()
                     .WithHandler<InsertResourceHandler>()
                     .WithHandler<ConfigurationSettingsHandler>()
-                    .WithServices(RegisterServices);
+                    .WithHandler<LocalDeployHandler>()
+                    .WithServices(services => services.AddServerDependencies(bicepLangServerOptions));
 
                 onOptionsFunc(options);
             });
@@ -81,7 +82,8 @@ namespace Bicep.LanguageServer
         {
             await server.Initialize(cancellationToken);
 
-            server.LogInfo($"Running on processId {Environment.ProcessId}");
+            server.LogInfo($"Bicep version: {environment.GetVersionString()}, OS: {environment.CurrentPlatform?.ToString() ?? "unknown"}, Architecture: {environment.CurrentArchitecture}");
+            server.LogInfo($"Running on processId {System.Environment.ProcessId}");
 
             if (FeatureProvider.TracingEnabled)
             {
@@ -93,36 +95,13 @@ namespace Bicep.LanguageServer
                 var scheduler = server.GetRequiredService<IModuleRestoreScheduler>();
                 scheduler.Start();
 
+#pragma warning disable VSTHRD003 // Avoid awaiting foreign Tasks
                 await server.WaitForExit;
+#pragma warning restore VSTHRD003 // Avoid awaiting foreign Tasks
             }
-        }
 
-        private static void RegisterServices(IServiceCollection services)
-        {
-            // using type based registration so dependencies can be injected automatically
-            // without manually constructing up the graph
-            services
-                .AddBicepCore()
-                .AddBicepDecompiler()
-                .AddSingleton<IWorkspace, Workspace>()
-                .AddSingleton<ISnippetsProvider, SnippetsProvider>()
-                .AddSingleton<ITelemetryProvider, TelemetryProvider>()
-                .AddSingleton<ICompilationManager, BicepCompilationManager>()
-                .AddSingleton<ICompilationProvider, BicepCompilationProvider>()
-                .AddSingleton<ISymbolResolver, BicepSymbolResolver>()
-                .AddSingleton<ICompletionProvider, BicepCompletionProvider>()
-                .AddSingleton<IModuleRestoreScheduler, ModuleRestoreScheduler>()
-                .AddSingleton<IAzResourceProvider, AzResourceProvider>()
-                .AddSingleton<IBicepConfigChangeHandler, BicepConfigChangeHandler>()
-                .AddSingleton<IDeploymentCollectionProvider, DeploymentCollectionProvider>()
-                .AddSingleton<IDeploymentOperationsCache, DeploymentOperationsCache>()
-                .AddSingleton<IDeploymentFileCompilationCache, DeploymentFileCompilationCache>()
-                .AddSingleton<IClientCapabilitiesProvider, ClientCapabilitiesProvider>()
-                .AddSingleton<IModuleReferenceCompletionProvider, ModuleReferenceCompletionProvider>()
-                .AddSingleton<ITokenCredentialFactory, TokenCredentialFactory>()
-                .AddSingleton<ISettingsProvider, SettingsProvider>()
-                .AddSingleton<IAzureContainerRegistriesProvider, AzureContainerRegistriesProvider>()
-                .AddSingleton<IPublicRegistryModuleMetadataProvider>(sp => new PublicRegistryModuleMetadataProvider(initializeCache: true));
+            var publicModuleMetadataProvider = server.GetRequiredService<IPublicModuleMetadataProvider>();
+            publicModuleMetadataProvider.StartCache();
         }
 
         public void Dispose()

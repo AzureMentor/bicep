@@ -1,11 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using Bicep.Core.Diagnostics;
 using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.UnitTests.Utils;
 using FluentAssertions;
-using FluentAssertions.Execution;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json.Linq;
 
@@ -14,7 +11,6 @@ namespace Bicep.Core.IntegrationTests.Emit
     [TestClass]
     public class ParamsFileWriterTests
     {
-
         [DataTestMethod]
         [DataRow(@"
 using 'main.bicep'
@@ -33,7 +29,111 @@ param myParam string
 ")]
         [DataRow(@"
 using 'main.bicep'
-
+param myParam = getSecret('<subscriptionId>', '<resourceGroupName>', '<keyVaultName>', '<secretName>')", @"
+{
+  ""$schema"": ""https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#"",
+  ""contentVersion"": ""1.0.0.0"",
+  ""parameters"": {
+    ""myParam"": {
+      ""reference"": {
+        ""keyVault"": {
+          ""id"": ""/subscriptions/<subscriptionId>/resourceGroups/<resourceGroupName>/providers/Microsoft.KeyVault/vaults/<keyVaultName>""
+        },
+        ""secretName"": ""<secretName>""
+      }
+    }
+  }
+}", @"
+param myParam string
+")]
+        [DataRow(@"
+using 'main.bicep'
+param myParam = getSecret('<subscriptionId>', '<resourceGroupName>', '<keyVaultName>', '<secretName>', '<secretVersion>')", @"
+{
+  ""$schema"": ""https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#"",
+  ""contentVersion"": ""1.0.0.0"",
+  ""parameters"": {
+    ""myParam"": {
+      ""reference"": {
+        ""keyVault"": {
+          ""id"": ""/subscriptions/<subscriptionId>/resourceGroups/<resourceGroupName>/providers/Microsoft.KeyVault/vaults/<keyVaultName>""
+        },
+        ""secretName"": ""<secretName>"",
+        ""secretVersion"": ""<secretVersion>""
+      }
+    }
+  }
+}", @"
+param myParam string
+")]
+        [DataRow("""
+          using 'main.bicep'
+          param myParam = getSecret('<subscription${toUpper('i')}d>', '<resourceGroup${toUpper('n')}ame>', '<keyVault${toUpper('n')}ame>', '<secret${toUpper('n')}ame>', '<secret${toUpper('v')}ersion>')
+          """,
+          """
+          {
+            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": {
+              "myParam": {
+                "reference": {
+                  "keyVault": {
+                    "id": "/subscriptions/<subscriptionId>/resourceGroups/<resourceGroupName>/providers/Microsoft.KeyVault/vaults/<keyVaultName>"
+                  },
+                  "secretName": "<secretName>",
+                  "secretVersion": "<secretVersion>"
+                }
+              }
+            }
+          }
+          """,
+          """
+          param myParam string
+          """)]
+        [DataRow(@"
+using 'main.bicep'
+param myParam = getSecret(
+  externalInput('subId'),
+  externalInput('rgName'),
+  externalInput('kvName'),
+  externalInput('secretName'),
+  externalInput('secretVersion'))", @"
+{
+  ""$schema"": ""https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#"",
+  ""contentVersion"": ""1.0.0.0"",
+  ""parameters"": {
+    ""myParam"": {
+      ""reference"": {
+        ""keyVault"": {
+          ""id"": ""[resourceId(externalInputs('subId_0'), externalInputs('rgName_1'), 'Microsoft.KeyVault', 'vaults', externalInputs('kvName_2'))]""
+        },
+        ""secretName"": ""[externalInputs('secretName_3')]"",
+        ""secretVersion"": ""[externalInputs('secretVersion_4')]""
+      }
+    }
+  },
+  ""externalInputDefinitions"": {
+    ""kvName_2"": {
+      ""kind"": ""kvName""
+    },
+    ""rgName_1"": {
+      ""kind"": ""rgName""
+    },
+    ""secretName_3"": {
+      ""kind"": ""secretName""
+    },
+    ""secretVersion_4"": {
+      ""kind"": ""secretVersion""
+    },
+    ""subId_0"": {
+      ""kind"": ""subId""
+    }
+  }
+}", @"
+param myParam string
+")]
+        [DataRow(@"
+using 'main.bicep'
 param myParam = 1", @"
 {
   ""$schema"": ""https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#"",
@@ -198,33 +298,6 @@ param myParam = {
   }
 }", @"
 param myParam object
-")]
-
-        [DataRow(@"
-using 'main.bicep'
-
-//multiple parameters
-param myStr = 'foo'
-param myBool = false
-param myInt = 1", @"
-{
-  ""$schema"": ""https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#"",
-  ""contentVersion"": ""1.0.0.0"",
-  ""parameters"": {
-    ""myStr"": {
-      ""value"": ""foo""
-    },
-    ""myBool"": {
-      ""value"": false
-    },
-    ""myInt"": {
-      ""value"": 1
-    }
-  }
-}", @"
-param myStr string
-param myBool bool
-param myInt int
 ")]
         public void Params_file_with_no_errors_should_compile_correctly(string paramsText, string paramsJsonText, string bicepText)
         {

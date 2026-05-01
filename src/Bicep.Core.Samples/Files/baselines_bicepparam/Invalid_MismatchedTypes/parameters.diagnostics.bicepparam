@@ -1,22 +1,22 @@
 using './main.bicep'
 
 param string = 123
-//@[0:18) [BCP260 (Error)] The parameter "string" expects a value of type "string" but the provided value is of type "123". (CodeDescription: none) |param string = 123|
+//@[15:18) [BCP033 (Error)] Expected a value of type "string" but the provided value is of type "123". (bicep https://aka.ms/bicep/core-diagnostics#BCP033) |123|
 
 param bool = 'hello'
-//@[0:20) [BCP260 (Error)] The parameter "bool" expects a value of type "bool" but the provided value is of type "'hello'". (CodeDescription: none) |param bool = 'hello'|
+//@[13:20) [BCP033 (Error)] Expected a value of type "bool" but the provided value is of type "'hello'". (bicep https://aka.ms/bicep/core-diagnostics#BCP033) |'hello'|
 
 param int = false
-//@[0:17) [BCP260 (Error)] The parameter "int" expects a value of type "int" but the provided value is of type "false". (CodeDescription: none) |param int = false|
+//@[12:17) [BCP033 (Error)] Expected a value of type "int" but the provided value is of type "false". (bicep https://aka.ms/bicep/core-diagnostics#BCP033) |false|
 
 param object = ['abc', 'def']
-//@[0:29) [BCP260 (Error)] The parameter "object" expects a value of type "object" but the provided value is of type "['abc', 'def']". (CodeDescription: none) |param object = ['abc', 'def']|
+//@[15:29) [BCP033 (Error)] Expected a value of type "object" but the provided value is of type "['abc', 'def']". (bicep https://aka.ms/bicep/core-diagnostics#BCP033) |['abc', 'def']|
 
 param array = {
-//@[0:38) [BCP260 (Error)] The parameter "array" expects a value of type "array" but the provided value is of type "object". (CodeDescription: none) |param array = {\n  isThis: 'correct?'\n}|
+//@[14:38) [BCP033 (Error)] Expected a value of type "array" but the provided value is of type "object". (bicep https://aka.ms/bicep/core-diagnostics#BCP033) |{\n  isThis: 'correct?'\n}|
   isThis: 'correct?'
 }
 
 param stringAllowed = 'notTheAllowedValue'
-//@[0:42) [BCP260 (Error)] The parameter "stringAllowed" expects a value of type "'bar' | 'foo'" but the provided value is of type "'notTheAllowedValue'". (CodeDescription: none) |param stringAllowed = 'notTheAllowedValue'|
+//@[22:42) [BCP033 (Error)] Expected a value of type "'bar' | 'foo'" but the provided value is of type "'notTheAllowedValue'". (bicep https://aka.ms/bicep/core-diagnostics#BCP033) |'notTheAllowedValue'|
 

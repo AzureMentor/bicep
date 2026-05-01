@@ -1,16 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Immutable;
-using Bicep.Core.Analyzers.Interfaces;
-using Bicep.Core.Analyzers.Linter.ApiVersions;
-using Bicep.Core.Configuration;
-using Bicep.Core.Features;
-using Bicep.Core.FileSystem;
-using Bicep.Core.Registry;
-using Bicep.Core.Semantics;
-using Bicep.Core.Semantics.Namespaces;
-using Bicep.Core.Workspaces;
+
+using Bicep.Core.SourceGraph;
+using Bicep.Core.UnitTests.Features;
+using Bicep.Core.UnitTests.Mock.Registry;
+using Bicep.Core.UnitTests.Utils;
+using Bicep.Core.Utils;
 using Bicep.Decompiler;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -24,24 +19,6 @@ public interface IDependencyHelper
 
 public static class IDependencyHelperExtensions
 {
-    public static Compilation BuildCompilation(this IDependencyHelper helper, SourceFileGrouping sourceFileGrouping, ImmutableDictionary<ISourceFile, ISemanticModel>? modelLookup = null)
-        => new(
-            helper.Construct<IFeatureProviderFactory>(),
-            helper.Construct<INamespaceProvider>(),
-            sourceFileGrouping,
-            helper.Construct<IConfigurationManager>(),
-            helper.Construct<IApiVersionProviderFactory>(),
-            helper.Construct<IBicepAnalyzer>(),
-            modelLookup);
-
-    public static SourceFileGrouping BuildSourceFileGrouping(this IDependencyHelper helper, Uri entryFileUri, bool forceModulesRestore = false)
-        => SourceFileGroupingBuilder.Build(
-            helper.Construct<IFileResolver>(),
-            helper.Construct<IModuleDispatcher>(),
-            helper.Construct<IWorkspace>(),
-            entryFileUri,
-            forceModulesRestore);
-
     public static BicepCompiler GetCompiler(this IDependencyHelper helper)
         => helper.Construct<BicepCompiler>();
 
@@ -53,26 +30,56 @@ public class ServiceBuilder
 {
     private readonly IServiceCollection services;
 
+    private FeatureProviderOverrides? FeatureOverrides { get; set; }
+
     public ServiceBuilder()
     {
         this.services = new ServiceCollection()
+            .AddSingleton<IEnvironment>(TestEnvironment.Default)
             .AddBicepCore()
             .AddBicepDecompiler()
-            .WithWorkspace(new Workspace());
+            .AddMockHttpClient(PublicModuleIndexHttpClientMocks.Create([]).Object)
+            .WithWorkspace(new ActiveSourceFileSet());
     }
 
     public static IDependencyHelper Create(Action<IServiceCollection>? registerAction = null)
     {
-        registerAction ??= services => {};
+        registerAction ??= services => { };
 
         return new ServiceBuilder().WithRegistration(registerAction).Build();
     }
+
+    public static ServiceBuilder CreateWithServices(Action<IServiceCollection> registerAction)
+    {
+        ServiceBuilder builder = new();
+
+        builder.WithRegistration(registerAction);
+
+        return builder;
+    }
+
+    public static ServiceBuilder CreateWithFeatures(FeatureProviderOverrides overrides)
+        => CreateWithServices(x => x.WithFeatureOverrides(overrides));
 
     public ServiceBuilder WithRegistration(Action<IServiceCollection> registerAction)
     {
         registerAction(services);
 
         return this;
+    }
+
+    public ServiceBuilder WithFeatureOverrides(FeatureProviderOverrides overrides)
+    {
+        var resultFeatures = FeatureOverrides = overrides;
+
+        return WithRegistration(x => x.WithFeatureOverrides(resultFeatures));
+    }
+
+    public ServiceBuilder WithFeaturesOverridden(Func<FeatureProviderOverrides, FeatureProviderOverrides> overrides)
+    {
+        var resultFeatures = FeatureOverrides = overrides(FeatureOverrides ?? new FeatureProviderOverrides());
+
+        return WithRegistration(x => x.WithFeatureOverrides(resultFeatures));
     }
 
     public IDependencyHelper Build()

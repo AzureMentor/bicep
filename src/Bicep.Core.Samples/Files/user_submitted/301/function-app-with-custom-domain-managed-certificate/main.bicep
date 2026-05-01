@@ -19,6 +19,7 @@ resource hostingPlan 'Microsoft.Web/serverfarms@2020-06-01' = {
 }
 
 resource storage 'Microsoft.Storage/storageAccounts@2019-06-01' = {
+  #disable-next-line BCP334
   name: '${replace(componentBase, '-', '')}st'
   location: location
   kind: 'StorageV2'
@@ -95,9 +96,7 @@ resource dnsTxt 'Microsoft.Network/dnsZones/TXT@2018-05-01' = {
     TTL: 3600
     TXTRecords: [
       {
-        value: [
-          '${functionApp.properties.customDomainVerificationId}'
-        ]
+        value: ['${functionApp.properties.customDomainVerificationId}']
       }
     ]
   }
@@ -121,10 +120,7 @@ resource dnsCname 'Microsoft.Network/dnsZones/CNAME@2018-05-01' = {
 
 resource functionAppCustomHost 'Microsoft.Web/sites/hostNameBindings@2020-06-01' = {
   name: '${functionApp.name}/${applicationName}.${dnsZone}'
-  dependsOn: [
-    dnsTxt
-    dnsCname
-  ]
+  dependsOn: [dnsTxt, dnsCname]
   properties: {
     hostNameType: 'Verified'
     sslState: 'Disabled'
@@ -136,9 +132,7 @@ resource functionAppCustomHost 'Microsoft.Web/sites/hostNameBindings@2020-06-01'
 resource functionAppCustomHostCertificate 'Microsoft.Web/certificates@2020-06-01' = {
   name: '${applicationName}.${dnsZone}'
   location: location
-  dependsOn: [
-    functionAppCustomHost
-  ]
+  dependsOn: [functionAppCustomHost]
   properties: any({
     serverFarmId: hostingPlan.id
     canonicalName: '${applicationName}.${dnsZone}'

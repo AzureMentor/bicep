@@ -2,66 +2,147 @@
 // Licensed under the MIT License.
 
 using System.Buffers;
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Text;
 using System.Text.Json;
 using Bicep.Core.Diagnostics;
+using Bicep.Core.Extensions;
+using Bicep.IO.Abstraction;
 
 namespace Bicep.Core.Configuration
 {
     public class RootConfiguration
     {
-        private const string CloudKey = "cloud";
-        private const string ModuleAliasesKey = "moduleAliases";
-        private const string AnalyzersKey = "analyzers";
-        private const string CacheRootDirectoryKey = "cacheRootDirectory";
-        private const string ExperimentalFeaturesEnabledKey = "experimentalFeaturesEnabled";
+        public const string CloudKey = "cloud";
+
+        public const string ModuleAliasesKey = "moduleAliases";
+
+        public const string ExtensionsKey = "extensions";
+
+        public const string ImplicitExtensionsKey = "implicitExtensions";
+
+        public const string AnalyzersKey = "analyzers";
+
+        public const string CacheRootDirectoryKey = "cacheRootDirectory";
+
+        public const string ExperimentalFeaturesWarningKey = "experimentalFeaturesWarning";
+
+        public const string ExperimentalFeaturesEnabledKey = "experimentalFeaturesEnabled";
+
+        public const string FormattingKey = "formatting";
+
+        public const string SecurityKey = "security";
 
         public RootConfiguration(
             CloudConfiguration cloud,
             ModuleAliasesConfiguration moduleAliases,
+            ExtensionsConfiguration extensions,
+            ImplicitExtensionsConfiguration implicitExtensions,
             AnalyzersConfiguration analyzers,
             string? cacheRootDirectory,
+            bool experimentalFeaturesWarning,
             ExperimentalFeaturesEnabled experimentalFeaturesEnabled,
-            string? configurationPath,
-            IEnumerable<DiagnosticBuilder.DiagnosticBuilderDelegate>? diagnosticBuilders)
+            FormattingConfiguration formatting,
+            IOUri? configFileUri,
+            IEnumerable<IDiagnostic>? diagnostics,
+            SecurityConfiguration? security = null)
         {
             this.Cloud = cloud;
             this.ModuleAliases = moduleAliases;
+            this.Extensions = extensions;
+            this.ImplicitExtensions = implicitExtensions;
             this.Analyzers = analyzers;
-            this.CacheRootDirectory = cacheRootDirectory;
+            this.CacheRootDirectory = ExpandCacheRootDirectory(cacheRootDirectory);
+            this.ExperimentalFeaturesWarning = experimentalFeaturesWarning;
             this.ExperimentalFeaturesEnabled = experimentalFeaturesEnabled;
-            this.ConfigurationPath = configurationPath;
-            this.DiagnosticBuilders = diagnosticBuilders?.ToImmutableArray() ?? ImmutableArray<DiagnosticBuilder.DiagnosticBuilderDelegate>.Empty;
+            this.Formatting = formatting;
+            this.ConfigFileUri = configFileUri;
+            this.Security = security ?? SecurityConfiguration.Default;
+
+            // Merge BCP447 warnings from invalid security config patterns
+            var securityDiagnostics = this.Security.InvalidRegistryPatterns
+                .Select(p => DiagnosticBuilder.ForDocumentStart().InvalidTrustedRegistryPattern(
+                    p.Pattern,
+                    p.Reason))
+                .Cast<IDiagnostic>();
+            this.Diagnostics = (diagnostics ?? [])
+                .Concat(securityDiagnostics)
+                .ToImmutableArray();
         }
 
-        public static RootConfiguration Bind(JsonElement element, string? configurationPath = null, IEnumerable<DiagnosticBuilder.DiagnosticBuilderDelegate>? diagnosticBuilders = null)
+        public static RootConfiguration Bind(JsonElement element, IOUri? configFileUri = null)
         {
-            var cloud = CloudConfiguration.Bind(element.GetProperty(CloudKey), configurationPath);
-            var moduleAliases = ModuleAliasesConfiguration.Bind(element.GetProperty(ModuleAliasesKey), configurationPath);
+            var cloud = CloudConfiguration.Bind(element.GetProperty(CloudKey));
+            var moduleAliases = ModuleAliasesConfiguration.Bind(element.GetProperty(ModuleAliasesKey), configFileUri);
             var analyzers = new AnalyzersConfiguration(element.GetProperty(AnalyzersKey));
             var cacheRootDirectory = element.TryGetProperty(CacheRootDirectoryKey, out var e) ? e.GetString() : default;
-            var experimentalFeaturesEnabled = ExperimentalFeaturesEnabled.Bind(element.GetProperty(ExperimentalFeaturesEnabledKey), configurationPath);
+            var experimentalFeaturesWarning = element.TryGetProperty(ExperimentalFeaturesWarningKey, out var value) && value.GetBoolean();
+            var experimentalFeaturesEnabled = ExperimentalFeaturesEnabled.Bind(element.GetProperty(ExperimentalFeaturesEnabledKey));
+            var formatting = FormattingConfiguration.Bind(element.GetProperty(FormattingKey));
 
-            return new(cloud, moduleAliases, analyzers, cacheRootDirectory, experimentalFeaturesEnabled, configurationPath, diagnosticBuilders);
+            var extensions = ExtensionsConfiguration.Bind(element.GetProperty(ExtensionsKey));
+            var implicitExtensions = ImplicitExtensionsConfiguration.Bind(element.GetProperty(ImplicitExtensionsKey));
+            var security = element.TryGetProperty(SecurityKey, out var securityElement)
+                ? SecurityConfiguration.Bind(securityElement)
+                : SecurityConfiguration.Default;
+
+            return new(cloud, moduleAliases, extensions, implicitExtensions, analyzers, cacheRootDirectory, experimentalFeaturesWarning, experimentalFeaturesEnabled, formatting, configFileUri, null, security);
         }
 
         public CloudConfiguration Cloud { get; }
 
         public ModuleAliasesConfiguration ModuleAliases { get; }
 
+        public ExtensionsConfiguration Extensions { get; }
+
+        public ImplicitExtensionsConfiguration ImplicitExtensions { get; }
+
         public AnalyzersConfiguration Analyzers { get; }
 
         public string? CacheRootDirectory { get; }
 
+        public bool ExperimentalFeaturesWarning { get; }
+
         public ExperimentalFeaturesEnabled ExperimentalFeaturesEnabled { get; }
 
-        public string? ConfigurationPath { get; }
+        public FormattingConfiguration Formatting { get; }
 
-        public ImmutableArray<DiagnosticBuilder.DiagnosticBuilderDelegate> DiagnosticBuilders { get; }
+        public SecurityConfiguration Security { get; }
 
-        public bool IsBuiltIn => ConfigurationPath is null;
+        public IOUri? ConfigFileUri { get; }
+
+        public ImmutableArray<IDiagnostic> Diagnostics { get; }
+
+        public bool IsBuiltIn => ConfigFileUri is null;
+
+        public RootConfiguration With(
+            CloudConfiguration? cloud = null,
+            ModuleAliasesConfiguration? moduleAliases = null,
+            ExtensionsConfiguration? extensions = null,
+            ImplicitExtensionsConfiguration? implicitExtensions = null,
+            AnalyzersConfiguration? analyzers = null,
+            string? cacheRootDirectory = null,
+            bool? experimentalFeaturesWarning = null,
+            ExperimentalFeaturesEnabled? experimentalFeaturesEnabled = null,
+            FormattingConfiguration? formatting = null,
+            IOUri? configFileIdentifier = null,
+            IEnumerable<IDiagnostic>? diagnostics = null,
+            SecurityConfiguration? security = null)
+        {
+            return new RootConfiguration(
+                cloud ?? this.Cloud,
+                moduleAliases ?? this.ModuleAliases,
+                extensions ?? this.Extensions,
+                implicitExtensions ?? this.ImplicitExtensions,
+                analyzers ?? this.Analyzers,
+                cacheRootDirectory ?? this.CacheRootDirectory,
+                experimentalFeaturesWarning ?? this.ExperimentalFeaturesWarning,
+                experimentalFeaturesEnabled ?? this.ExperimentalFeaturesEnabled,
+                formatting ?? this.Formatting,
+                configFileIdentifier ?? this.ConfigFileUri,
+                diagnostics ?? this.Diagnostics,
+                security ?? this.Security);
+        }
 
         public string ToUtf8Json()
         {
@@ -76,6 +157,12 @@ namespace Bicep.Core.Configuration
                 writer.WritePropertyName(ModuleAliasesKey);
                 this.ModuleAliases.WriteTo(writer);
 
+                writer.WritePropertyName(ExtensionsKey);
+                this.Extensions.WriteTo(writer);
+
+                writer.WritePropertyName(ImplicitExtensionsKey);
+                this.ImplicitExtensions.WriteTo(writer);
+
                 writer.WritePropertyName(AnalyzersKey);
                 this.Analyzers.WriteTo(writer);
 
@@ -84,13 +171,49 @@ namespace Bicep.Core.Configuration
                     writer.WriteString(CacheRootDirectoryKey, cacheRootDir);
                 }
 
+                writer.WriteBoolean(ExperimentalFeaturesWarningKey, this.ExperimentalFeaturesWarning);
+
                 writer.WritePropertyName(ExperimentalFeaturesEnabledKey);
                 this.ExperimentalFeaturesEnabled.WriteTo(writer);
+
+                writer.WritePropertyName(FormattingKey);
+                this.Formatting.WriteTo(writer);
+
+                writer.WritePropertyName(SecurityKey);
+                this.Security.WriteTo(writer);
 
                 writer.WriteEndObject();
             }
 
             return Encoding.UTF8.GetString(bufferWriter.WrittenSpan);
+        }
+
+        private static string? ExpandCacheRootDirectory(string? cacheRootDirectory)
+        {
+            /*
+             Note: the method is a simple workaround for https://github.com/Azure/bicep/issues/10935. To reduce
+             complexity, it does not handle all cross-platform edge cases, such as "~username" on Unix based systems.
+             In the future, we may want to read CacheRootDirectory from a environment variable instead whose value
+             must be a full path.
+            */
+            if (string.IsNullOrEmpty(cacheRootDirectory) || cacheRootDirectory[0] != '~')
+            {
+                return cacheRootDirectory;
+            }
+
+            var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+            if (cacheRootDirectory.Length == 1)
+            {
+                return homeDirectory;
+            }
+
+            if (cacheRootDirectory[1] is '/' or '\\')
+            {
+                return $"{homeDirectory}{cacheRootDirectory[1..]}";
+            }
+
+            return cacheRootDirectory;
         }
     }
 }

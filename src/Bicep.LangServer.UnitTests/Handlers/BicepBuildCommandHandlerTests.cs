@@ -1,12 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.UnitTests.Mock;
@@ -17,7 +13,6 @@ using Bicep.LanguageServer.Handlers;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
 using OmniSharp.Extensions.JsonRpc;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 
@@ -50,7 +45,7 @@ namespace Bicep.LangServer.UnitTests.Handlers
 
             Func<Task> sut = () => bicepBuildCommandHandler.Handle(path, CancellationToken.None);
 
-            await sut.Should().ThrowAsync<ArgumentException>().WithMessage("Invalid input file path");
+            await sut.Should().ThrowAsync<UriFormatException>();
         }
 
         [TestMethod]
@@ -67,7 +62,7 @@ namespace Bicep.LangServer.UnitTests.Handlers
             var bicepBuildCommandHandler = CreateHandler(bicepCompilationManager);
             string expected = await bicepBuildCommandHandler.Handle(bicepFilePath, CancellationToken.None);
 
-            expected.Should().Be(@"Bicep build succeeded. Created ARM template file: input.json");
+            expected.Should().MatchRegex(@"Bicep build succeeded. Created ARM template file: "".*[/\\]input.json""");
         }
 
         [TestMethod]
@@ -83,14 +78,14 @@ resource dnsZone 'Microsoft.Network/dnsZones@2018-05-01' = {
   location: 'global'
 }";
             string bicepFilePath = FileHelper.SaveResultFile(TestContext, "input.bicep", bicepFileContents, testOutputPath);
-            Uri bicepFileUri = new Uri(bicepFilePath);
+            Uri bicepFileUri = new(bicepFilePath);
 
             DocumentUri documentUri = DocumentUri.From(bicepFileUri);
             BicepCompilationManager bicepCompilationManager = BicepCompilationManagerHelper.CreateCompilationManager(documentUri, bicepFileContents, true);
             var bicepBuildCommandHandler = CreateHandler(bicepCompilationManager);
             string expected = await bicepBuildCommandHandler.Handle(bicepFilePath, CancellationToken.None);
 
-            expected.Should().Be(@"Bicep build succeeded. Created ARM template file: input.json");
+            expected.Should().MatchRegex(@"Bicep build succeeded. Created ARM template file: "".*[/\\]input.json""");
         }
 
         [TestMethod]
@@ -118,25 +113,25 @@ param accountName string = 'testAccount'
 
             expected.Should().BeEquivalentToIgnoringNewlines("""
                 Bicep build failed. Please fix below errors:
-                /input.bicep(1,1) : Error BCP112: The "targetScope" cannot be declared multiple times in one file.
-                /input.bicep(1,12) : Error BCP018: Expected the "=" character at this location.
-                /input.bicep(1,12) : Error BCP009: Expected a literal value, an array, an object, a parenthesized expression, or a function call at this location.
-                /input.bicep(3,2) : Error BCP001: The following token is not recognized: "#".
-                /input.bicep(3,2) : Error BCP007: This declaration type is not recognized. Specify a metadata, parameter, variable, resource, or output declaration.
-                /input.bicep(4,1) : Error BCP112: The "targetScope" cannot be declared multiple times in one file.
-                /input.bicep(4,12) : Error BCP018: Expected the "=" character at this location.
-                /input.bicep(4,12) : Error BCP009: Expected a literal value, an array, an object, a parenthesized expression, or a function call at this location.
-                /input.bicep(6,2) : Error BCP001: The following token is not recognized: "#".
-                /input.bicep(6,2) : Error BCP007: This declaration type is not recognized. Specify a metadata, parameter, variable, resource, or output declaration.
-                /input.bicep(7,1) : Error BCP112: The "targetScope" cannot be declared multiple times in one file.
-                /input.bicep(7,14) : Error BCP009: Expected a literal value, an array, an object, a parenthesized expression, or a function call at this location.
-                /input.bicep(10,1) : Error BCP112: The "targetScope" cannot be declared multiple times in one file.
-                /input.bicep(10,15) : Error BCP033: Expected a value of type "'managementGroup' | 'resourceGroup' | 'subscription' | 'tenant'" but the provided value is of type "'asdfds'".
-                /input.bicep(12,1) : Error BCP112: The "targetScope" cannot be declared multiple times in one file.
-                /input.bicep(12,15) : Error BCP033: Expected a value of type "'managementGroup' | 'resourceGroup' | 'subscription' | 'tenant'" but the provided value is of type "object".
-                /input.bicep(14,1) : Error BCP112: The "targetScope" cannot be declared multiple times in one file.
-                /input.bicep(14,15) : Error BCP033: Expected a value of type "'managementGroup' | 'resourceGroup' | 'subscription' | 'tenant'" but the provided value is of type "true".
-                /input.bicep(15,7) : Warning no-unused-params: Parameter "accountName" is declared but never used. [https://aka.ms/bicep/linter/no-unused-params]
+                /input.bicep(1,1) : Error BCP112: The "targetScope" cannot be declared multiple times in one file. [https://aka.ms/bicep/core-diagnostics#BCP112]
+                /input.bicep(1,12) : Error BCP018: Expected the "=" character at this location. [https://aka.ms/bicep/core-diagnostics#BCP018]
+                /input.bicep(1,12) : Error BCP009: Expected a literal value, an array, an object, a parenthesized expression, or a function call at this location. [https://aka.ms/bicep/core-diagnostics#BCP009]
+                /input.bicep(3,2) : Error BCP001: The following token is not recognized: "#". [https://aka.ms/bicep/core-diagnostics#BCP001]
+                /input.bicep(3,2) : Error BCP007: This declaration type is not recognized. Specify a metadata, parameter, variable, resource, or output declaration. [https://aka.ms/bicep/core-diagnostics#BCP007]
+                /input.bicep(4,1) : Error BCP112: The "targetScope" cannot be declared multiple times in one file. [https://aka.ms/bicep/core-diagnostics#BCP112]
+                /input.bicep(4,12) : Error BCP018: Expected the "=" character at this location. [https://aka.ms/bicep/core-diagnostics#BCP018]
+                /input.bicep(4,12) : Error BCP009: Expected a literal value, an array, an object, a parenthesized expression, or a function call at this location. [https://aka.ms/bicep/core-diagnostics#BCP009]
+                /input.bicep(6,2) : Error BCP001: The following token is not recognized: "#". [https://aka.ms/bicep/core-diagnostics#BCP001]
+                /input.bicep(6,2) : Error BCP007: This declaration type is not recognized. Specify a metadata, parameter, variable, resource, or output declaration. [https://aka.ms/bicep/core-diagnostics#BCP007]
+                /input.bicep(7,1) : Error BCP112: The "targetScope" cannot be declared multiple times in one file. [https://aka.ms/bicep/core-diagnostics#BCP112]
+                /input.bicep(7,14) : Error BCP009: Expected a literal value, an array, an object, a parenthesized expression, or a function call at this location. [https://aka.ms/bicep/core-diagnostics#BCP009]
+                /input.bicep(10,1) : Error BCP112: The "targetScope" cannot be declared multiple times in one file. [https://aka.ms/bicep/core-diagnostics#BCP112]
+                /input.bicep(10,15) : Error BCP033: Expected a value of type "'managementGroup' | 'resourceGroup' | 'subscription' | 'tenant'" but the provided value is of type "'asdfds'". [https://aka.ms/bicep/core-diagnostics#BCP033]
+                /input.bicep(12,1) : Error BCP112: The "targetScope" cannot be declared multiple times in one file. [https://aka.ms/bicep/core-diagnostics#BCP112]
+                /input.bicep(12,15) : Error BCP033: Expected a value of type "'managementGroup' | 'resourceGroup' | 'subscription' | 'tenant'" but the provided value is of type "object". [https://aka.ms/bicep/core-diagnostics#BCP033]
+                /input.bicep(14,1) : Error BCP112: The "targetScope" cannot be declared multiple times in one file. [https://aka.ms/bicep/core-diagnostics#BCP112]
+                /input.bicep(14,15) : Error BCP033: Expected a value of type "'managementGroup' | 'resourceGroup' | 'subscription' | 'tenant'" but the provided value is of type "true". [https://aka.ms/bicep/core-diagnostics#BCP033]
+                /input.bicep(15,7) : Warning no-unused-params: Parameter "accountName" is declared but never used. [https://aka.ms/bicep/linter-diagnostics#no-unused-params]
 
                 """);
         }
@@ -152,7 +147,7 @@ param accountName string = 'testAccount'
             var bicepBuildCommandHandler = CreateHandler(bicepCompilationManager);
             string actual = await bicepBuildCommandHandler.Handle(bicepFilePath, CancellationToken.None);
 
-            actual.Should().Be(@"Bicep build failed. The output file ""input.json"" already exists and was not generated by Bicep. If overwriting the file is intended, delete it manually and retry the build command.");
+            actual.Should().MatchRegex(@"Bicep build failed. The output file "".*[/\\]input.json"" already exists and was not generated by Bicep. If overwriting the file is intended, delete it manually and retry the build command.");
         }
 
         [TestMethod]
@@ -166,7 +161,7 @@ param accountName string = 'testAccount'
             var bicepBuildCommandHandler = CreateHandler(bicepCompilationManager);
             string actual = await bicepBuildCommandHandler.Handle(bicepFilePath, CancellationToken.None);
 
-            actual.Should().Be(@"Bicep build failed. The output file ""input.json"" already exists and was not generated by Bicep. If overwriting the file is intended, delete it manually and retry the build command.");
+            actual.Should().MatchRegex(@"Bicep build failed. The output file "".*[/\\]input.json"" already exists and was not generated by Bicep. If overwriting the file is intended, delete it manually and retry the build command.");
         }
 
         [TestMethod]
@@ -183,7 +178,7 @@ param accountName string = 'testAccount'
             var bicepBuildCommandHandler = CreateHandler(bicepCompilationManager);
             string actual = await bicepBuildCommandHandler.Handle(bicepFilePath, CancellationToken.None);
 
-            actual.Should().Be(@"Bicep build succeeded. Created ARM template file: input.json");
+            actual.Should().MatchRegex(@"Bicep build succeeded. Created ARM template file: "".*[/\\]input.json""");
         }
 
         [DataRow(null)]
@@ -261,7 +256,7 @@ param accountName string = 'testAccount'
             string bicepFileContents = @"var textFromFile = loadTextContent('test.sql')";
             string bicepFilePath = FileHelper.SaveResultFile(TestContext, "input.bicep", bicepFileContents, testOutputPath);
 
-            Uri bicepFileUri = new Uri(bicepFilePath);
+            Uri bicepFileUri = new(bicepFilePath);
             DocumentUri documentUri = DocumentUri.From(bicepFileUri);
             BicepCompilationManager bicepCompilationManager = BicepCompilationManagerHelper.CreateCompilationManager(documentUri, bicepFileContents, true);
             var bicepBuildCommandHandler = CreateHandler(bicepCompilationManager);
@@ -289,7 +284,7 @@ param accountName string = 'testAccount'
 
         private void VerifyBuildOutputMessageAndContents(string actualBuildOutputMessage, string buildOutputContents, string expectedText)
         {
-            actualBuildOutputMessage.Should().Be(@"Bicep build succeeded. Created ARM template file: input.json");
+            actualBuildOutputMessage.Should().MatchRegex(@"Bicep build succeeded. Created ARM template file: "".*[/\\]input.json""");
             buildOutputContents.Should().ContainIgnoringNewlines(expectedText);
         }
     }

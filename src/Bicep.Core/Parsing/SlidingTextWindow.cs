@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
+using Bicep.Core.Text;
 
 namespace Bicep.Core.Parsing
 {
@@ -116,8 +116,8 @@ namespace Bicep.Core.Parsing
                 return text[..position];
             }
 
-            var postionAfterNewLine = indexOfPreviousNewLine + 1;
-            return text[postionAfterNewLine..position];
+            var positionAfterNewLine = indexOfPreviousNewLine + 1;
+            return text[positionAfterNewLine..position];
         }
     }
 }

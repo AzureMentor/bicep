@@ -1,13 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using Bicep.Core.Features;
 using Bicep.Core.Resources;
-using Bicep.Core.TypeSystem.Az;
 using ResourceScope = Bicep.Core.TypeSystem.ResourceScope;
 
 namespace Bicep.Core.Analyzers.Linter.ApiVersions
@@ -19,12 +15,11 @@ namespace Bicep.Core.Analyzers.Linter.ApiVersions
         // One cache per target scope type
         private readonly Dictionary<ResourceScope, ApiVersionCache> _caches = new();
         private readonly IFeatureProvider features;
-        private readonly IAzResourceTypeLoader resourceTypeLoader;
-
-        public ApiVersionProvider(IFeatureProvider features, IAzResourceTypeLoader resourceTypeLoader)
+        private readonly IEnumerable<ResourceTypeReference> resourceTypeReferences;
+        public ApiVersionProvider(IFeatureProvider features, IEnumerable<ResourceTypeReference> resourceTypeReferences)
         {
             this.features = features;
-            this.resourceTypeLoader = resourceTypeLoader;
+            this.resourceTypeReferences = resourceTypeReferences;
         }
 
         // for unit testing
@@ -32,7 +27,7 @@ namespace Bicep.Core.Analyzers.Linter.ApiVersions
         {
             var cache = GetCache(scope);
             Debug.Assert(!cache.typesCached, $"{nameof(InjectTypeReferences)} Types have already been cached for scope {scope}");
-            cache.injectedTypes = resourceTypeReferences.ToArray();
+            cache.injectedTypes = [.. resourceTypeReferences];
         }
 
         private ApiVersionCache GetCache(ResourceScope scope)
@@ -68,18 +63,9 @@ namespace Bicep.Core.Analyzers.Linter.ApiVersions
                 return cache;
             }
             cache.typesCached = true;
+            var resourceTypesToCache = cache.injectedTypes ?? this.resourceTypeReferences;
 
-            IEnumerable<ResourceTypeReference> resourceTypeReferences;
-            if (cache.injectedTypes is null)
-            {
-                resourceTypeReferences = resourceTypeLoader.GetAvailableTypes();
-            }
-            else
-            {
-                resourceTypeReferences = cache.injectedTypes;
-            }
-
-            cache.CacheApiVersions(resourceTypeReferences);
+            cache.CacheApiVersions(resourceTypesToCache);
             return cache;
         }
 
@@ -89,7 +75,7 @@ namespace Bicep.Core.Analyzers.Linter.ApiVersions
             return cache.apiVersionsByResourceTypeName.Keys;
         }
 
-        public IEnumerable<ApiVersion> GetApiVersions(ResourceScope scope, string fullyQualifiedResourceType)
+        public IEnumerable<AzureResourceApiVersion> GetApiVersions(ResourceScope scope, string fullyQualifiedResourceType)
         {
             var cache = EnsureCached(scope);
 
@@ -100,10 +86,10 @@ namespace Bicep.Core.Analyzers.Linter.ApiVersions
 
             if (cache.apiVersionsByResourceTypeName.TryGetValue(fullyQualifiedResourceType, out List<string>? apiVersions))
             {
-                return apiVersions.Select((string version) => new ApiVersion(version));
+                return apiVersions.Select(AzureResourceApiVersion.Parse);
             }
 
-            return Enumerable.Empty<ApiVersion>();
+            return [];
         }
 
         private class ApiVersionCache
@@ -119,14 +105,11 @@ namespace Bicep.Core.Analyzers.Linter.ApiVersions
 
                 foreach (var resourceTypeReference in resourceTypeReferences)
                 {
-                    var (apiVersion, suffix) =
-                        resourceTypeReference.ApiVersion != null ?
-                        ApiVersionHelper.TryParse(resourceTypeReference.ApiVersion) :
-                        (null, null);
-                    if (apiVersion is not null)
+                    if (resourceTypeReference.ApiVersion is string apiVersionString &&
+                        AzureResourceApiVersion.TryParse(apiVersionString, out var apiVersion))
                     {
                         string fullyQualifiedType = resourceTypeReference.FormatType();
-                        AddApiVersionToCache(apiVersionsByResourceTypeName, suffix == null ? apiVersion : (apiVersion + suffix) /* suffix will have been lower-cased */, fullyQualifiedType);
+                        AddApiVersionToCache(apiVersionsByResourceTypeName, apiVersion /* suffix will have been lower-cased */, fullyQualifiedType);
                     }
                     else
                     {
@@ -138,7 +121,7 @@ namespace Bicep.Core.Analyzers.Linter.ApiVersions
                 apiVersionsByResourceTypeName = apiVersionsByResourceTypeName.ToDictionary(x => x.Key, x => x.Value.OrderBy(y => y).ToList(), Comparer);
             }
 
-            private void AddApiVersionToCache(Dictionary<string, List<string>> listOfTypes, string apiVersion, string fullyQualifiedType)
+            private static void AddApiVersionToCache(Dictionary<string, List<string>> listOfTypes, string apiVersion, string fullyQualifiedType)
             {
                 if (listOfTypes.TryGetValue(fullyQualifiedType, out List<string>? value))
                 {

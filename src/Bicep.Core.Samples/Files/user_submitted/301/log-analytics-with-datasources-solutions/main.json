@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "dev",
-      "templateHash": "7661581430833195871"
+      "templateHash": "12203299832706637626"
     }
   },
   "parameters": {
@@ -24,9 +24,6 @@
     },
     "sku": {
       "type": "string",
-      "metadata": {
-        "description": "Sku of the workspace"
-      },
       "allowedValues": [
         "PerGB2018",
         "Free",
@@ -34,12 +31,15 @@
         "PerNode",
         "Standard",
         "Premium"
-      ]
+      ],
+      "metadata": {
+        "description": "Sku of the workspace"
+      }
     },
     "retentionInDays": {
       "type": "int",
-      "maxValue": 730,
       "minValue": 7,
+      "maxValue": 730,
       "metadata": {
         "description": "The workspace data retention in days, between 30 and 730"
       }
@@ -163,7 +163,7 @@
       "condition": "[parameters('enableDeleteLock')]",
       "type": "Microsoft.Authorization/locks",
       "apiVersion": "2016-09-01",
-      "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('name'))]",
+      "scope": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('name'))]",
       "name": "[variables('lockName')]",
       "properties": {
         "level": "CanNotDelete"
@@ -174,9 +174,9 @@
     },
     {
       "condition": "[parameters('enableDiagnostics')]",
-      "type": "Microsoft.Insights/diagnosticSettings",
+      "type": "microsoft.insights/diagnosticSettings",
       "apiVersion": "2017-05-01-preview",
-      "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('name'))]",
+      "scope": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('name'))]",
       "name": "[variables('diagnosticsName')]",
       "properties": {
         "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('name'))]",
@@ -184,12 +184,6 @@
         "logs": [
           {
             "category": "Audit",
-            "enabled": true
-          }
-        ],
-        "metrics": [
-          {
-            "category": "AllMetrics",
             "enabled": true
           }
         ]

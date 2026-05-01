@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Azure.Bicep.McpServer</AssemblyName>
+    <RootNamespace>Bicep.McpServer</RootNamespace>
+    <Nullable>enable</Nullable>
+    <EnableNuget>true</EnableNuget>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <PackageTags>Azure;ResourceManager;ARM;Deployments;Templates;Bicep</PackageTags>
+    <Description>
+      Bicep MCP Server
+    </Description>
+
+    <!-- Set up the NuGet package to be an MCP server -->
+    <PackAsTool>true</PackAsTool>
+    <PackageType>McpServer</PackageType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Bicep.McpServer.Core/Bicep.McpServer.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Nerdbank.GitVersioning automatically takes care of replacing 0.0.0-placeholder in this file with the correct version -->
+    <None Include=".mcp\server.json" Pack="true" PackagePath="/.mcp/" />
+  </ItemGroup>
+
+</Project>

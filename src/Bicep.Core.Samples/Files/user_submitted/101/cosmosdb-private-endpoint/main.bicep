@@ -2,10 +2,7 @@ param location string = resourceGroup().location
 param virtualNetworkName string = 'Vnet'
 param accountName string
 
-@allowed([
-  'Enabled'
-  'Disabled'
-])
+@allowed(['Enabled', 'Disabled'])
 param publicNetworkAccess string = 'Enabled'
 
 param privateEndpointName string
@@ -15,9 +12,7 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2020-06-01' = {
   location: location
   properties: {
     addressSpace: {
-      addressPrefixes: [
-        '172.20.0.0/16'
-      ]
+      addressPrefixes: ['172.20.0.0/16']
     }
   }
 }
@@ -85,9 +80,7 @@ resource privateEndpoint 'Microsoft.Network/privateEndpoints@2020-06-01' = {
         name: 'MyConnection'
         properties: {
           privateLinkServiceId: databaseAccount.id
-          groupIds: [
-            'Sql'
-          ]
+          groupIds: ['Sql']
         }
       }
     ]

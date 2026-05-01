@@ -12,13 +12,7 @@ param administratorLogin string
 param administratorLoginPassword string
 
 @description('Azure database for MySQL compute capacity in vCores (2,4,8,16,32)')
-@allowed([
-  2
-  4
-  8
-  16
-  32
-])
+@allowed([2, 4, 8, 16, 32])
 param databaseSkucapacity int = 2
 
 @description('Azure database for MySQL sku name ')
@@ -37,24 +31,15 @@ param databaseSkucapacity int = 2
 param databaseSkuName string = 'GP_Gen5_2'
 
 @description('Azure database for MySQL Sku Size ')
-@allowed([
-  51200
-  102400
-])
+@allowed([51200, 102400])
 param databaseSkuSizeMB int = 51200
 
 @description('Azure database for MySQL pricing tier')
-@allowed([
-  'GeneralPurpose'
-  'MemoryOptimized'
-])
+@allowed(['GeneralPurpose', 'MemoryOptimized'])
 param databaseSkuTier string = 'GeneralPurpose'
 
 @description('MySQL version')
-@allowed([
-  '5.6'
-  '5.7'
-])
+@allowed(['5.6', '5.7'])
 param mySqlVersion string = '5.6'
 
 @description('Location for all resources.')
@@ -125,9 +110,7 @@ resource server 'Microsoft.DBforMySQL/servers@2017-12-01' = {
 resource firewallRules 'Microsoft.DBforMySQL/servers/firewallrules@2017-12-01' = {
   parent: server
   name: 'AllowAzureIPs'
-  dependsOn: [
-    database
-  ]
+  dependsOn: [database]
   properties: {
     startIpAddress: '0.0.0.0'
     endIpAddress: '0.0.0.0'

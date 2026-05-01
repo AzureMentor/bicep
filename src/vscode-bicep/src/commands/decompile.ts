@@ -1,11 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import {
-  IActionContext,
-  UserCancelledError,
-} from "@microsoft/vscode-azext-utils";
 import assert from "assert";
+import { IActionContext, UserCancelledError } from "@microsoft/vscode-azext-utils";
 import * as fse from "fs-extra";
 import vscode, { MessageItem, Uri, window } from "vscode";
 import { DocumentUri, LanguageClient } from "vscode-languageclient/node";
@@ -51,28 +48,21 @@ export class DecompileCommand implements Command {
   public readonly id = "bicep.decompile";
   public constructor(
     private readonly client: LanguageClient,
-    private readonly outputChannelManager: OutputChannelManager
+    private readonly outputChannelManager: OutputChannelManager,
   ) {
     // nothing to do
   }
 
-  public async execute(
-    context: IActionContext,
-    documentUri?: vscode.Uri | undefined
-  ): Promise<void> {
+  public async execute(context: IActionContext, documentUri?: vscode.Uri | undefined): Promise<void> {
     documentUri = documentUri ?? window.activeTextEditor?.document.uri;
     if (!documentUri) {
-      throw new Error(
-        "Please open a JSON ARM Template file before running this command"
-      );
+      throw new Error("Please open a JSON ARM Template file before running this command");
     }
 
-    const canDecompile = await DecompileCommand.mightBeArmTemplateNoThrow(
-      documentUri
-    );
+    const canDecompile = await DecompileCommand.mightBeArmTemplateNoThrow(documentUri);
     if (!canDecompile) {
       this.outputChannelManager.appendToOutputChannel(
-        `Cannot decompile "${documentUri.fsPath}" into Bicep because it does not appear to be an ARM template.`
+        `Cannot decompile "${documentUri.fsPath}" into Bicep because it does not appear to be an ARM template.`,
       );
       throw new UserCancelledError("Can't decompile because not ARM template");
     }
@@ -80,24 +70,15 @@ export class DecompileCommand implements Command {
     const decompileParams: DecompileCommandParams = {
       jsonUri: documentUri.toString(),
     };
-    const decompileResult: BicepDecompileCommandResult =
-      await this.client.sendRequest("workspace/executeCommand", {
-        command: "decompile",
-        arguments: [decompileParams],
-      });
+    const decompileResult: BicepDecompileCommandResult = await this.client.sendRequest("workspace/executeCommand", {
+      command: "decompile",
+      arguments: [decompileParams],
+    });
 
-    this.outputChannelManager.appendToOutputChannel(
-      decompileResult.output.trimEnd()
-    );
-    context.telemetry.properties.decompileStatus = decompileResult.errorMessage
-      ? "failed"
-      : "success";
-    context.telemetry.properties.countOutputFiles = String(
-      decompileResult.outputFiles.length
-    );
-    context.telemetry.properties.countConflictFiles = String(
-      decompileResult.conflictingOutputPaths.length
-    );
+    this.outputChannelManager.appendToOutputChannel(decompileResult.output.trimEnd());
+    context.telemetry.properties.decompileStatus = decompileResult.errorMessage ? "failed" : "success";
+    context.telemetry.properties.countOutputFiles = String(decompileResult.outputFiles.length);
+    context.telemetry.properties.countConflictFiles = String(decompileResult.conflictingOutputPaths.length);
 
     if (decompileResult.errorMessage) {
       // Language server will have already shown the message
@@ -109,7 +90,7 @@ export class DecompileCommand implements Command {
     const overwrite = await this.queryOverwrite(
       context,
       decompileResult.outputFiles,
-      decompileResult.conflictingOutputPaths
+      decompileResult.conflictingOutputPaths,
     );
 
     // Save the output files
@@ -118,29 +99,20 @@ export class DecompileCommand implements Command {
       outputFiles: decompileResult.outputFiles,
       overwrite,
     };
-    const saveResult: BicepDecompileSaveCommandResult =
-      await this.client.sendRequest("workspace/executeCommand", {
-        command: "decompileSave",
-        arguments: [saveParams],
-      });
-    context.telemetry.properties.saveStatus = decompileResult.errorMessage
-      ? "failed"
-      : "success";
+    const saveResult: BicepDecompileSaveCommandResult = await this.client.sendRequest("workspace/executeCommand", {
+      command: "decompileSave",
+      arguments: [saveParams],
+    });
+    context.telemetry.properties.saveStatus = decompileResult.errorMessage ? "failed" : "success";
 
-    this.outputChannelManager.appendToOutputChannel(
-      saveResult.output.trimEnd()
-    );
+    this.outputChannelManager.appendToOutputChannel(saveResult.output.trimEnd());
   }
 
-  public static async mightBeArmTemplateNoThrow(
-    documentUri: Uri
-  ): Promise<boolean> {
+  public static async mightBeArmTemplateNoThrow(documentUri: Uri): Promise<boolean> {
     try {
-      const contents = await (
-        await fse.readFile(documentUri.fsPath)
-      ).toString();
+      const contents = await (await fse.readFile(documentUri.fsPath)).toString();
       return /\$schema.*deploymenttemplate\.json/i.test(contents);
-    } catch (err) {
+    } catch {
       // ignore
     }
 
@@ -150,7 +122,7 @@ export class DecompileCommand implements Command {
   private async queryOverwrite(
     context: IActionContext,
     outputFiles: DecompiledFile[],
-    conflictingOutputPaths: DocumentUri[]
+    conflictingOutputPaths: DocumentUri[],
   ): Promise<boolean> {
     let overwrite: boolean;
     const isSingleFileDecompilation = outputFiles.length === 1;
@@ -170,20 +142,13 @@ export class DecompileCommand implements Command {
         isCloseAffordance: true,
       };
 
-      const conflictFilesWithQuotes = conflictingOutputPaths
-        .map((f) => `"${f}"`)
-        .join(", ");
+      const conflictFilesWithQuotes = conflictingOutputPaths.map((f) => `"${f}"`).join(", ");
       const message = isSingleFileDecompilation
         ? `Decompile output file already exists: ${conflictFilesWithQuotes}`
         : `There are multiple decompilation output files and the following already exist: ${conflictFilesWithQuotes}`;
       this.outputChannelManager.appendToOutputChannel(message.trimEnd());
 
-      const result = await context.ui.showWarningMessage(
-        message,
-        overwriteAction,
-        createCopyAction,
-        cancelAction
-      );
+      const result = await context.ui.showWarningMessage(message, overwriteAction, createCopyAction, cancelAction);
       if (result === cancelAction) {
         this.outputChannelManager.appendToOutputChannel("Canceled.");
         throw new UserCancelledError("queryOverwrite");
@@ -191,12 +156,8 @@ export class DecompileCommand implements Command {
 
       assert(result === overwriteAction || result === createCopyAction);
       overwrite = result === overwriteAction;
-      this.outputChannelManager.appendToOutputChannel(
-        `Response: ${result.title}`
-      );
-      context.telemetry.properties.conflictResolution = overwrite
-        ? "overwrite"
-        : "copy";
+      this.outputChannelManager.appendToOutputChannel(`Response: ${result.title}`);
+      context.telemetry.properties.conflictResolution = overwrite ? "overwrite" : "copy";
     }
 
     return overwrite;

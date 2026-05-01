@@ -1,16 +1,17 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
-using System.Linq;
+
+using System.Collections.Immutable;
 using Bicep.Core.Navigation;
 using Bicep.Core.Parsing;
+using Bicep.Core.Registry;
+using Bicep.Core.Text;
 
 namespace Bicep.Core.Syntax
 {
-    public class ModuleDeclarationSyntax : StatementSyntax, ITopLevelNamedDeclarationSyntax
+    public class ModuleDeclarationSyntax : StatementSyntax, ITopLevelNamedDeclarationSyntax, IArtifactReferenceSyntax
     {
-        public ModuleDeclarationSyntax(IEnumerable<SyntaxBase> leadingNodes, Token keyword, IdentifierSyntax name, SyntaxBase path, SyntaxBase assignment, SyntaxBase value)
+        public ModuleDeclarationSyntax(IEnumerable<SyntaxBase> leadingNodes, Token keyword, IdentifierSyntax name, SyntaxBase path, SyntaxBase assignment, ImmutableArray<Token> newlines, SyntaxBase value)
             : base(leadingNodes)
         {
             AssertKeyword(keyword, nameof(keyword), LanguageConstants.ModuleKeyword);
@@ -25,6 +26,7 @@ namespace Bicep.Core.Syntax
             this.Name = name;
             this.Path = path;
             this.Assignment = assignment;
+            this.Newlines = newlines;
             this.Value = value;
         }
 
@@ -36,13 +38,15 @@ namespace Bicep.Core.Syntax
 
         public SyntaxBase Assignment { get; }
 
+        public ImmutableArray<Token> Newlines { get; }
+
         public SyntaxBase Value { get; }
 
         public override void Accept(ISyntaxVisitor visitor) => visitor.VisitModuleDeclarationSyntax(this);
 
         public override TextSpan Span => TextSpan.Between(this.LeadingNodes.FirstOrDefault() ?? this.Keyword, this.Value);
 
-        public StringSyntax? TryGetPath() => Path as StringSyntax;
+        SyntaxBase IArtifactReferenceSyntax.SourceSyntax => Path;
 
         public ObjectSyntax? TryGetBody() =>
             this.Value switch
@@ -66,6 +70,16 @@ namespace Bicep.Core.Syntax
         public ObjectSyntax GetBody() =>
             this.TryGetBody() ?? throw new InvalidOperationException($"A valid module body is not available on this module due to errors. Use {nameof(TryGetBody)}() instead.");
 
-        public bool HasCondition() => this.Value is IfConditionSyntax or ForSyntax { Body: IfConditionSyntax };
+        public bool HasCondition() => TryGetCondition() is not null;
+
+        public SyntaxBase? TryGetCondition() => Value switch
+        {
+            IfConditionSyntax ifCondition => ifCondition.ConditionExpression,
+            ForSyntax { Body: IfConditionSyntax ifCondition } => ifCondition.ConditionExpression,
+            _ => null,
+        };
+
+
+        public ArtifactType GetArtifactType() => ArtifactType.Module;
     }
 }

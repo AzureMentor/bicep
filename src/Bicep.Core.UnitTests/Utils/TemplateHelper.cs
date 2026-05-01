@@ -1,11 +1,12 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
+
 using Azure.Deployments.Core.Configuration;
 using Azure.Deployments.Core.Definitions.Schema;
 using Azure.Deployments.Core.Helpers;
 using Azure.Deployments.Templates.Engines;
 using Bicep.Core.Emit;
+using Bicep.Core.Features;
 using FluentAssertions;
 
 namespace Bicep.Core.UnitTests.Utils
@@ -26,14 +27,14 @@ namespace Bicep.Core.UnitTests.Utils
         /// <summary>
         /// Validates an ARM template string with the Deployment engine code, and checks the template hash is correctly set.
         /// </summary>
-        public static void TemplateShouldBeValid(string templateString)
+        public static void TemplateShouldBeValid(string templateString, IFeatureProvider features)
         {
             Template? template = null;
             FluentActions.Invoking(() => template = TemplateEngine.ParseTemplate(templateString))
                 .Should().NotThrow("template can be parsed successfully");
 
             var templateJtoken = template!.ToJToken();
-            var validationApiVersion = TemplateWriter.NestedDeploymentResourceApiVersion;
+            var validationApiVersion = EmitConstants.NestedDeploymentResourceApiVersion;
             var deploymentScope = GetDeploymentScope(template.Schema.Value);
 
             FluentActions.Invoking(() => TemplateEngine.ValidateTemplate(template, validationApiVersion, deploymentScope))

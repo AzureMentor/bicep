@@ -1,11 +1,12 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Linq;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Parsing;
 using Bicep.Core.Resources;
+using Bicep.Core.Text;
 using Bicep.Core.TypeSystem;
+using Bicep.Core.TypeSystem.Types;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.UnitTests.Utils;
@@ -54,7 +55,7 @@ namespace Bicep.Core.IntegrationTests.Scenarios
             };
 
             var result = CompilationHelper.Compile(
-                TestTypeHelper.CreateAzResourceTypeLoaderWithTypes(customTypes),
+                TestTypeHelper.CreateResourceTypeLoaderWithTypes(customTypes),
                 ("main.bicep", @"
 resource test 'Rp.A/parent@2020-10-01' = {
   name: 'test'
@@ -92,7 +93,7 @@ resource test5 'Rp.A/parent/child@2020-10-01' existing = {
             result.ExcludingLinterDiagnostics().Should().NotHaveAnyDiagnostics();
 
             var failedResult = CompilationHelper.Compile(
-                TestTypeHelper.CreateAzResourceTypeLoaderWithTypes(customTypes),
+                TestTypeHelper.CreateResourceTypeLoaderWithTypes(customTypes),
                 ("main.bicep", @"
 resource test 'Rp.A/parent@2020-10-01' = {
   name: 'test'
@@ -101,7 +102,7 @@ resource test 'Rp.A/parent@2020-10-01' = {
 // parent-property child resource
 resource test4 'Rp.A/parent/child@2020-10-01' = {
   parent: test
-  name: 'notAValidVal'
+  name: 'notAValidVal1'
   properties: {
     onlyOnEnum: true
   }
@@ -110,13 +111,13 @@ resource test4 'Rp.A/parent/child@2020-10-01' = {
 // 'existing' parent-property child resource
 resource test5 'Rp.A/parent/child@2020-10-01' existing = {
   parent: test
-  name: 'notAValidVal'
+  name: 'notAValidVal2'
 }
 "));
 
             failedResult.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new[] {
-                ("BCP036", DiagnosticLevel.Warning, "The property \"name\" expected a value of type \"'val1' | 'val2'\" but the provided value is of type \"'notAValidVal'\". If this is an inaccuracy in the documentation, please report it to the Bicep Team."),
-                ("BCP036", DiagnosticLevel.Warning, "The property \"name\" expected a value of type \"'val1' | 'val2'\" but the provided value is of type \"'notAValidVal'\". If this is an inaccuracy in the documentation, please report it to the Bicep Team."),
+                ("BCP036", DiagnosticLevel.Warning, "The property \"name\" expected a value of type \"'val1' | 'val2'\" but the provided value is of type \"'notAValidVal1'\". If this is a resource type definition inaccuracy, report it using https://aka.ms/bicep-type-issues."),
+                ("BCP036", DiagnosticLevel.Warning, "The property \"name\" expected a value of type \"'val1' | 'val2'\" but the provided value is of type \"'notAValidVal2'\". If this is a resource type definition inaccuracy, report it using https://aka.ms/bicep-type-issues."),
             });
         }
 
@@ -147,7 +148,7 @@ resource test5 'Rp.A/parent/child@2020-10-01' existing = {
             };
 
             var result = CompilationHelper.Compile(
-                TestTypeHelper.CreateAzResourceTypeLoaderWithTypes(customTypes),
+                TestTypeHelper.CreateResourceTypeLoaderWithTypes(customTypes),
                 ("main.bicep", @"
 resource test 'Rp.A/parent@2020-10-01' = {
   name: 'test'
@@ -185,7 +186,7 @@ resource test5 'Rp.A/parent/child@2020-10-01' existing = {
             result.ExcludingLinterDiagnostics().Should().NotHaveAnyDiagnostics();
 
             var failedResult = CompilationHelper.Compile(
-                TestTypeHelper.CreateAzResourceTypeLoaderWithTypes(customTypes),
+                TestTypeHelper.CreateResourceTypeLoaderWithTypes(customTypes),
                 ("main.bicep", @"
 resource test 'Rp.A/parent@2020-10-01' = {
   name: 'test'
@@ -194,7 +195,7 @@ resource test 'Rp.A/parent@2020-10-01' = {
 // parent-property child resource
 resource test4 'Rp.A/parent/child@2020-10-01' = {
   parent: test
-  name: 'notAValidVal'
+  name: 'notAValidVal1'
   properties: {
     onlyOnEnum: true
   }
@@ -203,13 +204,13 @@ resource test4 'Rp.A/parent/child@2020-10-01' = {
 // 'existing' parent-property child resource
 resource test5 'Rp.A/parent/child@2020-10-01' existing = {
   parent: test
-  name: 'notAValidVal'
+  name: 'notAValidVal2'
 }
 "));
 
             failedResult.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new[] {
-                ("BCP036", DiagnosticLevel.Error, "The property \"name\" expected a value of type \"'val1' | 'val2'\" but the provided value is of type \"'notAValidVal'\"."),
-                ("BCP036", DiagnosticLevel.Error, "The property \"name\" expected a value of type \"'val1' | 'val2'\" but the provided value is of type \"'notAValidVal'\"."),
+                ("BCP036", DiagnosticLevel.Error, "The property \"name\" expected a value of type \"'val1' | 'val2'\" but the provided value is of type \"'notAValidVal1'\"."),
+                ("BCP036", DiagnosticLevel.Error, "The property \"name\" expected a value of type \"'val1' | 'val2'\" but the provided value is of type \"'notAValidVal2'\"."),
             });
         }
 
@@ -240,9 +241,7 @@ resource service 'Microsoft.ServiceFabric/clusters/applications/services@2020-12
                 ("BCP089", DiagnosticLevel.Warning, "The property \"PartitionScheme\" is not allowed on objects of type \"'Named' | 'Singleton' | 'UniformInt64Range'\". Did you mean \"partitionScheme\"?"),
             });
 
-            var diagnosticWithCodeFix = result.Diagnostics.OfType<FixableDiagnostic>().Single();
-            var codeFix = diagnosticWithCodeFix.Fixes.Single();
-            var codeReplacement = codeFix.Replacements.Single();
+            var codeReplacement = result.Diagnostics.SelectMany(x => x.Fixes).SelectMany(x => x.Replacements).Single();
 
             codeReplacement.Span.Should().Be(new TextSpan(212, 15));
             codeReplacement.Text.Should().Be("partitionScheme");

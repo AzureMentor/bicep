@@ -1,16 +1,12 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Bicep.RegistryModuleTool.Exceptions;
-using Bicep.RegistryModuleTool.Extensions;
-using Bicep.RegistryModuleTool.ModuleFiles;
-using Bicep.RegistryModuleTool.ModuleValidators;
-using Bicep.RegistryModuleTool.Proxies;
-using Microsoft.Extensions.Logging;
-using System;
 using System.CommandLine;
 using System.CommandLine.Invocation;
 using System.IO.Abstractions;
+using Bicep.Core;
+using Bicep.RegistryModuleTool.ModuleFiles;
+using Microsoft.Extensions.Logging;
 
 namespace Bicep.RegistryModuleTool.Commands
 {
@@ -23,66 +19,39 @@ namespace Bicep.RegistryModuleTool.Commands
 
         public sealed class CommandHandler : BaseCommandHandler
         {
-            private readonly IEnvironmentProxy environmentProxy;
+            private readonly BicepCompiler compiler;
 
-            private readonly IProcessProxy processProxy;
-
-            public CommandHandler(IEnvironmentProxy environmentProxy, IProcessProxy processProxy, IFileSystem fileSystem, ILogger<GenerateCommand> logger)
+            public CommandHandler(IFileSystem fileSystem, ILogger<GenerateCommand> logger, BicepCompiler compiler)
                 : base(fileSystem, logger)
             {
-                this.environmentProxy = environmentProxy;
-                this.processProxy = processProxy;
+                this.compiler = compiler;
             }
 
-            protected override int InvokeInternal(InvocationContext context)
+            protected override async Task<int> InvokeInternalAsync(InvocationContext context)
             {
-                try
-                {
-                    ModulePathValidator.ValidateModulePath(this.FileSystem);
-                }
-                catch (InvalidModuleException exception)
-                {
-                    context.Console.WriteError(exception.Message);
+                var mainBicepFile = await this.GenerateAndLogAsync(
+                    MainBicepFile.FileName, () => MainBicepFile.GenerateAsync(this.FileSystem, this.compiler, context.Console));
 
-                    return 1;
-                }
+                await this.GenerateAndLogAsync(
+                    MainArmTemplateFile.FileName, () => MainArmTemplateFile.GenerateAsync(this.FileSystem, mainBicepFile));
 
-                // Read or create main Bicep file.
-                this.Logger.LogInformation("Ensuring {MainBicepFile} exists...", "main Bicep file");
-                var mainBicepFile = MainBicepFile.EnsureInFileSystem(this.FileSystem);
+                await this.GenerateAndLogAsync(
+                    ReadmeFile.FileName, () => ReadmeFile.GenerateAsync(this.FileSystem, mainBicepFile));
 
-                // Create main Bicep test file if it doesn't exist.
-                this.Logger.LogInformation("Ensuring {MainBicepTestFile} exists...", "main Bicep test file");
-                MainBicepTestFile.EnsureInFileSystem(this.FileSystem);
+                await this.GenerateAndLogAsync(
+                    MainBicepTestFile.FileName, () => MainBicepTestFile.GenerateAsync(this.FileSystem));
 
-                // Generate main ARM template file.
-                var bicepCliProxy = new BicepCliProxy(this.environmentProxy, this.processProxy, this.FileSystem, this.Logger, context.Console);
-                var mainArmTemplateFile = this.GenerateFileAndLogInformation("main ARM template file", () => MainArmTemplateFile
-                    .Generate(this.FileSystem, bicepCliProxy, mainBicepFile)
-                    .WriteToFileSystem(FileSystem));
-
-                // Read or create metadata file.
-                this.Logger.LogInformation("Ensuring {MetadataFile} exists...", "metadata file");
-                var metadataFile = MetadataFile.EnsureInFileSystem(this.FileSystem);
-
-                // Generate README file.
-                this.GenerateFileAndLogInformation("README file", () => ReadmeFile
-                    .Generate(this.FileSystem, metadataFile, mainArmTemplateFile)
-                    .WriteToFileSystem(this.FileSystem));
-
-                // Generate version file.
-                this.GenerateFileAndLogInformation("version file", () => VersionFile
-                    .Generate(this.FileSystem)
-                    .WriteToFileSystem(this.FileSystem));
+                await this.GenerateAndLogAsync(
+                    VersionFile.FileName, () => VersionFile.GenerateAsync(this.FileSystem));
 
                 return 0;
             }
 
-            private T GenerateFileAndLogInformation<T>(string fileFriendlyName, Func<T> fileGenerator) where T : ModuleFile
+            private async Task<T> GenerateAndLogAsync<T>(string fileName, Func<Task<T>> fileGenerator) where T : ModuleFile
             {
-                this.Logger.LogInformation("Generating {FileFriendlyName}..", fileFriendlyName);
-                var file = fileGenerator();
-                this.Logger.LogInformation("Wrote {FileFriendlyName} to \"{FilePath}\".", fileFriendlyName, file.Path);
+                this.Logger.LogInformation("Generating {FileName}...", fileName);
+                var file = await fileGenerator();
+                this.Logger.LogInformation(@"Generation succeeded. File path: ""{FilePath}"".", file.Path);
 
                 return file;
             }

@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using Bicep.Core.Parsing;
+
 namespace Bicep.Core.Syntax
 {
     public static class StringSyntaxExtensions
@@ -18,5 +20,17 @@ namespace Bicep.Core.Syntax
         /// <param name="syntax">The string syntax node</param>
         public static string? TryGetLiteralValue(this StringSyntax syntax)
             => syntax.IsInterpolated() ? null : syntax.SegmentValues[0];
+
+        /// <summary>
+        /// Checks if the syntax node is a verbatim string (multi-line string without interpolation).
+        /// </summary>
+        public static bool IsVerbatimString(this StringSyntax syntax)
+            => !IsInterpolated(syntax) && IsMultiLineString(syntax);
+
+        /// <summary>
+        /// Checks if the syntax node is a multi-line string (with or without without interpolation).
+        /// </summary>
+        public static bool IsMultiLineString(this StringSyntax syntax)
+            => Lexer.GetStringTokenInfo(syntax.StringTokens.First()).isMultiLine;
     }
 }

@@ -1,123 +1,158 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
+using System.Diagnostics;
+using System.Reflection;
+using Azure.Bicep.Types.Az;
+using Azure.Deployments.Core.Definitions.Identifiers;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Extensions;
-using Bicep.Core.FileSystem;
 using Bicep.Core.Intermediate;
+using Bicep.Core.SourceGraph;
 using Bicep.Core.Syntax;
 using Bicep.Core.TypeSystem;
-using Bicep.Core.TypeSystem.Az;
+using Bicep.Core.TypeSystem.Providers;
+using Bicep.Core.TypeSystem.Providers.Az;
+using Bicep.Core.TypeSystem.Types;
 
 namespace Bicep.Core.Semantics.Namespaces
 {
     public static class AzNamespaceType
     {
         public const string BuiltInName = "az";
+        public const string GetSecretFunctionName = "getSecret";
+        public const string ResourceIdFunctionName = "resourceId";
+        private static readonly string EmbeddedAzExtensionVersion = typeof(AzTypeLoader).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version
+            ?? throw new UnreachableException("The 'Azure.Bicep.Types.Az' assembly should always have a file version attribute.");
+
+        private static readonly Lazy<IResourceTypeProvider> TypeProviderLazy
+            = new(() => new AzResourceTypeProvider(new AzResourceTypeLoader(new AzTypeLoader())));
+
+        public static IResourceTypeProvider BuiltInTypeProvider => TypeProviderLazy.Value;
 
         public static NamespaceSettings Settings { get; } = new(
             IsSingleton: true,
-            BicepProviderName: BuiltInName,
+            BicepExtensionName: BuiltInName,
             ConfigurationType: null,
-            ArmTemplateProviderName: "AzureResourceManager",
-            ArmTemplateProviderVersion: "1.0.0");
+            TemplateExtensionName: "AzureResourceManager",
+            TemplateExtensionVersion: new Version(EmbeddedAzExtensionVersion).ToString(3));
+
+        private delegate bool VisibilityDelegate(ResourceScope scope, BicepSourceFileKind sourceFileKind);
+        private record NamespaceValue<T>(T Value, VisibilityDelegate IsVisible);
+
+        private static readonly ImmutableArray<NamespaceValue<FunctionOverload>> Overloads = [.. GetAzOverloads()];
 
         private static FunctionOverload.ResultBuilderDelegate AddDiagnosticsAndReturnResult(TypeSymbol returnType, DiagnosticBuilder.DiagnosticBuilderDelegate writeDiagnostic)
         {
-            return (binder, fileResolver, diagnostics, functionCall, argumentTypes) => {
+            return (_, diagnostics, functionCall, argumentTypes) =>
+            {
                 diagnostics.Write(functionCall.Name, writeDiagnostic);
-
                 return new(returnType);
             };
         }
 
-        private static FunctionResult GetRestrictedResourceGroupReturnResult(IBinder binder, IFileResolver fileResolver, IDiagnosticWriter diagnostics, FunctionCallSyntaxBase functionCall, ImmutableArray<TypeSymbol> argumentTypes)
+        private static FunctionResult GetRestrictedResourceGroupReturnResult(SemanticModel model, IDiagnosticWriter diagnostics, FunctionCallSyntaxBase functionCall, ImmutableArray<TypeSymbol> argumentTypes)
             => new(
-                new ResourceGroupScopeType(functionCall.Arguments.ToImmutableArray(), Enumerable.Empty<TypeProperty>()),
-                new ObjectExpression(functionCall, ImmutableArray<ObjectPropertyExpression>.Empty));
+                new ResourceGroupScopeType(functionCall.Arguments, []),
+                new ObjectExpression(functionCall, []));
 
-        private static FunctionResult GetRestrictedSubscriptionReturnResult(IBinder binder, IFileResolver fileResolver, IDiagnosticWriter diagnostics, FunctionCallSyntaxBase functionCall, ImmutableArray<TypeSymbol> argumentTypes)
+        private static FunctionResult GetRestrictedSubscriptionReturnResult(SemanticModel model, IDiagnosticWriter diagnostics, FunctionCallSyntaxBase functionCall, ImmutableArray<TypeSymbol> argumentTypes)
             => new(
-                new SubscriptionScopeType(functionCall.Arguments.ToImmutableArray(), Enumerable.Empty<TypeProperty>()),
-                new ObjectExpression(functionCall, ImmutableArray<ObjectPropertyExpression>.Empty));
+                new SubscriptionScopeType(functionCall.Arguments, []),
+                new ObjectExpression(functionCall, []));
 
-        private static FunctionResult GetRestrictedManagementGroupReturnResult(IBinder binder, IFileResolver fileResolver, IDiagnosticWriter diagnostics, FunctionCallSyntaxBase functionCall, ImmutableArray<TypeSymbol> argumentTypes)
+        private static FunctionResult GetRestrictedManagementGroupReturnResult(SemanticModel model, IDiagnosticWriter diagnostics, FunctionCallSyntaxBase functionCall, ImmutableArray<TypeSymbol> argumentTypes)
             => new(
-                new ManagementGroupScopeType(functionCall.Arguments.ToImmutableArray(), Enumerable.Empty<TypeProperty>()),
-                new ObjectExpression(functionCall, ImmutableArray<ObjectPropertyExpression>.Empty));
+                new ManagementGroupScopeType(functionCall.Arguments, []),
+                new ObjectExpression(functionCall, []));
 
-        private static FunctionResult GetTenantReturnResult(IBinder binder, IFileResolver fileResolver, IDiagnosticWriter diagnostics, FunctionCallSyntaxBase functionCall, ImmutableArray<TypeSymbol> argumentTypes)
-            => new(new TenantScopeType(functionCall.Arguments.ToImmutableArray(), new[]
+        private static FunctionResult GetTenantReturnResult(SemanticModel model, IDiagnosticWriter diagnostics, FunctionCallSyntaxBase functionCall, ImmutableArray<TypeSymbol> argumentTypes)
+            => new(new TenantScopeType(functionCall.Arguments, new[]
             {
-                new TypeProperty("tenantId", LanguageConstants.String),
-                new TypeProperty("country", LanguageConstants.String),
-                new TypeProperty("countryCode", LanguageConstants.String),
-                new TypeProperty("displayName", LanguageConstants.String),
+                new NamedTypeProperty("tenantId", LanguageConstants.String),
+                new NamedTypeProperty("country", LanguageConstants.String),
+                new NamedTypeProperty("countryCode", LanguageConstants.String),
+                new NamedTypeProperty("displayName", LanguageConstants.String),
             }));
 
-        private static FunctionResult GetManagementGroupReturnResult(IBinder binder, IFileResolver fileResolver, IDiagnosticWriter diagnostics, FunctionCallSyntaxBase functionCall, ImmutableArray<TypeSymbol> argumentTypes)
+        private static FunctionResult GetManagementGroupReturnResult(SemanticModel model, IDiagnosticWriter diagnostics, FunctionCallSyntaxBase functionCall, ImmutableArray<TypeSymbol> argumentTypes)
         {
             var summary = new ObjectType("summaryProperties", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("id", LanguageConstants.String),
-                new TypeProperty("name", LanguageConstants.String),
-                new TypeProperty("type", LanguageConstants.String),
+                new NamedTypeProperty("id", LanguageConstants.String),
+                new NamedTypeProperty("name", LanguageConstants.String),
+                new NamedTypeProperty("type", LanguageConstants.String),
             }, null);
 
             var details = new ObjectType("detailsProperties", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("version", LanguageConstants.String),
-                new TypeProperty("updatedTime", LanguageConstants.String),
-                new TypeProperty("updatedBy", LanguageConstants.String),
-                new TypeProperty("parent", summary)
+                new NamedTypeProperty("version", LanguageConstants.String),
+                new NamedTypeProperty("updatedTime", LanguageConstants.String),
+                new NamedTypeProperty("updatedBy", LanguageConstants.String),
+                new NamedTypeProperty("parent", summary)
             }, null);
 
             var properties = new ObjectType("properties", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("tenantId", LanguageConstants.String),
-                new TypeProperty("displayName", LanguageConstants.String),
-                new TypeProperty("details", details)
+                new NamedTypeProperty("tenantId", LanguageConstants.String),
+                new NamedTypeProperty("displayName", LanguageConstants.String),
+                new NamedTypeProperty("details", details)
             }, null);
 
-            return new(new ManagementGroupScopeType(functionCall.Arguments.ToImmutableArray(), new[]
+            return new(new ManagementGroupScopeType(functionCall.Arguments, new[]
             {
-                new TypeProperty("id", LanguageConstants.String),
-                new TypeProperty("name", LanguageConstants.String),
-                new TypeProperty("type", LanguageConstants.String),
-                new TypeProperty("properties", properties),
+                new NamedTypeProperty("id", LanguageConstants.String),
+                new NamedTypeProperty("name", LanguageConstants.String),
+                new NamedTypeProperty("type", LanguageConstants.String),
+                new NamedTypeProperty("properties", properties),
             }));
         }
 
-        private static FunctionResult GetResourceGroupReturnResult(IBinder binder, IFileResolver fileResolver, IDiagnosticWriter diagnostics, FunctionCallSyntaxBase functionCall, ImmutableArray<TypeSymbol> argumentTypes)
+        private static FunctionResult GetResourceGroupReturnResult(SemanticModel model, IDiagnosticWriter diagnostics, FunctionCallSyntaxBase functionCall, ImmutableArray<TypeSymbol> argumentTypes)
         {
             var properties = new ObjectType("properties", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("provisioningState", LanguageConstants.String),
+                new NamedTypeProperty("provisioningState", LanguageConstants.String),
             }, null);
 
-            return new(new ResourceGroupScopeType(functionCall.Arguments.ToImmutableArray(), new[]
+            return new(new ResourceGroupScopeType(functionCall.Arguments, new[]
             {
-                new TypeProperty("id", LanguageConstants.String),
-                new TypeProperty("name", LanguageConstants.String),
-                new TypeProperty("type", LanguageConstants.String),
-                new TypeProperty("location", LanguageConstants.String),
-                new TypeProperty("managedBy", LanguageConstants.String),
-                new TypeProperty("tags", AzResourceTypeProvider.Tags),
-                new TypeProperty("properties", properties),
+                new NamedTypeProperty("id", LanguageConstants.String),
+                new NamedTypeProperty("name", LanguageConstants.String),
+                new NamedTypeProperty("type", LanguageConstants.String),
+                new NamedTypeProperty("location", LanguageConstants.String),
+                new NamedTypeProperty("managedBy", LanguageConstants.String),
+                new NamedTypeProperty("tags", AzResourceTypeProvider.Tags),
+                new NamedTypeProperty("properties", properties),
             }));
         }
 
-        private static FunctionResult GetSubscriptionReturnResult(IBinder binder, IFileResolver fileResolver, IDiagnosticWriter diagnostics, FunctionCallSyntaxBase functionCall, ImmutableArray<TypeSymbol> argumentTypes)
+        private static FunctionResult GetSubscriptionReturnResult(SemanticModel model, IDiagnosticWriter diagnostics, FunctionCallSyntaxBase functionCall, ImmutableArray<TypeSymbol> argumentTypes)
         {
-            return new(new SubscriptionScopeType(functionCall.Arguments.ToImmutableArray(), new[]
+            return new(new SubscriptionScopeType(functionCall.Arguments, new[]
             {
-                new TypeProperty("id", LanguageConstants.String),
-                new TypeProperty("subscriptionId", LanguageConstants.String),
-                new TypeProperty("tenantId", LanguageConstants.String),
-                new TypeProperty("displayName", LanguageConstants.String),
+                new NamedTypeProperty("id", LanguageConstants.String),
+                new NamedTypeProperty("subscriptionId", LanguageConstants.String),
+                new NamedTypeProperty("tenantId", LanguageConstants.String),
+                new NamedTypeProperty("displayName", LanguageConstants.String),
             }));
+        }
+
+        private static ObjectType GetRoleDefinitionReturnType()
+        {
+            // Return type matches the ARM implementation where we expect id and roleDefinitionId
+            return new ObjectType("roleDefinition", TypeSymbolValidationFlags.Default, new[]
+            {
+                new NamedTypeProperty("id", LanguageConstants.String),
+                new NamedTypeProperty("roleDefinitionId", LanguageConstants.String),
+            }, null);
+        }
+
+        private static FunctionResult GetRoleDefinitionReturnResult(SemanticModel model, IDiagnosticWriter diagnostics, FunctionCallSyntaxBase functionCall, ImmutableArray<TypeSymbol> argumentTypes)
+        {
+            // The actual role definition will be populated at runtime based on the role name
+            // No need to validate the role name at compile time since Azure manages the role definitions
+            return new(GetRoleDefinitionReturnType());
         }
 
         private static ObjectType GetProvidersSingleResourceReturnType()
@@ -125,9 +160,9 @@ namespace Bicep.Core.Semantics.Namespaces
             // from https://docs.microsoft.com/en-us/azure/azure-resource-manager/templates/template-functions-resource?tabs=json#providers
             return new ObjectType("ProviderResource", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("resourceType", LanguageConstants.String),
-                new TypeProperty("locations", new TypedArrayType(LanguageConstants.String, TypeSymbolValidationFlags.Default)),
-                new TypeProperty("apiVersions", new TypedArrayType(LanguageConstants.String, TypeSymbolValidationFlags.Default)),
+                new NamedTypeProperty("resourceType", LanguageConstants.String),
+                new NamedTypeProperty("locations", new TypedArrayType(LanguageConstants.String, TypeSymbolValidationFlags.Default)),
+                new NamedTypeProperty("apiVersions", new TypedArrayType(LanguageConstants.String, TypeSymbolValidationFlags.Default)),
             }, null);
         }
 
@@ -136,77 +171,98 @@ namespace Bicep.Core.Semantics.Namespaces
             // from https://docs.microsoft.com/en-us/azure/azure-resource-manager/templates/template-functions-resource?tabs=json#providers
             return new ObjectType("Provider", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("namespace", LanguageConstants.String),
-                new TypeProperty("resourceTypes", new TypedArrayType(GetProvidersSingleResourceReturnType(), TypeSymbolValidationFlags.Default)),
-                }, null);
+                new NamedTypeProperty("namespace", LanguageConstants.String),
+                new NamedTypeProperty("resourceTypes", new TypedArrayType(GetProvidersSingleResourceReturnType(), TypeSymbolValidationFlags.Default)),
+            }, null);
         }
 
         private static ObjectType GetEnvironmentReturnType()
         {
             return new ObjectType("environment", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("activeDirectoryDataLake", LanguageConstants.String),
-                new TypeProperty("authentication", new ObjectType("authenticationProperties", TypeSymbolValidationFlags.Default, new []
+                new NamedTypeProperty("activeDirectoryDataLake", LanguageConstants.String),
+                new NamedTypeProperty("authentication", new ObjectType("authenticationProperties", TypeSymbolValidationFlags.Default, new []
                 {
-                    new TypeProperty("audiences", new TypedArrayType(LanguageConstants.String, TypeSymbolValidationFlags.Default)),
-                    new TypeProperty("identityProvider", LanguageConstants.String),
-                    new TypeProperty("loginEndpoint", LanguageConstants.String),
-                    new TypeProperty("tenant", LanguageConstants.String),
+                    new NamedTypeProperty("audiences", new TypedArrayType(LanguageConstants.String, TypeSymbolValidationFlags.Default)),
+                    new NamedTypeProperty("identityProvider", LanguageConstants.String),
+                    new NamedTypeProperty("loginEndpoint", LanguageConstants.String),
+                    new NamedTypeProperty("tenant", LanguageConstants.String),
                 }, null)),
-                new TypeProperty("batch", LanguageConstants.String),
-                new TypeProperty("gallery", LanguageConstants.String),
-                new TypeProperty("graph", LanguageConstants.String),
-                new TypeProperty("graphAudience", LanguageConstants.String),
-                new TypeProperty("media", LanguageConstants.String),
-                new TypeProperty("name", LanguageConstants.String),
-                new TypeProperty("portal", LanguageConstants.String),
-                new TypeProperty("resourceManager", LanguageConstants.String),
-                new TypeProperty("sqlManagement", LanguageConstants.String),
-                new TypeProperty("suffixes", new ObjectType("suffixesProperties", TypeSymbolValidationFlags.Default, new []
+                new NamedTypeProperty("batch", LanguageConstants.String),
+                new NamedTypeProperty("gallery", LanguageConstants.String),
+                new NamedTypeProperty("graph", LanguageConstants.String),
+                new NamedTypeProperty("graphAudience", LanguageConstants.String),
+                new NamedTypeProperty("media", LanguageConstants.String),
+                new NamedTypeProperty("name", LanguageConstants.String),
+                new NamedTypeProperty("portal", LanguageConstants.String),
+                new NamedTypeProperty("resourceManager", LanguageConstants.String),
+                new NamedTypeProperty("sqlManagement", LanguageConstants.String),
+                new NamedTypeProperty("suffixes", new ObjectType("suffixesProperties", TypeSymbolValidationFlags.Default, new []
                 {
-                    new TypeProperty("acrLoginServer", LanguageConstants.String),
-                    new TypeProperty("azureDatalakeAnalyticsCatalogAndJob", LanguageConstants.String),
-                    new TypeProperty("azureDatalakeStoreFileSystem", LanguageConstants.String),
-                    new TypeProperty("azureFrontDoorEndpointSuffix", LanguageConstants.String),
-                    new TypeProperty("keyvaultDns", LanguageConstants.String),
-                    new TypeProperty("sqlServerHostname", LanguageConstants.String),
-                    new TypeProperty("storage", LanguageConstants.String),
+                    new NamedTypeProperty("acrLoginServer", LanguageConstants.String),
+                    new NamedTypeProperty("azureDatalakeAnalyticsCatalogAndJob", LanguageConstants.String),
+                    new NamedTypeProperty("azureDatalakeStoreFileSystem", LanguageConstants.String),
+                    new NamedTypeProperty("azureFrontDoorEndpointSuffix", LanguageConstants.String),
+                    new NamedTypeProperty("keyvaultDns", LanguageConstants.String),
+                    new NamedTypeProperty("sqlServerHostname", LanguageConstants.String),
+                    new NamedTypeProperty("storage", LanguageConstants.String),
                 }, null)),
-                new TypeProperty("vmImageAliasDoc", LanguageConstants.String),
+                new NamedTypeProperty("vmImageAliasDoc", LanguageConstants.String),
             }, null);
         }
 
-        private static ObjectType GetDeploymentReturnType(ResourceScope targetScope)
+        private static FunctionResult GetDeploymentReturnResult(SemanticModel model, IDiagnosticWriter diagnostics, FunctionCallSyntaxBase functionCall, ImmutableArray<TypeSymbol> argumentTypes)
         {
+            List<NamedTypeProperty> templateProperties = [new("contentVersion", LanguageConstants.String)];
+            if (model.Root.MetadataDeclarations.Length > 0)
+            {
+                templateProperties.Add(new("metadata", new ObjectType(
+                    "metadataProperties",
+                    TypeSymbolValidationFlags.Default,
+                    model.Root.MetadataDeclarations.Select(md => new NamedTypeProperty(
+                        md.Name,
+                        md.Type,
+                        Description: md.TryGetDescriptionFromDecorator(model))))));
+            }
+
             // Note: there are other properties which could be included here, but they allow you to break out of the bicep world.
             // We're going to omit them and only include what is truly necessary. If we get feature requests to expose more properties, we should discuss this further.
             // Properties such as 'template', 'templateHash', 'parameters' depend on the codegen, and feel like they could be fragile.
             // template.contentVersion was requested in issue #3114
-            IEnumerable<TypeProperty> properties = new[]
+            IEnumerable<NamedTypeProperty> properties = new[]
             {
-                new TypeProperty("name", LanguageConstants.String),
-                new TypeProperty("properties", new ObjectType("properties", TypeSymbolValidationFlags.Default, new []
+                new NamedTypeProperty("name", LanguageConstants.String),
+                new NamedTypeProperty("properties", new ObjectType("properties", TypeSymbolValidationFlags.Default, new []
                 {
-                    new TypeProperty("template", new ObjectType("templateProperties", TypeSymbolValidationFlags.Default, new []
+                    new NamedTypeProperty("template", new ObjectType("templateProperties", TypeSymbolValidationFlags.Default, templateProperties, null)),
+                    new NamedTypeProperty("templateLink", new ObjectType("templateLinkProperties", TypeSymbolValidationFlags.Default, new []
                     {
-                        new TypeProperty("contentVersion", LanguageConstants.String)
-                    }, null)),
-                    new TypeProperty("templateLink", new ObjectType("templateLinkProperties", TypeSymbolValidationFlags.Default, new []
-                    {
-                        new TypeProperty("id", LanguageConstants.String),
-                        new TypeProperty("uri", LanguageConstants.String),
+                        new NamedTypeProperty("id", LanguageConstants.String),
+                        new NamedTypeProperty("uri", LanguageConstants.String),
                     }, null))
                 }, null)),
             };
 
-            if (!targetScope.HasFlag(ResourceScope.ResourceGroup))
+            if (model.TargetScope != ResourceScope.ResourceGroup)
             {
                 // deployments in the 'resourcegroup' scope do not have the 'location' property. All other scopes do.
-                var locationProperty = new TypeProperty("location", LanguageConstants.String);
+                var locationProperty = new NamedTypeProperty("location", LanguageConstants.String);
                 properties = properties.Concat(locationProperty.AsEnumerable());
             }
 
-            return new ObjectType("deployment", TypeSymbolValidationFlags.Default, properties, null);
+            return new(new ObjectType("deployment", TypeSymbolValidationFlags.Default, properties, null));
+        }
+
+        private static ObjectType GetDeployerReturnType()
+        {
+            IEnumerable<NamedTypeProperty> properties = new[]
+            {
+                new NamedTypeProperty("objectId", LanguageConstants.String),
+                new NamedTypeProperty("tenantId", LanguageConstants.String),
+                new NamedTypeProperty("userPrincipalName", LanguageConstants.String),
+            };
+
+            return new ObjectType("deployer", TypeSymbolValidationFlags.Default, properties, null);
         }
 
         private static IEnumerable<(FunctionOverload functionOverload, ResourceScope allowedScopes)> GetScopeFunctions()
@@ -219,7 +275,7 @@ namespace Bicep.Core.Semantics.Namespaces
 
             yield return (
                 new FunctionOverloadBuilder("tenant")
-                    .WithReturnResultBuilder(GetTenantReturnResult, new TenantScopeType(Enumerable.Empty<FunctionArgumentSyntax>(), Enumerable.Empty<TypeProperty>()))
+                    .WithReturnResultBuilder(GetTenantReturnResult, new TenantScopeType([], []))
                     .WithGenericDescription("Returns the current tenant scope.")
                     .Build(),
                 ResourceScope.Tenant | ResourceScope.ManagementGroup | ResourceScope.Subscription | ResourceScope.ResourceGroup);
@@ -227,14 +283,14 @@ namespace Bicep.Core.Semantics.Namespaces
             const string managementGroupGenericDescription = "Returns a management group scope.";
             yield return (
                 new FunctionOverloadBuilder("managementGroup")
-                    .WithReturnResultBuilder(GetManagementGroupReturnResult, new ManagementGroupScopeType(Enumerable.Empty<FunctionArgumentSyntax>(), Enumerable.Empty<TypeProperty>()))
+                    .WithReturnResultBuilder(GetManagementGroupReturnResult, new ManagementGroupScopeType([], []))
                     .WithGenericDescription(managementGroupGenericDescription)
                     .WithDescription("Returns the current management group scope.")
                     .Build(),
                 ResourceScope.ManagementGroup);
             yield return (
                 new FunctionOverloadBuilder("managementGroup")
-                    .WithReturnResultBuilder(GetRestrictedManagementGroupReturnResult, new ManagementGroupScopeType(Enumerable.Empty<FunctionArgumentSyntax>(), Enumerable.Empty<TypeProperty>()))
+                    .WithReturnResultBuilder(GetRestrictedManagementGroupReturnResult, new ManagementGroupScopeType([], []))
                     .WithGenericDescription(managementGroupGenericDescription)
                     .WithDescription("Returns the scope for a named management group.")
                     .WithRequiredParameter("name", LanguageConstants.String, "The unique identifier of the management group (not the display name).")
@@ -244,31 +300,31 @@ namespace Bicep.Core.Semantics.Namespaces
             const string subscriptionGenericDescription = "Returns a subscription scope.";
             yield return (
                 new FunctionOverloadBuilder("subscription")
-                    .WithReturnResultBuilder(GetSubscriptionReturnResult, new SubscriptionScopeType(Enumerable.Empty<FunctionArgumentSyntax>(), Enumerable.Empty<TypeProperty>()))
+                    .WithReturnResultBuilder(GetSubscriptionReturnResult, new SubscriptionScopeType([], []))
                     .WithGenericDescription(subscriptionGenericDescription)
                     .WithDescription("Returns the subscription scope for the current deployment.")
                     .Build(),
                 ResourceScope.Subscription | ResourceScope.ResourceGroup);
             yield return (
                 new FunctionOverloadBuilder("subscription")
-                    .WithReturnResultBuilder(GetRestrictedSubscriptionReturnResult, new SubscriptionScopeType(Enumerable.Empty<FunctionArgumentSyntax>(), Enumerable.Empty<TypeProperty>()))
+                    .WithReturnResultBuilder(GetRestrictedSubscriptionReturnResult, new SubscriptionScopeType([], []))
                     .WithGenericDescription(subscriptionGenericDescription)
                     .WithDescription("Returns a named subscription scope.")
                     .WithRequiredParameter("subscriptionId", LanguageConstants.String, "The subscription ID")
                     .Build(),
-                ResourceScope.Tenant | ResourceScope.ManagementGroup | ResourceScope.Subscription | ResourceScope.ResourceGroup);
+                ResourceScope.Tenant | ResourceScope.ManagementGroup | ResourceScope.Subscription | ResourceScope.ResourceGroup | ResourceScope.Local);
 
             const string resourceGroupGenericDescription = "Returns a resource group scope.";
             yield return (
                 new FunctionOverloadBuilder("resourceGroup")
-                    .WithReturnResultBuilder(GetResourceGroupReturnResult, new ResourceGroupScopeType(Enumerable.Empty<FunctionArgumentSyntax>(), Enumerable.Empty<TypeProperty>()))
+                    .WithReturnResultBuilder(GetResourceGroupReturnResult, new ResourceGroupScopeType([], []))
                     .WithGenericDescription(resourceGroupGenericDescription)
                     .WithDescription("Returns the current resource group scope.")
                     .Build(),
                 ResourceScope.ResourceGroup);
             yield return (
                 new FunctionOverloadBuilder("resourceGroup")
-                    .WithReturnResultBuilder(GetRestrictedResourceGroupReturnResult, new ResourceGroupScopeType(Enumerable.Empty<FunctionArgumentSyntax>(), Enumerable.Empty<TypeProperty>()))
+                    .WithReturnResultBuilder(GetRestrictedResourceGroupReturnResult, new ResourceGroupScopeType([], []))
                     .WithGenericDescription(resourceGroupGenericDescription)
                     .WithDescription("Returns a named resource group scope")
                     .WithRequiredParameter("resourceGroupName", LanguageConstants.String, "The resource group name")
@@ -276,179 +332,306 @@ namespace Bicep.Core.Semantics.Namespaces
                 ResourceScope.Subscription | ResourceScope.ResourceGroup);
             yield return (
                 new FunctionOverloadBuilder("resourceGroup")
-                    .WithReturnResultBuilder(GetRestrictedResourceGroupReturnResult, new ResourceGroupScopeType(Enumerable.Empty<FunctionArgumentSyntax>(), Enumerable.Empty<TypeProperty>()))
+                    .WithReturnResultBuilder(GetRestrictedResourceGroupReturnResult, new ResourceGroupScopeType([], []))
                     .WithGenericDescription(resourceGroupGenericDescription)
                     .WithDescription("Returns a named resource group scope.")
                     .WithRequiredParameter("subscriptionId", LanguageConstants.String, "The subscription ID")
                     .WithRequiredParameter("resourceGroupName", LanguageConstants.String, "The resource group name")
                     .Build(),
+                ResourceScope.Tenant | ResourceScope.ManagementGroup | ResourceScope.Subscription | ResourceScope.ResourceGroup | ResourceScope.Local);
+
+            yield return (
+                new FunctionOverloadBuilder("deployment")
+                    .WithReturnResultBuilder(
+                        GetDeploymentReturnResult,
+                        new ObjectType("deployment", TypeSymbolValidationFlags.Default, [], new TypeProperty(LanguageConstants.Any)))
+                    .WithGenericDescription("Returns information about the current deployment operation.")
+                    .Build(),
+                ResourceScope.Tenant | ResourceScope.ManagementGroup | ResourceScope.Subscription | ResourceScope.ResourceGroup);
+
+            yield return (
+                new FunctionOverloadBuilder("deployer")
+                    .WithReturnType(GetDeployerReturnType())
+                    .WithGenericDescription("Returns information about the current deployment principal.")
+                    .Build(),
                 ResourceScope.Tenant | ResourceScope.ManagementGroup | ResourceScope.Subscription | ResourceScope.ResourceGroup);
         }
 
-        private static IEnumerable<FunctionOverload> GetAzOverloads(ResourceScope resourceScope)
+        private static IEnumerable<NamespaceValue<FunctionOverload>> GetAzOverloads()
         {
-            foreach (var (functionOverload, allowedScopes) in GetScopeFunctions())
+            static IEnumerable<FunctionOverload> GetParamsFilePermittedOverloads()
             {
-                // we only include it if it's valid at all of the scopes that the template is valid at
-                if (resourceScope == (resourceScope & allowedScopes))
-                {
-                    yield return functionOverload;
-                }
+                var kvResourceNamespace = "Microsoft.KeyVault";
+                var kvResourceType = "vaults";
 
-                // TODO: add banned function to explain why a given function isn't available
+                yield return new FunctionOverloadBuilder(GetSecretFunctionName)
+                    .WithReturnType(LanguageConstants.SecureString)
+                    .WithGenericDescription("Retrieve a value from an Azure Key Vault at the start of a deployment.")
+                    .WithRequiredParameter("subscriptionId", LanguageConstants.String, "Id of the Subscription that has the target KeyVault")
+                    .WithRequiredParameter("resourceGroupName", LanguageConstants.String, "Name of the Resource Group that has the target KeyVault")
+                    .WithRequiredParameter("keyVaultName", LanguageConstants.String, "Name of the target KeyVault")
+                    .WithRequiredParameter("secretName", LanguageConstants.String, "Name of the Secret")
+                    .WithOptionalParameter("secretVersion", LanguageConstants.String, "Version of the Secret")
+                    .WithReturnResultBuilder((_, _, func, argumentTypes) =>
+                    {
+                        if (argumentTypes[0] is not StringLiteralType subType ||
+                            argumentTypes[1] is not StringLiteralType rgType ||
+                            argumentTypes[2] is not StringLiteralType kvNameType ||
+                            argumentTypes[3] is not StringLiteralType secretNameType ||
+                            (func.Arguments.Length > 4 && argumentTypes[4] is not StringLiteralType))
+                        {
+                            return new(LanguageConstants.SecureString);
+                        }
+
+                        // all arguments are string literals, hence key vault id should be string literal expression
+                        // if any arguments are not string literals, we will handle that in the expression evaluator callback (see WithEvaluator)
+                        var kvResourceId = ResourceGroupLevelResourceId.Create(
+                            subType.RawStringValue,
+                            rgType.RawStringValue,
+                            kvResourceNamespace,
+                            [kvResourceType],
+                            [kvNameType.RawStringValue]);
+                        var secretVersion = func.Arguments.Length > 4 ? (argumentTypes[4] as StringLiteralType)?.RawStringValue : null;
+
+                        return new(
+                            LanguageConstants.SecureString,
+                            new ParameterKeyVaultReferenceExpression(func,
+                                new StringLiteralExpression(null, kvResourceId.FullyQualifiedId),
+                                new StringLiteralExpression(null, secretNameType.RawStringValue),
+                                secretVersion != null ? new StringLiteralExpression(null, secretVersion) : null));
+
+                    }, LanguageConstants.SecureString)
+                    .WithEvaluator(exp =>
+                    {
+                        var subscriptionId = exp.Parameters[0];
+                        var resourceGroupName = exp.Parameters[1];
+                        var keyVaultName = exp.Parameters[2];
+                        var secretName = exp.Parameters[3];
+                        var secretVersion = exp.Parameters.Length > 4 ? exp.Parameters[4] : null;
+
+                        // If we get to this callback, then at least one argument was not a string literal type (see WithReturnResultBuilder)
+                        // hence, we can go ahead an use resourceId expression for the key vault id
+                        var keyVaultId = new FunctionCallExpression(exp.SourceSyntax, ResourceIdFunctionName, [
+                            subscriptionId,
+                            resourceGroupName,
+                            new StringLiteralExpression(null, kvResourceNamespace),
+                            new StringLiteralExpression(null, kvResourceType),
+                            keyVaultName]);
+
+                        return new ParameterKeyVaultReferenceExpression(exp.SourceSyntax, keyVaultId, secretName, secretVersion);
+                    })
+                    .WithFlags(FunctionFlags.DirectAssignment)
+                    .Build();
             }
 
-            // TODO: Add schema for return type
-            yield return new FunctionOverloadBuilder("deployment")
-                .WithReturnType(GetDeploymentReturnType(resourceScope))
-                .WithGenericDescription("Returns information about the current deployment operation.")
-                .Build();
+            static IEnumerable<FunctionOverload> GetBicepFilePermittedOverloads()
+            {
+                yield return new FunctionOverloadBuilder("environment")
+                    .WithReturnType(GetEnvironmentReturnType())
+                    .WithGenericDescription("Returns information about the Azure environment used for deployment.")
+                    .Build();
 
-            yield return new FunctionOverloadBuilder("environment")
-                .WithReturnType(GetEnvironmentReturnType())
-                .WithGenericDescription("Returns information about the Azure environment used for deployment.")
-                .Build();
+                // TODO: This is based on docs. Verify
+                // the resourceId function relies on leading optional parameters that are disambiguated at runtime
+                // modeling this as multiple overload with all possible permutations of the leading parameters
+                const string resourceIdDescription = "Returns the unique identifier of a resource. You use this function when the resource name is ambiguous or not provisioned within the same template. The format of the returned identifier varies based on whether the deployment happens at the scope of a resource group, subscription, management group, or tenant.";
+                yield return new FunctionOverloadBuilder(ResourceIdFunctionName)
+                    .WithReturnType(LanguageConstants.String)
+                    .WithGenericDescription(resourceIdDescription)
+                    .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of resource including resource provider namespace")
+                    .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The resource name segment")
+                    .Build();
 
-            // TODO: This is based on docs. Verify
-            // the resourceId function relies on leading optional parameters that are disambiguated at runtime
-            // modeling this as multiple overload with all possible permutations of the leading parameters
-            const string resourceIdDescription = "Returns the unique identifier of a resource. You use this function when the resource name is ambiguous or not provisioned within the same template. The format of the returned identifier varies based on whether the deployment happens at the scope of a resource group, subscription, management group, or tenant.";
-            yield return new FunctionOverloadBuilder("resourceId")
-                .WithReturnType(LanguageConstants.String)
-                .WithGenericDescription(resourceIdDescription)
-                .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of resource including resource provider namespace")
-                .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The resource name segment")
-                .Build();
+                yield return new FunctionOverloadBuilder(ResourceIdFunctionName)
+                    .WithReturnType(LanguageConstants.String)
+                    .WithGenericDescription(resourceIdDescription)
+                    .WithRequiredParameter("subscriptionId", LanguageConstants.String, "The subscription ID")
+                    .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of resource including resource provider namespace")
+                    .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The resource name segment")
+                    .Build();
 
-            yield return new FunctionOverloadBuilder("resourceId")
-                .WithReturnType(LanguageConstants.String)
-                .WithGenericDescription(resourceIdDescription)
-                .WithRequiredParameter("subscriptionId", LanguageConstants.String, "The subscription ID")
-                .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of resource including resource provider namespace")
-                .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The resource name segment")
-                .Build();
+                yield return new FunctionOverloadBuilder(ResourceIdFunctionName)
+                    .WithReturnType(LanguageConstants.String)
+                    .WithGenericDescription(resourceIdDescription)
+                    .WithRequiredParameter("resourceGroupName", LanguageConstants.String, "The resource group name")
+                    .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of resource including resource provider namespace")
+                    .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The resource name segment")
+                    .Build();
 
-            yield return new FunctionOverloadBuilder("resourceId")
-                .WithReturnType(LanguageConstants.String)
-                .WithGenericDescription(resourceIdDescription)
-                .WithRequiredParameter("resourceGroupName", LanguageConstants.String, "The resource group name")
-                .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of resource including resource provider namespace")
-                .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The resource name segment")
-                .Build();
+                yield return new FunctionOverloadBuilder(ResourceIdFunctionName)
+                    .WithReturnType(LanguageConstants.String)
+                    .WithGenericDescription(resourceIdDescription)
+                    .WithRequiredParameter("subscriptionId", LanguageConstants.String, "The subscription ID")
+                    .WithRequiredParameter("resourceGroupName", LanguageConstants.String, "The resource group name")
+                    .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of resource including resource provider namespace")
+                    .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The resource name segment")
+                    .Build();
 
-            yield return new FunctionOverloadBuilder("resourceId")
-                .WithReturnType(LanguageConstants.String)
-                .WithGenericDescription(resourceIdDescription)
-                .WithRequiredParameter("subscriptionId", LanguageConstants.String, "The subscription ID")
-                .WithRequiredParameter("resourceGroupName", LanguageConstants.String, "The resource group name")
-                .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of resource including resource provider namespace")
-                .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The resource name segment")
-                .Build();
+                // the subscriptionResourceId function relies on leading optional parameters that are disambiguated at runtime
+                // modeling this as multiple overload with all possible permutations of the leading parameters
+                const string subscriptionResourceIdDescription = "Returns the unique identifier for a resource deployed at the subscription level.";
+                yield return new FunctionOverloadBuilder("subscriptionResourceId")
+                    .WithReturnType(LanguageConstants.String)
+                    .WithGenericDescription(subscriptionResourceIdDescription)
+                    .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of resource including resource provider namespace")
+                    .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The resource name segment")
+                    .Build();
 
-            // the subscriptionResourceId function relies on leading optional parameters that are disambiguated at runtime
-            // modeling this as multiple overload with all possible permutations of the leading parameters
-            const string subscriptionResourceIdDescription = "Returns the unique identifier for a resource deployed at the subscription level.";
-            yield return new FunctionOverloadBuilder("subscriptionResourceId")
-                .WithReturnType(LanguageConstants.String)
-                .WithGenericDescription(subscriptionResourceIdDescription)
-                .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of resource including resource provider namespace")
-                .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The resource name segment")
-                .Build();
+                yield return new FunctionOverloadBuilder("subscriptionResourceId")
+                    .WithReturnType(LanguageConstants.String)
+                    .WithGenericDescription(subscriptionResourceIdDescription)
+                    .WithRequiredParameter("subscriptionId", LanguageConstants.String, "The subscription ID")
+                    .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of resource including resource provider namespace")
+                    .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The resource name segment")
+                    .Build();
 
-            yield return new FunctionOverloadBuilder("subscriptionResourceId")
-                .WithReturnType(LanguageConstants.String)
-                .WithGenericDescription(subscriptionResourceIdDescription)
-                .WithRequiredParameter("subscriptionId", LanguageConstants.String, "The subscription ID")
-                .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of resource including resource provider namespace")
-                .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The resource name segment")
-                .Build();
+                yield return new FunctionOverloadBuilder("tenantResourceId")
+                    .WithReturnType(LanguageConstants.String)
+                    .WithGenericDescription("Returns the unique identifier for a resource deployed at the tenant level.")
+                    .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of resource including resource provider namespace")
+                    .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The resource name segment")
+                    .Build();
 
-            yield return new FunctionOverloadBuilder("tenantResourceId")
-                .WithReturnType(LanguageConstants.String)
-                .WithGenericDescription("Returns the unique identifier for a resource deployed at the tenant level.")
-                .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of resource including resource provider namespace")
-                .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The resource name segment")
-                .Build();
+                yield return new FunctionOverloadBuilder("extensionResourceId")
+                    .WithReturnType(LanguageConstants.String)
+                    // .WithGenericDescription("Returns the resource ID for an extension resource, which is a resource type that is applied to another resource to add to its capabilities.")
+                    .WithGenericDescription("Returns the resource ID for an [extension](https://docs.microsoft.com/en-us/azure/azure-resource-manager/management/extension-resource-types) resource, which is a resource type that is applied to another resource to add to its capabilities.")
+                    .WithRequiredParameter("resourceId", LanguageConstants.String, "The resource ID for the resource that the extension resource is applied to")
+                    .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of the extension resource including resource provider namespace")
+                    .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The extension resource name segment")
+                    .Build();
 
-            yield return new FunctionOverloadBuilder("extensionResourceId")
-                .WithReturnType(LanguageConstants.String)
-                // .WithGenericDescription("Returns the resource ID for an extension resource, which is a resource type that is applied to another resource to add to its capabilities.")
-                .WithGenericDescription("Returns the resource ID for an [extension](https://docs.microsoft.com/en-us/azure/azure-resource-manager/management/extension-resource-types) resource, which is a resource type that is applied to another resource to add to its capabilities.")
-                .WithRequiredParameter("resourceId", LanguageConstants.String, "The resource ID for the resource that the extension resource is applied to")
-                .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of the extension resource including resource provider namespace")
-                .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The extension resource name segment")
-                .Build();
+                const string managementGroupResourceIdDescription = "Returns the unique identifier for a resource deployed at the management group level.";
+                yield return new FunctionOverloadBuilder("managementGroupResourceId")
+                    .WithReturnType(LanguageConstants.String)
+                    .WithGenericDescription(managementGroupResourceIdDescription)
+                    .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of resource including resource provider namespace")
+                    .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The resource name segment")
+                    .Build();
 
-            const string managementGroupResourceIdDescription = "Returns the unique identifier for a resource deployed at the management group level.";
-            yield return new FunctionOverloadBuilder("managementGroupResourceId")
-                .WithReturnType(LanguageConstants.String)
-                .WithGenericDescription(managementGroupResourceIdDescription)
-                .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of resource including resource provider namespace")
-                .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The resource name segment")
-                .Build();
+                yield return new FunctionOverloadBuilder("managementGroupResourceId")
+                    .WithReturnType(LanguageConstants.String)
+                    .WithGenericDescription(managementGroupResourceIdDescription)
+                    .WithRequiredParameter("managementGroupId", LanguageConstants.String, "The management group ID")
+                    .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of resource including resource provider namespace")
+                    .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The resource name segment")
+                    .Build();
 
-            yield return new FunctionOverloadBuilder("managementGroupResourceId")
-                .WithReturnType(LanguageConstants.String)
-                .WithGenericDescription(managementGroupResourceIdDescription)
-                .WithRequiredParameter("managementGroupId", LanguageConstants.String, "The management group ID")
-                .WithRequiredParameter("resourceType", LanguageConstants.String, "Type of resource including resource provider namespace")
-                .WithVariableParameter("resourceName", LanguageConstants.String, minimumCount: 1, "The resource name segment")
-                .Build();
+                // Add roleDefinition function
+                yield return new FunctionOverloadBuilder("roleDefinitions")
+                    .WithReturnResultBuilder(GetRoleDefinitionReturnResult, GetRoleDefinitionReturnType())
+                    .WithGenericDescription("Gets a role definition that can be used in role assignments.")
+                    .WithDescription("Returns information about the specified role definition including id and roleDefinitionId.")
+                    .WithRequiredParameter("roleName", LanguageConstants.String, "The display name of the role definition")
+                    .Build();
 
-            const string providersDescription = "Returns information about a resource provider and its supported resource types. If you don't provide a resource type, the function returns all the supported types for the resource provider.";
-            yield return new FunctionOverloadBuilder("providers")
-                .WithReturnResultBuilder(AddDiagnosticsAndReturnResult(GetProvidersSingleProviderReturnType(), x => x.DeprecatedProvidersFunction("providers")), GetProvidersSingleProviderReturnType())
-                .WithGenericDescription(providersDescription)
-                .WithRequiredParameter("providerNamespace", LanguageConstants.String, "the namespace of the provider")
-                .Build();
+                const string providersDescription = "Returns information about a resource provider and its supported resource types. If you don't provide a resource type, the function returns all the supported types for the resource provider.";
+                yield return new FunctionOverloadBuilder("providers")
+                    .WithReturnResultBuilder(AddDiagnosticsAndReturnResult(GetProvidersSingleProviderReturnType(), x => x.DeprecatedProvidersFunction("providers")), GetProvidersSingleProviderReturnType())
+                    .WithGenericDescription(providersDescription)
+                    .WithRequiredParameter("providerNamespace", LanguageConstants.String, "the namespace of the provider")
+                    .Build();
 
-            yield return new FunctionOverloadBuilder("providers")
-                .WithReturnResultBuilder(AddDiagnosticsAndReturnResult(GetProvidersSingleResourceReturnType(), x => x.DeprecatedProvidersFunction("providers")), GetProvidersSingleResourceReturnType())
-                .WithGenericDescription(providersDescription)
-                .WithRequiredParameter("providerNamespace", LanguageConstants.String, "the namespace of the provider")
-                .WithRequiredParameter("resourceType", LanguageConstants.String, "The type of resource within the specified namespace")
-                .Build();
+                yield return new FunctionOverloadBuilder("providers")
+                    .WithReturnResultBuilder(AddDiagnosticsAndReturnResult(GetProvidersSingleResourceReturnType(), x => x.DeprecatedProvidersFunction("providers")), GetProvidersSingleResourceReturnType())
+                    .WithGenericDescription(providersDescription)
+                    .WithRequiredParameter("providerNamespace", LanguageConstants.String, "the namespace of the provider")
+                    .WithRequiredParameter("resourceType", LanguageConstants.String, "The type of resource within the specified namespace")
+                    .Build();
 
-            // TODO: return type is string[]
-            // TODO: Location param should be of location type if we ever add it
-            yield return new FunctionOverloadBuilder("pickZones")
-                .WithReturnType(LanguageConstants.Array)
-                .WithGenericDescription("Determines whether a resource type supports zones for a region.")
-                .WithRequiredParameter("providerNamespace", LanguageConstants.String, "The resource provider namespace for the resource type to check for zone support")
-                .WithRequiredParameter("resourceType", LanguageConstants.String, "The resource type to check for zone support")
-                .WithRequiredParameter("location", LanguageConstants.String, "The region to check for zone support")
-                .WithOptionalParameter("numberOfZones", LanguageConstants.Int, "The number of logical zones to return. The default is 1. The number must a positive integer from 1 to 3. Use 1 for single-zoned resources. For multi-zoned resources, the value must be less than or equal to the number of supported zones.")
-                .WithOptionalParameter("offset", LanguageConstants.Int, "The offset from the starting logical zone. The function returns an error if offset plus numberOfZones exceeds the number of supported zones.")
-                .Build();
+                yield return new FunctionOverloadBuilder("toLogicalZone")
+                    .WithReturnType(LanguageConstants.String)
+                    .WithGenericDescription("Returns the logical zone corresponding to the given physical zone.")
+                    .WithRequiredParameter("subscriptionId", LanguageConstants.String, "The subscription ID of the deployed availability zones")
+                    .WithRequiredParameter("location", LanguageConstants.String, "The location of the availability zone mappings")
+                    .WithRequiredParameter("physicalZone", LanguageConstants.String, "The physical zone to convert")
+                    .WithFlags(FunctionFlags.RequiresInlining)
+                    .Build();
 
-            // TODO: Change 'Full' to literal type after verifying in the runtime source
-            yield return new FunctionOverloadBuilder("reference")
-                .WithReturnType(LanguageConstants.Object)
-                .WithGenericDescription("Returns an object representing a resource's runtime state.")
-                .WithRequiredParameter("resourceNameOrIdentifier", LanguageConstants.String, "Name or unique identifier of a resource. When referencing a resource in the current template, provide only the resource name as a parameter. When referencing a previously deployed resource or when the name of the resource is ambiguous, provide the resource ID.")
-                .WithOptionalParameter("apiVersion", LanguageConstants.String, "API version of the specified resource. This parameter is required when the resource isn't provisioned within same template.")
-                .WithOptionalParameter("full", LanguageConstants.String, "Value that specifies whether to return the full resource object. If you don't specify 'Full', only the properties object of the resource is returned. The full object includes values such as the resource ID and location.")
-                .WithFlags(FunctionFlags.RequiresInlining)
-                .Build();
+                yield return new FunctionOverloadBuilder("toLogicalZones")
+                    .WithReturnType(new TypedArrayType(LanguageConstants.String, TypeSymbolValidationFlags.Default))
+                    .WithGenericDescription("Returns the logical zone array corresponding to the given array of physical zones.")
+                    .WithRequiredParameter("subscriptionId", LanguageConstants.String, "The subscription ID of the deployed availability zones")
+                    .WithRequiredParameter("location", LanguageConstants.String, "The location of the availability zone mappings")
+                    .WithRequiredParameter("physicalZones", LanguageConstants.Array, "An array of physical zones to convert")
+                    .WithFlags(FunctionFlags.RequiresInlining)
+                    .Build();
 
-            // TODO: Doc parameters need an update
-            yield return new FunctionWildcardOverloadBuilder("list*", AzConstants.ListWildcardFunctionRegex)
-                .WithReturnType(LanguageConstants.Any)
-                .WithGenericDescription("The syntax for this function varies by name of the list operations. Each implementation returns values for the resource type that supports a list operation. The operation name must start with list. Some common usages are `listKeys`, `listKeyValue`, and `listSecrets`.")
-                .WithRequiredParameter("resourceNameOrIdentifier", LanguageConstants.String, "Name or unique identifier of a resource. When referencing a resource in the current template, provide only the resource name as a parameter. When referencing a previously deployed resource or when the name of the resource is ambiguous, provide the resource ID.")
-                .WithRequiredParameter("apiVersion", LanguageConstants.String, "API version of resource runtime state. Typically, in the format, yyyy-mm-dd.")
-                .WithOptionalParameter("functionValues", LanguageConstants.Object, "An object that has values for the function. Only provide this object for functions that support receiving an object with parameter values, such as listAccountSas on a storage account. An example of passing function values is shown in this article.")
-                .WithFlags(FunctionFlags.RequiresInlining)
-                .Build();
+                yield return new FunctionOverloadBuilder("toPhysicalZone")
+                    .WithReturnType(LanguageConstants.String)
+                    .WithGenericDescription("Returns the physical zone corresponding to the given logical zone.")
+                    .WithRequiredParameter("subscriptionId", LanguageConstants.String, "The subscription ID of the deployed availability zones")
+                    .WithRequiredParameter("location", LanguageConstants.String, "The location of the availability zone mappings")
+                    .WithRequiredParameter("logicalZone", LanguageConstants.String, "The logical zone to convert")
+                    .WithFlags(FunctionFlags.RequiresInlining)
+                    .Build();
+
+                yield return new FunctionOverloadBuilder("toPhysicalZones")
+                    .WithReturnType(new TypedArrayType(LanguageConstants.String, TypeSymbolValidationFlags.Default))
+                    .WithGenericDescription("Returns the physical zone array corresponding to the given array of logical zones.")
+                    .WithRequiredParameter("subscriptionId", LanguageConstants.String, "The subscription ID of the deployed availability zones")
+                    .WithRequiredParameter("location", LanguageConstants.String, "The location of the availability zone mappings")
+                    .WithRequiredParameter("logicalZones", LanguageConstants.Array, "An array of logical zones to convert")
+                    .WithFlags(FunctionFlags.RequiresInlining)
+                    .Build();
+
+                // TODO: return type is string[]
+                // TODO: Location param should be of location type if we ever add it
+                yield return new FunctionOverloadBuilder("pickZones")
+                    .WithReturnType(LanguageConstants.Array)
+                    .WithGenericDescription("Determines whether a resource type supports zones for a region.")
+                    .WithRequiredParameter("providerNamespace", LanguageConstants.String, "The resource provider namespace for the resource type to check for zone support")
+                    .WithRequiredParameter("resourceType", LanguageConstants.String, "The resource type to check for zone support")
+                    .WithRequiredParameter("location", LanguageConstants.String, "The region to check for zone support")
+                    .WithOptionalParameter("numberOfZones", LanguageConstants.Int, "The number of logical zones to return. The default is 1. The number must a positive integer from 1 to 3. Use 1 for single-zoned resources. For multi-zoned resources, the value must be less than or equal to the number of supported zones.")
+                    .WithOptionalParameter("offset", LanguageConstants.Int, "The offset from the starting logical zone. The function returns an error if offset plus numberOfZones exceeds the number of supported zones.")
+                    .Build();
+
+                // TODO: Change 'Full' to literal type after verifying in the runtime source
+                yield return new FunctionOverloadBuilder("reference")
+                    .WithReturnType(LanguageConstants.Object)
+                    .WithGenericDescription("Returns an object representing a resource's runtime state.")
+                    .WithRequiredParameter("resourceNameOrIdentifier", LanguageConstants.String, "Name or unique identifier of a resource. When referencing a resource in the current template, provide only the resource name as a parameter. When referencing a previously deployed resource or when the name of the resource is ambiguous, provide the resource ID.")
+                    .WithOptionalParameter("apiVersion", LanguageConstants.String, "API version of the specified resource. This parameter is required when the resource isn't provisioned within same template.")
+                    .WithOptionalParameter("full", LanguageConstants.String, "Value that specifies whether to return the full resource object. If you don't specify 'Full', only the properties object of the resource is returned. The full object includes values such as the resource ID and location.")
+                    .WithFlags(FunctionFlags.RequiresInlining)
+                    .Build();
+
+                // TODO: Doc parameters need an update
+                yield return new FunctionWildcardOverloadBuilder("list*", AzConstants.ListWildcardFunctionRegex)
+                    .WithReturnType(LanguageConstants.Any)
+                    .WithGenericDescription("The syntax for this function varies by name of the list operations. Each implementation returns values for the resource type that supports a list operation. The operation name must start with list. Some common usages are `listKeys`, `listKeyValue`, and `listSecrets`.")
+                    .WithRequiredParameter("resourceNameOrIdentifier", LanguageConstants.String, "Name or unique identifier of a resource. When referencing a resource in the current template, provide only the resource name as a parameter. When referencing a previously deployed resource or when the name of the resource is ambiguous, provide the resource ID.")
+                    .WithRequiredParameter("apiVersion", LanguageConstants.String, "API version of resource runtime state. Typically, in the format, yyyy-mm-dd.")
+                    .WithOptionalParameter("functionValues", LanguageConstants.Object, "An object that has values for the function. Only provide this object for functions that support receiving an object with parameter values, such as listAccountSas on a storage account. An example of passing function values is shown in this article.")
+                    .WithFlags(FunctionFlags.RequiresInlining)
+                    .Build();
+            }
+
+            foreach (var overload in GetBicepFilePermittedOverloads())
+            {
+                yield return new(overload, (targetScope, sfk) => sfk == BicepSourceFileKind.BicepFile && targetScope != ResourceScope.Local);
+            }
+
+            foreach (var overload in GetParamsFilePermittedOverloads())
+            {
+                yield return new(overload, (targetScope, sfk) => sfk == BicepSourceFileKind.ParamsFile && targetScope != ResourceScope.Local);
+            }
+
+            foreach (var (overload, allowedScopes) in GetScopeFunctions())
+            {
+                // we only include it if it's valid at all of the scopes that the template is valid at
+                yield return new(overload, (scope, sfk) => sfk == BicepSourceFileKind.BicepFile && scope == (scope & allowedScopes));
+            }
         }
 
-        public static NamespaceType Create(string aliasName, ResourceScope resourceScope, AzResourceTypeProvider resourceTypeProvider)
+        public static NamespaceType Create(string? aliasName, ResourceScope scope, IResourceTypeProvider resourceTypeProvider, BicepSourceFileKind sourceFileKind)
         {
             return new NamespaceType(
-                aliasName,
+                aliasName ?? BuiltInName,
                 Settings,
-                ImmutableArray<TypeTypeProperty>.Empty,
-                GetAzOverloads(resourceScope),
+                ImmutableArray<NamedTypeProperty>.Empty,
+                Overloads.Where(x => x.IsVisible(scope, sourceFileKind)).Select(x => x.Value),
                 ImmutableArray<BannedFunction>.Empty,
                 ImmutableArray<Decorator>.Empty,
                 resourceTypeProvider);

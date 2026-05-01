@@ -5,10 +5,7 @@ param vnetName string = 'vnet01'
 param vnetIpPrefix string = '10.1.0.0/16'
 
 @description('Specify whether to provision new vnet or deploy to existing vnet')
-@allowed([
-  'new'
-  'existing'
-])
+@allowed(['new', 'existing'])
 param vnetNewOrExisting string = 'new'
 
 @description('Bastion subnet IP prefix MUST be within vnet IP prefix address space')
@@ -40,9 +37,7 @@ resource newVirtualNetwork 'Microsoft.Network/virtualNetworks@2020-05-01' = if (
   location: location
   properties: {
     addressSpace: {
-      addressPrefixes: [
-        vnetIpPrefix
-      ]
+      addressPrefixes: [vnetIpPrefix]
     }
     subnets: [
       {
@@ -110,10 +105,7 @@ resource subnet 'Microsoft.Network/virtualNetworks/subnets@2020-05-01' = if (vne
 resource bastionHost 'Microsoft.Network/bastionHosts@2020-05-01' = {
   name: bastionHostName
   location: location
-  dependsOn: [
-    newVirtualNetwork
-    existingVirtualNetwork
-  ]
+  dependsOn: [newVirtualNetwork, existingVirtualNetwork]
   properties: {
     ipConfigurations: [
       {

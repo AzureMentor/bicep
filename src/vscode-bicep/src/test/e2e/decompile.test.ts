@@ -2,11 +2,9 @@
 // Licensed under the MIT License.
 
 import fs from "fs";
-import fse from "fs-extra";
 import path from "path";
 import vscode from "vscode";
 import { createUniqueTempFolder } from "../utils/createUniqueTempFolder";
-
 import { executeCloseAllEditors, executeDecompileCommand } from "./commands";
 
 const json = `
@@ -58,10 +56,14 @@ describe("decompile", (): void => {
     expect(fs.existsSync(outputPath2)).toBe(true);
 
     // Delete the folder
-    fse.rmdirSync(folder, {
-      recursive: true,
-      maxRetries: 5,
-      retryDelay: 1000,
-    });
+    try {
+      fs.rmSync(folder, {
+        recursive: true,
+        maxRetries: 5,
+        retryDelay: 1000,
+      });
+    } catch {
+      // post-test cleanup is strictly best-effort only
+    }
   });
 });

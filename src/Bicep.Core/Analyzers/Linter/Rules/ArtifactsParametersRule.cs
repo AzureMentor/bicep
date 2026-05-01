@@ -1,20 +1,16 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Diagnostics;
+using System.Text.RegularExpressions;
 using Bicep.Core.CodeAction;
 using Bicep.Core.Diagnostics;
-using Bicep.Core.Navigation;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text.RegularExpressions;
 
 namespace Bicep.Core.Analyzers.Linter.Rules
 {
-    public sealed class ArtifactsParametersRule : LocationRuleBase
+    public sealed partial class ArtifactsParametersRule : LinterRuleBase
     {
         public new const string Code = "artifacts-parameters";
 
@@ -28,10 +24,10 @@ namespace Bicep.Core.Analyzers.Linter.Rules
         public ArtifactsParametersRule() : base(
             code: Code,
             description: "Follow best practices when including the _artifactsLocation and _artifactsLocationSasToken parameters.",
-            docUri: new Uri($"https://aka.ms/bicep/linter/{Code}"))
+            LinterRuleCategory.BestPractice)
         {
-            Debug.Assert(ArtifactsLocationName.StartsWith("_"));
-            Debug.Assert(ArtifactsLocationSasTokenName.StartsWith("_"));
+            Debug.Assert(ArtifactsLocationName.StartsWith('_'));
+            Debug.Assert(ArtifactsLocationSasTokenName.StartsWith('_'));
         }
 
         public override string FormatMessage(params object[] values)
@@ -94,7 +90,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
             }
 
             // Verify default values
-            foreach (var diag in VerifyDefaultValues(diagnosticLevel, artifactsLocationParam, artifactsSasParam))
+            foreach (var diag in VerifyDefaultValues(model, diagnosticLevel, artifactsLocationParam, artifactsSasParam))
             {
                 yield return diag;
             }
@@ -107,7 +103,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
 
             foreach (var module in model.Root.ModuleDeclarations)
             {
-                if (module.TryGetSemanticModel(out ISemanticModel? moduleModel, out _))
+                if (module.TryGetSemanticModel().IsSuccess(out var moduleModel))
                 {
                     foreach (var formalParam in moduleModel.Parameters.Values)
                     {
@@ -146,6 +142,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
         }
 
         private IEnumerable<IDiagnostic> VerifyDefaultValues(
+            SemanticModel model,
             DiagnosticLevel diagnosticLevel,
             ParameterSymbol artifactsLocationParam,
             ParameterSymbol artifactsSasParam)
@@ -179,8 +176,8 @@ namespace Bicep.Core.Analyzers.Linter.Rules
                 else
                 {
                     // We're not worried about an exact match.
-                    string syntaxString = artifactsLocationDefaultValue.ToText();
-                    if (Regex.Matches(syntaxString, "deployment\\(.*\\.templatelink", RegexOptions.IgnoreCase).Any())
+                    string defaultValueString = artifactsLocationDefaultValue.ToString();
+                    if (TemplateLinkReferencePattern().Match(defaultValueString).Success)
                     {
                         pass = true;
                     }
@@ -221,7 +218,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
         private static string? GetParameterType(SemanticModel model, ParameterSymbol parameterSymbol)
         {
             if (parameterSymbol.DeclaringSyntax is ParameterDeclarationSyntax parameterDeclaration
-               && parameterDeclaration.Type is VariableAccessSyntax typeSyntax)
+               && parameterDeclaration.Type is TypeVariableAccessSyntax typeSyntax)
             {
                 if (model.HasParsingError(typeSyntax))
                 {
@@ -268,5 +265,8 @@ namespace Bicep.Core.Analyzers.Linter.Rules
 
             return null;
         }
+
+        [GeneratedRegex(@"deployment\(.*\.templatelink", RegexOptions.IgnoreCase)]
+        private static partial Regex TemplateLinkReferencePattern();
     }
 }

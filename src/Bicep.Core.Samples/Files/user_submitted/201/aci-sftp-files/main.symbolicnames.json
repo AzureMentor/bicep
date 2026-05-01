@@ -1,13 +1,12 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "languageVersion": "1.10-experimental",
+  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
     "_generator": {
       "name": "bicep",
       "version": "dev",
-      "templateHash": "7094727738859386523"
+      "templateHash": "4588876734589341088"
     }
   },
   "parameters": {
@@ -156,7 +155,7 @@
               "readOnly": false,
               "shareName": "[parameters('fileShareName')]",
               "storageAccountName": "[variables('storageAccountName')]",
-              "storageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2020-08-01-preview').keys[0].value]"
+              "storageAccountKey": "[listKeys('storageAccount', '2020-08-01-preview').keys[0].value]"
             }
           }
         ]

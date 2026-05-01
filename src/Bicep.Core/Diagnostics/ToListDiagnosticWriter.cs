@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
-
 namespace Bicep.Core.Diagnostics
 {
     public class ToListDiagnosticWriter : IDiagnosticWriter
@@ -15,7 +13,7 @@ namespace Bicep.Core.Diagnostics
         }
 
         public static ToListDiagnosticWriter Create()
-            => new ToListDiagnosticWriter(new List<IDiagnostic>());
+            => new(new List<IDiagnostic>());
 
         public void Write(IDiagnostic diagnostic)
             => diagnostics.Add(diagnostic);

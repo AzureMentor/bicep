@@ -9,11 +9,7 @@ param acrAdminUserEnabled bool = false
 @description('Location for all resources.')
 param location string = resourceGroup().location
 
-@allowed([
-  'Basic'
-  'Standard'
-  'Premium'
-])
+@allowed(['Basic', 'Standard', 'Premium'])
 @description('Tier of your Azure Container Registry.')
 param acrSku string = 'Basic'
 

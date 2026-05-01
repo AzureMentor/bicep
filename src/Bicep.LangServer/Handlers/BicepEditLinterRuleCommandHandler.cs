@@ -1,10 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 using Bicep.Core;
 using Bicep.Core.Configuration;
 using Bicep.LanguageServer.Configuration;
@@ -103,7 +99,7 @@ namespace Bicep.LanguageServer.Handlers
 
             string json = File.ReadAllText(bicepConfigFilePath);
             (int line, int column, string text)? insertion = new JsonEditor(json).InsertIfNotExist(
-                new string[] { "analyzers", "core", "rules", ruleCode, "level" },
+                ["analyzers", "core", "rules", ruleCode, "level"],
                 "warning");
 
             bool added = false;

@@ -1,20 +1,20 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import * as os from "os";
+import * as path from "path";
 import {
+  DialogResponses,
   IActionContext,
   IAzureQuickPickItem,
   IAzureUserInput,
   TelemetryProperties,
-  DialogResponses,
   UserCancelledError,
 } from "@microsoft/vscode-azext-utils";
-import * as path from "path";
-import * as os from "os";
 import * as fse from "fs-extra";
+import { TextDocument, TextEditor, Uri, window, workspace } from "vscode";
+import { bicepFileExtension, bicepLanguageId, bicepParamLanguageId } from "../language/constants";
 import { compareStringsOrdinal } from "../utils/compareStringsOrdinal";
-import { TextDocument, Uri, window, workspace } from "vscode";
-import { bicepFileExtension, bicepLanguageId } from "../language/constants";
 
 type TargetFile =
   | "rightClickOrMenu"
@@ -40,7 +40,72 @@ type Properties = TelemetryProperties & { targetFile: TargetFile };
 export async function findOrCreateActiveBicepFile(
   context: IActionContext,
   documentUri: Uri | undefined,
-  prompt: string
+  prompt: string,
+  includeBicepParam = false,
+): Promise<Uri> {
+  const properties = <Properties>context.telemetry.properties;
+  const ui = context.ui;
+
+  const matchesLanguageId = (editor: TextEditor) => {
+    const languageId = editor.document.languageId;
+    return languageId === bicepLanguageId || (includeBicepParam && languageId === bicepParamLanguageId);
+  };
+
+  if (documentUri) {
+    // The command specified a specific URI, so act on that (right-click or context menu).
+    // The only scenario where we should *not* have a documentUri is when a command is invoked through the command
+    //   palette or through a shortcut key.
+    properties.targetFile = "rightClickOrMenu";
+    return documentUri;
+  }
+
+  const activeEditor = window.activeTextEditor;
+  if (activeEditor && matchesLanguageId(activeEditor)) {
+    properties.targetFile = "activeEditor";
+    return activeEditor.document.uri;
+  }
+
+  const globPattern = includeBicepParam ? "**/*.{bicep, bicepparam}" : "**/*.bicep";
+
+  const workspaceBicepFiles = (await workspace.findFiles(globPattern, undefined)).filter((f) => !!f.fsPath);
+  const visibleBicepFiles = window.visibleTextEditors // List of the active editor in each editor tab group
+    .filter(matchesLanguageId)
+    .map((e) => e.document.uri);
+
+  // Create deduped, sorted array of all available Bicep files (in workspace and visible editors)
+  const map = new Map<string, Uri>();
+  workspaceBicepFiles.concat(visibleBicepFiles).forEach((bf) => map.set(bf.fsPath, bf));
+  const bicepFilesSorted = Array.from(map.values());
+  bicepFilesSorted.sort((a, b) => compareStringsOrdinal(a.path, b.path));
+
+  if (bicepFilesSorted.length === 1) {
+    // Only a single Bicep file in the workspace/visible editors - choose it
+    properties.targetFile = workspaceBicepFiles.length === 1 ? "singleInWorkspace" : "singleInVisibleEditors";
+    return bicepFilesSorted[0];
+  }
+
+  if (bicepFilesSorted.length === 0) {
+    // Ask to create a new Bicep file...
+    return await queryCreateBicepFile(ui, properties);
+  }
+
+  // We need to ask the user which existing file to use
+  properties.targetFile = "quickPick";
+
+  // Show quick pick
+  const entries: IAzureQuickPickItem<Uri>[] = [];
+  bicepFilesSorted.forEach((u) => addFileQuickPick(entries, u));
+
+  const response = await ui.showQuickPick(entries, {
+    placeHolder: prompt,
+  });
+  return response.data;
+}
+
+export async function findOrCreateActiveBicepParamFile(
+  context: IActionContext,
+  documentUri: Uri | undefined,
+  prompt: string,
 ): Promise<Uri> {
   const properties = <Properties>context.telemetry.properties;
   const ui = context.ui;
@@ -54,32 +119,25 @@ export async function findOrCreateActiveBicepFile(
   }
 
   const activeEditor = window.activeTextEditor;
-  if (activeEditor?.document.languageId === bicepLanguageId) {
+  if (activeEditor?.document.languageId === bicepParamLanguageId) {
     properties.targetFile = "activeEditor";
     return activeEditor.document.uri;
   }
 
-  const workspaceBicepFiles = (
-    await workspace.findFiles("**/*.bicep", undefined)
-  ).filter((f) => !!f.fsPath);
+  const workspaceBicepFiles = (await workspace.findFiles("**/*.bicepparam", undefined)).filter((f) => !!f.fsPath);
   const visibleBicepFiles = window.visibleTextEditors // List of the active editor in each editor tab group
-    .filter((e) => e.document.languageId === bicepLanguageId)
+    .filter((e) => e.document.languageId === bicepParamLanguageId)
     .map((e) => e.document.uri);
 
   // Create deduped, sorted array of all available Bicep files (in workspace and visible editors)
   const map = new Map<string, Uri>();
-  workspaceBicepFiles
-    .concat(visibleBicepFiles)
-    .forEach((bf) => map.set(bf.fsPath, bf));
+  workspaceBicepFiles.concat(visibleBicepFiles).forEach((bf) => map.set(bf.fsPath, bf));
   const bicepFilesSorted = Array.from(map.values());
   bicepFilesSorted.sort((a, b) => compareStringsOrdinal(a.path, b.path));
 
   if (bicepFilesSorted.length === 1) {
     // Only a single Bicep file in the workspace/visible editors - choose it
-    properties.targetFile =
-      workspaceBicepFiles.length === 1
-        ? "singleInWorkspace"
-        : "singleInVisibleEditors";
+    properties.targetFile = workspaceBicepFiles.length === 1 ? "singleInWorkspace" : "singleInVisibleEditors";
     return bicepFilesSorted[0];
   }
 
@@ -106,11 +164,8 @@ function addFileQuickPick(items: IAzureQuickPickItem<Uri>[], uri: Uri): void {
     return;
   }
 
-  const workspaceRoot: string | undefined =
-    workspace.getWorkspaceFolder(uri)?.uri.fsPath;
-  const relativePath = workspaceRoot
-    ? path.relative(workspaceRoot, uri.fsPath)
-    : path.basename(uri.fsPath);
+  const workspaceRoot: string | undefined = workspace.getWorkspaceFolder(uri)?.uri.fsPath;
+  const relativePath = workspaceRoot ? path.relative(workspaceRoot, uri.fsPath) : path.basename(uri.fsPath);
 
   items.push({
     label: relativePath,
@@ -120,23 +175,18 @@ function addFileQuickPick(items: IAzureQuickPickItem<Uri>[], uri: Uri): void {
   });
 }
 
-async function queryCreateBicepFile(
-  ui: IAzureUserInput,
-  properties: Properties
-): Promise<Uri> {
+async function queryCreateBicepFile(ui: IAzureUserInput, properties: Properties): Promise<Uri> {
   properties.targetFile = "new";
 
   await ui.showWarningMessage(
     "Couldn't find any Bicep files in your workspace. Would you like to create a Bicep file?",
     DialogResponses.yes,
-    DialogResponses.cancel
+    DialogResponses.cancel,
   );
 
   // User said yes (otherwise would have thrown user cancel error)
   const startingFolder: Uri =
-    (workspace.workspaceFolders
-      ? workspace.workspaceFolders[0].uri
-      : undefined) ?? Uri.file(os.homedir());
+    (workspace.workspaceFolders ? workspace.workspaceFolders[0].uri : undefined) ?? Uri.file(os.homedir());
   const uri: Uri | undefined = await window.showSaveDialog({
     title: "Save new Bicep file",
     defaultUri: Uri.joinPath(startingFolder, "main"),
@@ -154,7 +204,7 @@ async function queryCreateBicepFile(
   await fse.writeFile(
     path,
     "@description('Location of all resources')\nparam location string = resourceGroup().location\n",
-    { encoding: "utf-8" }
+    { encoding: "utf-8" },
   );
 
   const document: TextDocument = await workspace.openTextDocument(uri);

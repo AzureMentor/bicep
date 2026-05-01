@@ -1,22 +1,19 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Bicep.RegistryModuleTool.Commands;
-using Bicep.RegistryModuleTool.Extensions;
-using Bicep.RegistryModuleTool.Options;
-using Bicep.RegistryModuleTool.Proxies;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Serilog;
-using Serilog.Events;
 using System.CommandLine;
 using System.CommandLine.Builder;
 using System.CommandLine.Hosting;
 using System.CommandLine.Invocation;
 using System.CommandLine.NamingConventionBinder;
 using System.CommandLine.Parsing;
-using System.IO.Abstractions;
-using System.Threading.Tasks;
+using Bicep.RegistryModuleTool.Commands;
+using Bicep.RegistryModuleTool.Extensions;
+using Bicep.RegistryModuleTool.Options;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Serilog;
+using Serilog.Events;
 
 namespace Bicep.RegistryModuleTool
 {
@@ -44,10 +41,7 @@ namespace Bicep.RegistryModuleTool
         }
 
         private static void ConfigureHost(IHostBuilder builder) => builder
-            .ConfigureServices(services => services
-                .AddSingleton<IEnvironmentProxy, EnvironmentProxy>()
-                .AddSingleton<IProcessProxy, ProcessProxy>()
-                .AddSingleton<IFileSystem, FileSystem>())
+            .ConfigureServices(services => services.AddBicepCore())
             .UseSerilog((context, logging) => logging
                 .MinimumLevel.Is(GetMinimumLogEventLevel(context))
                 .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)

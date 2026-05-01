@@ -10,8 +10,6 @@ using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using CompilationHelper = Bicep.LanguageServer.Utils.CompilationHelper;
-using Bicep.Core;
-using System.Threading.Tasks;
 
 namespace Bicep.LangServer.UnitTests.Helpers
 {
@@ -38,7 +36,7 @@ namespace Bicep.LangServer.UnitTests.Helpers
 
             compilationContext.Should().BeNull();
 
-            var compilation = await new CompilationHelper(bicepCompiler, bicepCompilationManager).GetCompilation(documentUri);
+            var compilation = await new CompilationHelper(bicepCompiler, bicepCompilationManager).GetRefreshedCompilation(documentUri);
 
             compilation.Should().NotBeNull();
         }
@@ -57,7 +55,7 @@ namespace Bicep.LangServer.UnitTests.Helpers
             // Upsert compilation. This will cause CompilationContext to be non null
             BicepCompilationManager bicepCompilationManager = BicepCompilationManagerHelper.CreateCompilationManager(documentUri, bicepFileContents, upsertCompilation: true);
 
-            var compilation = await new CompilationHelper(bicepCompiler, bicepCompilationManager).GetCompilation(documentUri);
+            var compilation = await new CompilationHelper(bicepCompiler, bicepCompilationManager).GetRefreshedCompilation(documentUri);
 
             compilation.Should().NotBeNull();
             compilation.Should().BeSameAs(bicepCompilationManager.GetCompilation(documentUri)!.Compilation);

@@ -40,6 +40,23 @@
             "problemMatcher": "$msCompile"
         },
         {
+            "label": "Build MCP Server for VSIX",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/src/Bicep.McpServer/Bicep.McpServer.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary",
+                "--output",
+                "${workspaceFolder}/src/vscode-bicep/bicepMcpServer"
+            ],
+            "problemMatcher": "$msCompile",
+            "dependsOn": [
+                "Build Language Server for VSIX"
+            ]
+        },
+        {
             "label": "Build VSIX",
             "command": "npm",
             "args": ["run", "build", "--loglevel", "silent"],
@@ -49,8 +66,20 @@
                 "cwd": "${workspaceFolder}/src/vscode-bicep"
             },
             "dependsOn": [
-                "Build Language Server for VSIX"
+                "Build Language Server for VSIX",
+                "Build MCP Server for VSIX",
+                "Build VSCode UI"
             ]
+        },
+        {
+            "label": "Build VSCode UI",
+            "command": "npm",
+            "args": ["run", "build", "--loglevel", "silent"],
+            "type": "shell",
+            "problemMatcher": "$tsc-watch",
+            "options": {
+                "cwd": "${workspaceFolder}/src/vscode-bicep-ui"
+            }
         },
         {
             "label": "Build WASM for Playground",
@@ -80,10 +109,11 @@
             "type": "process",
             "args": [
                 "test",
+                "--",
                 "--filter",
                 "TestCategory=Baseline",
-                "--",
-                "TestRunParameters.Parameter(name=\"SetBaseLine\", value=\"true\")",
+                "--test-parameter",
+                "SetBaseLine=true",
             ],
             "problemMatcher": "$msCompile"
         }

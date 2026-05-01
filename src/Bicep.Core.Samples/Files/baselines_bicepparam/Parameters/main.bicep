@@ -2,6 +2,11 @@
   This is a block comment.
 */
 
+param now string = utcNow('yyyyMMdd')
+
+@allowed([ 1, 2, 3, 5, 8, 13, 21 ])
+param numberOfVMs int
+
 // parameters without default value
 @sys.description('''
 this is my multi line
@@ -34,12 +39,15 @@ param foo object = {
   priority: 3
   info: {
     a: 'b'
+    b: utcNow()
   }
+  fc: utcNow()
   empty: {
   }
   array: [
     'string item'
     12
+    utcNow()
     true
     [
       'inner'
@@ -49,6 +57,14 @@ param foo object = {
       a: 'b'
     }
   ]
+  subObject: {
+    a: 'b'
+    b: utcNow()
+    c: {
+      a: 'b'
+      b: utcNow()
+    }
+  }
 }
 
 // array default value
@@ -192,11 +208,16 @@ param decoratedObject object = {
 }
 
 @sys.metadata({
-    description: 'An array.'
+    description: 'I will be overrode.'
 })
 @sys.maxLength(20)
-@sys.description('I will be overrode.')
+@sys.description('An array.')
 param decoratedArray array = [
     utcNow()
     newGuid()
 ]
+
+param stringfromEnvironmentVariables string
+param intfromEnvironmentVariables int
+param boolfromEnvironmentVariables bool
+param intfromEnvironmentVariablesDefault int

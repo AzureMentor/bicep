@@ -1,17 +1,19 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 import path from "path";
-import webpack from "webpack";
 import CopyPlugin from "copy-webpack-plugin";
 import ForkTsCheckerWebpackPlugin from "fork-ts-checker-webpack-plugin";
 import TerserPlugin from "terser-webpack-plugin";
+import webpack from "webpack";
+
+const outputPath = path.resolve(__dirname, "out");
 
 const extensionConfig: webpack.Configuration = {
   target: "node",
   entry: "./src/extension.ts",
   devtool: "source-map",
   output: {
-    path: path.resolve(__dirname, "out"),
+    path: outputPath,
     filename: "extension.js",
     libraryTarget: "commonjs2",
     devtoolModuleFilenameTemplate: "file:///[absolute-resource-path]",
@@ -20,8 +22,7 @@ const extensionConfig: webpack.Configuration = {
     // the vscode-module is created on-the-fly and must be excluded. Add other modules that cannot be webpack'ed, 📖 -> https://webpack.js.org/configuration/externals/
     vscode: "commonjs vscode",
     // The following are optional dependencies of microsoft/vscode-azext-utils that cannot be resolved.
-    "applicationinsights-native-metrics":
-      "commonjs applicationinsights-native-metrics",
+    "applicationinsights-native-metrics": "commonjs applicationinsights-native-metrics",
     "@opentelemetry/tracing": "commonjs @opentelemetry/tracing",
   },
   optimization: {
@@ -43,7 +44,7 @@ const extensionConfig: webpack.Configuration = {
           loader: "ts",
           target: "es2019",
         },
-        exclude: [/node_modules/, /visualizer\/app/, /test/],
+        exclude: [/node_modules/, /panes\/deploy\/app/, /visualizer\/app/, /test/],
       },
     ],
   },
@@ -51,11 +52,33 @@ const extensionConfig: webpack.Configuration = {
     new CopyPlugin({
       patterns: [
         {
+          from: "../vscode-bicep-ui/apps/deploy-pane/dist",
+          to: path.join(__dirname, "out/deploy-pane"),
+          globOptions: {
+            ignore: ["**/index.html"],
+          },
+        },
+      ],
+    }),
+    new CopyPlugin({
+      patterns: [
+        {
+          from: "../vscode-bicep-ui/apps/visual-designer/dist",
+          to: path.join(__dirname, "out/visual-designer"),
+          globOptions: {
+            ignore: ["**/index.html"],
+          },
+        },
+      ],
+    }),
+    new CopyPlugin({
+      patterns: [
+        {
           from: "../textmate/bicep.tmlanguage",
           to: path.join(__dirname, "syntaxes/bicep.tmlanguage"),
         },
       ],
-    }) as { apply(...args: unknown[]): void },
+    }),
     new CopyPlugin({
       patterns: [
         {
@@ -63,11 +86,12 @@ const extensionConfig: webpack.Configuration = {
           to: path.join(__dirname, "syntaxes/language-configuration.json"),
         },
       ],
-    }) as { apply(...args: unknown[]): void },
+    }),
     new ForkTsCheckerWebpackPlugin(),
   ],
   resolve: {
     extensions: [".ts", ".js"],
+    conditionNames: ["import", "require"],
   },
 };
 
@@ -77,7 +101,7 @@ const visualizerConfig: webpack.Configuration = {
   devtool: "source-map",
   output: {
     filename: "visualizer.js",
-    path: path.resolve(__dirname, "out"),
+    path: outputPath,
     devtoolModuleFilenameTemplate: "file:///[absolute-resource-path]",
   },
   externals: {
@@ -113,7 +137,7 @@ const visualizerConfig: webpack.Configuration = {
   ],
 };
 
-module.exports = (env: unknown, argv: { mode: string }) => {
+module.exports = (_env: unknown, argv: { mode: string }) => {
   if (argv.mode === "development") {
     // "cheap-module-source-map" is almost 2x faster than "source-map",
     // while it provides decent source map quality.

@@ -1,18 +1,17 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
+using System.Diagnostics;
 using System.Reflection;
 using Bicep.Core.Diagnostics;
-using Bicep.Core.FileSystem;
-using Bicep.Core.Parsing;
 using Bicep.Core.Resources;
 using Bicep.Core.Semantics;
+using Bicep.Core.Semantics.Namespaces;
+using Bicep.Core.SourceGraph;
 using Bicep.Core.Syntax;
 using Bicep.Core.TypeSystem;
-using Bicep.Core.TypeSystem.Az;
+using Bicep.Core.TypeSystem.Providers.Az;
+using Bicep.Core.TypeSystem.Types;
 using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.UnitTests.Mock;
 using Bicep.Core.UnitTests.Utils;
@@ -226,7 +225,7 @@ namespace Bicep.Core.UnitTests.TypeSystem
 
             var binderMock = StrictMock.Of<IBinder>();
             binderMock.Setup(t => t.GetSymbolInfo(expression))
-                .Returns<Symbol?>(null);
+                .Returns<SyntaxBase>(x => null);
 
             var parsingErrorLookupMock = StrictMock.Of<IDiagnosticLookup>();
             parsingErrorLookupMock.Setup(x => x.Contains(expression)).Returns(false);
@@ -250,7 +249,7 @@ namespace Bicep.Core.UnitTests.TypeSystem
         private static IEnumerable<object[]> GetStringDomainNarrowingData()
         {
             static object[] Row(TypeSymbol sourceType, TypeSymbol targetType, TypeSymbol expectedType, params (string code, DiagnosticLevel level, string message)[] diagnostics)
-                => new object[] { sourceType, targetType, expectedType, diagnostics };
+                => [sourceType, targetType, expectedType, diagnostics];
 
             return new[]
             {
@@ -340,7 +339,7 @@ namespace Bicep.Core.UnitTests.TypeSystem
         private static IEnumerable<object[]> GetIntegerDomainNarrowingData()
         {
             static object[] Row(TypeSymbol sourceType, TypeSymbol targetType, TypeSymbol expectedType, params (string code, DiagnosticLevel level, string message)[] diagnostics)
-                => new object[] { sourceType, targetType, expectedType, diagnostics };
+                => [sourceType, targetType, expectedType, diagnostics];
 
             return new[]
             {
@@ -490,7 +489,7 @@ namespace Bicep.Core.UnitTests.TypeSystem
             var arrayLiteral = TestSyntaxFactory.CreateArray(new SyntaxBase[] { TestSyntaxFactory.CreateString("foo"), TestSyntaxFactory.CreateInt(5), TestSyntaxFactory.CreateNull() });
 
             var (narrowedType, diagnostics) = NarrowTypeAndCollectDiagnostics(SyntaxHierarchy.Build(arrayLiteral), arrayLiteral, new TupleType(
-                ImmutableArray.Create<ITypeReference>(TypeFactory.CreateStringType(maxLength: 2), TypeFactory.CreateIntegerType(minValue: 6)),
+                [TypeFactory.CreateStringType(maxLength: 2), TypeFactory.CreateIntegerType(minValue: 6)],
                 default));
 
             diagnostics.Should().HaveDiagnostics(new[]
@@ -532,7 +531,7 @@ namespace Bicep.Core.UnitTests.TypeSystem
         private static IEnumerable<object[]> GetArrayDomainNarrowingData()
         {
             static object[] Row(TypeSymbol sourceType, TypeSymbol targetType, TypeSymbol expectedReturnType, params (string code, DiagnosticLevel level, string message)[] diagnostics)
-                => new object[] { sourceType, targetType, expectedReturnType, diagnostics };
+                => [sourceType, targetType, expectedReturnType, diagnostics];
 
             return new[]
             {
@@ -548,9 +547,9 @@ namespace Bicep.Core.UnitTests.TypeSystem
                     new TypedArrayType(TypeFactory.CreateIntegerType(1, 10), default)),
 
                 // A source tuple should narrow its items
-                Row(new TupleType(ImmutableArray.Create<ITypeReference>(TypeFactory.CreateIntegerType(1, 10), TypeFactory.CreateStringType(1, 10)), default),
-                    new TupleType(ImmutableArray.Create<ITypeReference>(TypeFactory.CreateIntegerType(-5, 11), TypeFactory.CreateStringType(maxLength: 20)), default),
-                    new TupleType(ImmutableArray.Create<ITypeReference>(TypeFactory.CreateIntegerType(1, 10), TypeFactory.CreateStringType(1, 10)), default)),
+                Row(new TupleType([TypeFactory.CreateIntegerType(1, 10), TypeFactory.CreateStringType(1, 10)], default),
+                    new TupleType([TypeFactory.CreateIntegerType(-5, 11), TypeFactory.CreateStringType(maxLength: 20)], default),
+                    new TupleType([TypeFactory.CreateIntegerType(1, 10), TypeFactory.CreateStringType(1, 10)], default)),
 
                 // A source type whose domain overlaps but extends below the domain of the target type should narrow and warn
                 Row(TypeFactory.CreateArrayType(1, 10),
@@ -696,9 +695,8 @@ namespace Bicep.Core.UnitTests.TypeSystem
             var (narrowedType, diagnostics) = NarrowTypeAndCollectDiagnostics(hierarchy, obj, new ObjectType(
                 "additionalPropertiesFallbackTypeTest",
                 TypeSymbolValidationFlags.Default,
-                new[] { new TypeProperty("inSchema", LanguageConstants.String) },
-                LanguageConstants.Any,
-                TypePropertyFlags.FallbackProperty));
+                new[] { new NamedTypeProperty("inSchema", LanguageConstants.String) },
+                    new TypeProperty(LanguageConstants.Any, TypePropertyFlags.FallbackProperty)));
 
             diagnostics.Should().HaveCount(1);
             diagnostics.Should().ContainDiagnostic("BCP037", DiagnosticLevel.Warning, "The property \"notInSchema\" is not allowed on objects of type \"additionalPropertiesFallbackTypeTest\". No other properties are allowed.");
@@ -715,13 +713,13 @@ namespace Bicep.Core.UnitTests.TypeSystem
                 {
                     new ObjectType("typeA", TypeSymbolValidationFlags.Default, new []
                     {
-                        new TypeProperty("myDiscriminator", TypeFactory.CreateStringLiteralType("valA")),
-                        new TypeProperty("fieldA", LanguageConstants.String, TypePropertyFlags.Required),
+                        new NamedTypeProperty("myDiscriminator", TypeFactory.CreateStringLiteralType("valA")),
+                        new NamedTypeProperty("fieldA", LanguageConstants.String, TypePropertyFlags.Required),
                     }, null),
                     new ObjectType("typeB", TypeSymbolValidationFlags.Default, new []
                     {
-                        new TypeProperty("myDiscriminator", TypeFactory.CreateStringLiteralType("valB")),
-                        new TypeProperty("fieldB", LanguageConstants.String, TypePropertyFlags.Required),
+                        new NamedTypeProperty("myDiscriminator", TypeFactory.CreateStringLiteralType("valB")),
+                        new NamedTypeProperty("fieldB", LanguageConstants.String, TypePropertyFlags.Required),
                     }, null),
                 });
 
@@ -747,7 +745,7 @@ namespace Bicep.Core.UnitTests.TypeSystem
                 // incorrect type specified for the discriminator field
                 var obj = TestSyntaxFactory.CreateObject(new[]
                 {
-                    TestSyntaxFactory.CreateProperty("myDiscriminator", TestSyntaxFactory.CreateObject(Enumerable.Empty<ObjectPropertySyntax>())),
+                    TestSyntaxFactory.CreateProperty("myDiscriminator", TestSyntaxFactory.CreateObject([])),
                     TestSyntaxFactory.CreateProperty("fieldB", TestSyntaxFactory.CreateString("someVal")),
                 });
 
@@ -850,7 +848,7 @@ namespace Bicep.Core.UnitTests.TypeSystem
 
             {
                 // pick an invalid path (object) - we should get diagnosticWriter
-                var objectSyntax = TestSyntaxFactory.CreateObject(Enumerable.Empty<ObjectPropertySyntax>());
+                var objectSyntax = TestSyntaxFactory.CreateObject([]);
                 var hierarchy = SyntaxHierarchy.Build(objectSyntax);
                 var (narrowedType, diagnostics) = NarrowTypeAndCollectDiagnostics(hierarchy, objectSyntax, unionType);
 
@@ -904,7 +902,7 @@ namespace Bicep.Core.UnitTests.TypeSystem
 
         private static IEnumerable<object[]> GetData()
         {
-            static object[] CreateRow(string name, ObjectSyntax @object) => new object[] { name, @object };
+            static object[] CreateRow(string name, ObjectSyntax @object) => [name, @object];
 
             // empty object
             yield return CreateRow("Empty", TestSyntaxFactory.CreateObject(new ObjectPropertySyntax[0]));
@@ -935,11 +933,12 @@ namespace Bicep.Core.UnitTests.TypeSystem
 
         private TypeSymbol CreateDummyResourceType()
         {
-            var typeProvider = TestTypeHelper.CreateEmptyProvider();
-            var typeReference = ResourceTypeReference.Parse("Mock.Rp/mockType@2020-01-01");
-            var azNamespaceType = typeProvider.TryGetNamespace("az", "az", ResourceScope.ResourceGroup, BicepTestConstants.Features)!;
+            var typeProvider = TestTypeHelper.CreateAzResourceTypeProviderWithTypes([]);
+            var ns = AzNamespaceType.Create(AzNamespaceType.BuiltInName, ResourceScope.ResourceGroup, typeProvider, BicepSourceFileKind.BicepFile);
 
-            return azNamespaceType.ResourceTypeProvider.TryGenerateFallbackType(azNamespaceType, typeReference, ResourceTypeGenerationFlags.None)!;
+            var typeReference = ResourceTypeReference.Parse("Mock.Rp/mockType@2020-01-01");
+
+            return typeProvider.TryGenerateFallbackType(ns, typeReference, ResourceTypeGenerationFlags.None)!;
         }
 
         private static (TypeSymbol result, IReadOnlyList<IDiagnostic> diagnostics) NarrowTypeAndCollectDiagnostics(ISyntaxHierarchy hierarchy, SyntaxBase expression, TypeSymbol targetType, IDiagnosticLookup? parsingErrorLookup = null)
@@ -949,15 +948,14 @@ namespace Bicep.Core.UnitTests.TypeSystem
                 .Setup(x => x.GetParent(It.IsAny<SyntaxBase>()))
                 .Returns<SyntaxBase>(x => hierarchy.GetParent(x));
 
-            var fileResolverMock = StrictMock.Of<IFileResolver>();
-
             binderMock
                 .Setup(x => x.GetSymbolInfo(It.IsAny<SyntaxBase>()))
-                .Returns<Symbol?>(null);
+                .Returns<SyntaxBase>(x => null);
 
             parsingErrorLookup ??= EmptyDiagnosticLookup.Instance;
 
-            var typeManager = new TypeManager(BicepTestConstants.Features, binderMock.Object, fileResolverMock.Object, parsingErrorLookup, Core.Workspaces.BicepSourceFileKind.BicepFile);
+            var model = CompilationHelper.Compile("").Compilation.GetEntrypointSemanticModel();
+            var typeManager = new TypeManager(model, binderMock.Object);
 
             var diagnosticWriter = ToListDiagnosticWriter.Create();
             var result = TypeValidator.NarrowTypeAndCollectDiagnostics(typeManager, binderMock.Object, parsingErrorLookup, diagnosticWriter, expression, targetType);

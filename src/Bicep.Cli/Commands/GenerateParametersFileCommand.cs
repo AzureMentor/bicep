@@ -2,98 +2,66 @@
 // Licensed under the MIT License.
 
 using Bicep.Cli.Arguments;
+using Bicep.Cli.Helpers;
 using Bicep.Cli.Logging;
 using Bicep.Cli.Services;
-using Bicep.Core.Emit;
+using Bicep.Core;
 using Bicep.Core.Features;
-using Bicep.Core.FileSystem;
-using Bicep.Core.Workspaces;
+using Bicep.IO.Abstraction;
 using Microsoft.Extensions.Logging;
-using System.Threading.Tasks;
 
 namespace Bicep.Cli.Commands
 {
     public class GenerateParametersFileCommand : ICommand
     {
         private readonly ILogger logger;
-        private readonly IDiagnosticLogger diagnosticLogger;
-        private readonly IOContext io;
-        private readonly CompilationService compilationService;
+        private readonly IFileExplorer fileExplorer;
+        private readonly DiagnosticLogger diagnosticLogger;
+        private readonly BicepCompiler compiler;
         private readonly PlaceholderParametersWriter writer;
-        private readonly IFeatureProviderFactory featureProviderFactory;
+        private readonly InputOutputArgumentsResolver inputOutputArgumentsResolver;
 
         public GenerateParametersFileCommand(
             ILogger logger,
-            IDiagnosticLogger diagnosticLogger,
-            IOContext io,
-            CompilationService compilationService,
+            IFileExplorer fileExplorer,
+            DiagnosticLogger diagnosticLogger,
+            BicepCompiler compiler,
             PlaceholderParametersWriter writer,
-            IFeatureProviderFactory featureProviderFactory)
+            InputOutputArgumentsResolver inputOutputArgumentsResolver)
         {
             this.logger = logger;
             this.diagnosticLogger = diagnosticLogger;
-            this.io = io;
-            this.compilationService = compilationService;
+            this.compiler = compiler;
             this.writer = writer;
-            this.featureProviderFactory = featureProviderFactory;
+            this.inputOutputArgumentsResolver = inputOutputArgumentsResolver;
+            this.fileExplorer = fileExplorer;
         }
 
         public async Task<int> RunAsync(GenerateParametersFileArguments args)
         {
-            var inputPath = PathHelper.ResolvePath(args.InputFile);
-            var features = featureProviderFactory.GetFeatureProvider(PathHelper.FilePathToFileUrl(inputPath));
-            var emitterSettings = new EmitterSettings(features, BicepSourceFileKind.BicepFile);
+            var (inputUri, outputUri) = this.inputOutputArgumentsResolver.ResolveInputOutputArguments(args);
+            ArgumentHelper.ValidateBicepFile(inputUri);
 
-            if (emitterSettings.EnableSymbolicNames)
-            {
-                logger.LogWarning(CliResources.SymbolicNamesDisclaimerMessage);
-            }
+            var compilation = await compiler.CreateCompilation(inputUri, forceRestore: args.NoRestore);
+            CommandHelper.LogExperimentalWarning(logger, compilation);
 
-            if (features.ResourceTypedParamsAndOutputsEnabled)
-            {
-                logger.LogWarning(CliResources.ResourceTypesDisclaimerMessage);
-            }
+            var summary = diagnosticLogger.LogDiagnostics(DiagnosticOptions.Default, compilation);
 
-            if (!IsBicepFile(inputPath))
-            {
-                logger.LogError(CliResources.UnrecognizedBicepFileExtensionMessage, inputPath);
-                return 1;
-            }
-
-            var compilation = await compilationService.CompileAsync(inputPath, args.NoRestore);
-
-            if (diagnosticLogger.ErrorCount < 1)
+            if (!summary.HasErrors)
             {
                 if (args.OutputToStdOut)
                 {
-                    writer.ToStdout(compilation);
+                    writer.ToStdout(compilation, args.OutputFormat, args.IncludeParams);
                 }
                 else
                 {
-                    var outputPath = string.Empty;
-                    if (!string.IsNullOrWhiteSpace(args.OutputDir))
-                    {
-                        outputPath = args.OutputDir;
-                    }
-                    else if (!string.IsNullOrWhiteSpace(args.OutputFile))
-                    {
-                        outputPath = args.OutputFile;
-                    }
-                    else
-                    {
-                        outputPath = inputPath;
-                    }
-
-                    outputPath = PathHelper.ResolveParametersFileOutputPath(outputPath);
-
-                    writer.ToFile(compilation, outputPath);
+                    var outputFile = this.fileExplorer.GetFile(outputUri);
+                    writer.ToFile(compilation, outputFile, args.OutputFormat, args.IncludeParams);
                 }
             }
 
             // return non-zero exit code on errors
-            return diagnosticLogger.ErrorCount > 0 ? 1 : 0;
+            return summary.HasErrors ? 1 : 0;
         }
-
-        private bool IsBicepFile(string inputPath) => PathHelper.HasBicepExtension(PathHelper.FilePathToFileUrl(inputPath));
     }
 }

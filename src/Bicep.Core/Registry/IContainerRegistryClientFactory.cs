@@ -3,7 +3,6 @@
 
 using Azure.Containers.ContainerRegistry;
 using Bicep.Core.Configuration;
-using System;
 
 namespace Bicep.Core.Registry
 {
@@ -13,8 +12,12 @@ namespace Bicep.Core.Registry
     /// <remarks>This exists because we need to inject mock clients in integration tests and because the real client constructor requires parameters.</remarks>
     public interface IContainerRegistryClientFactory
     {
-        ContainerRegistryContentClient CreateAuthenticatedBlobClient(RootConfiguration configuration, Uri registryUri, string repository);
+        ContainerRegistryContentClient CreateAuthenticatedBlobClient(CloudConfiguration cloud, Uri registryUri, string repository);
 
-        ContainerRegistryContentClient CreateAnonymousBlobClient(RootConfiguration configuration, Uri registryUri, string repository);
+        ContainerRegistryContentClient CreateAnonymousBlobClient(CloudConfiguration cloud, Uri registryUri, string repository);
+
+        ContainerRegistryClient CreateAuthenticatedContainerClient(CloudConfiguration cloud, Uri registryUri);
+
+        ContainerRegistryClient CreateAnonymousContainerClient(CloudConfiguration cloud, Uri registryUri);
     }
 }

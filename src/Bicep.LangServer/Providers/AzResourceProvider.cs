@@ -1,15 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
 using System.Text.Json;
-using System.Threading.Tasks;
-using Azure.ResourceManager;
-using Bicep.Core.Tracing;
-using Bicep.Core.Registry.Auth;
-using Bicep.Core.Configuration;
-using System.Threading;
 using Azure.Core;
-using System.Collections.Generic;
+using Azure.ResourceManager;
+using Bicep.Core.AzureApi;
+using Bicep.Core.Configuration;
+using Bicep.Core.Tracing;
 
 namespace Bicep.LanguageServer.Providers
 {
@@ -32,7 +28,7 @@ namespace Bicep.LanguageServer.Providers
                 options.SetApiVersion(new ResourceType(resourceType), apiVersion);
             }
 
-            var credential = this.credentialFactory.CreateChain(configuration.Cloud.CredentialPrecedence, configuration.Cloud.ActiveDirectoryAuthorityUri);
+            var credential = this.credentialFactory.CreateChain(configuration.Cloud.CredentialPrecedence, configuration.Cloud.CredentialOptions, configuration.Cloud.ActiveDirectoryAuthorityUri);
 
             return new ArmClient(credential, subscriptionId, options);
         }

@@ -1,20 +1,21 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 using Bicep.Core.Diagnostics;
-using Bicep.Core.Parsing;
+using Bicep.Core.Text;
 using Microsoft.WindowsAzure.ResourceStack.Common.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Bicep.Core.Semantics
+namespace Bicep.Core.Semantics;
+
+public class JsonObjectParser : ObjectParser
 {
-    public class JsonObjectParser : ObjectParser
+    protected override ResultWithDiagnostic<JToken> ExtractTokenFromObject(string fileContent, IPositionable positionable)
     {
-        /// <summary>
-        /// TryFromJson returns null if the fileContent is not a valid JSON object
-        /// </summary>
-        override protected JToken ExtractTokenFromObject(string fileContent)
-            => fileContent.TryFromJson<JToken>();
-        override protected ErrorDiagnostic GetExtractTokenErrorType(IPositionable positionable)
-            => DiagnosticBuilder.ForPosition(positionable).UnparseableJsonType();
+        if (fileContent.TryFromJson<JToken>() is { } jToken)
+        {
+            return new(jToken);
+        }
+
+        return new(DiagnosticBuilder.ForPosition(positionable).UnparsableJsonType());
     }
 }

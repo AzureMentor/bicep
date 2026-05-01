@@ -1,13 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.IO;
-using System.Linq;
 using System.Text;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Emit;
-using Bicep.Core.Semantics;
 using Bicep.Core.Semantics.Metadata;
-using Bicep.Core.TypeSystem;
+using Bicep.Core.TypeSystem.Types;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.UnitTests.Utils;
@@ -287,7 +284,7 @@ resource parent 'My.RP/parentType@invalid-version' = {
 
             var diagnostics = Services.BuildCompilation(program).GetEntrypointSemanticModel().GetAllDiagnostics();
             diagnostics.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new[] {
-                ("BCP029", DiagnosticLevel.Error, "The resource type is not valid. Specify a valid resource type of format \"<types>@<apiVersion>\"."),
+                ("BCP029", DiagnosticLevel.Error, "The resource type is not valid. Specify a valid resource type of format \"<type-name>@<apiVersion>\"."),
                 ("BCP157", DiagnosticLevel.Error, "The resource type cannot be determined due to an error in the containing resource."),
             });
         }
@@ -407,10 +404,10 @@ resource parent 'My.RP/parentType@2020-01-01' = {
             model.ResourceAncestors.GetAncestors(parent).Should().BeEmpty();
 
             var child = (DeclaredResourceMetadata)model.ResourceMetadata.TryLookup(model.DeclaredResources.Select(x => x.Symbol).Single(r => r.Name == "child").DeclaringSyntax)!;
-            model.ResourceAncestors.GetAncestors(child).Select(x => x.Resource).Should().Equal(new[] { parent, });
+            model.ResourceAncestors.GetAncestors(child).Select(x => x.Resource).Should().Equal([parent,]);
 
             var grandchild = (DeclaredResourceMetadata)model.ResourceMetadata.TryLookup(model.DeclaredResources.Select(x => x.Symbol).Single(r => r.Name == "grandchild").DeclaringSyntax)!;
-            model.ResourceAncestors.GetAncestors(grandchild).Select(x => x.Resource).Should().Equal(new[] { parent, child, }); // order matters
+            model.ResourceAncestors.GetAncestors(grandchild).Select(x => x.Resource).Should().Equal([parent, child,]); // order matters
         }
 
         [TestMethod]
@@ -455,16 +452,16 @@ resource parent 'My.RP/parentType@2020-01-01' = {
             model.ResourceAncestors.GetAncestors(parent).Should().BeEmpty();
 
             var child = (DeclaredResourceMetadata)model.ResourceMetadata.TryLookup(model.DeclaredResources.Select(x => x.Symbol).Single(r => r.Name == "child").DeclaringSyntax)!;
-            model.ResourceAncestors.GetAncestors(child).Select(x => x.Resource).Should().Equal(new[] { parent, });
+            model.ResourceAncestors.GetAncestors(child).Select(x => x.Resource).Should().Equal([parent,]);
 
             var childGrandChild = (DeclaredResourceMetadata)model.ResourceMetadata.TryLookup(child.Symbol.DeclaringResource.GetBody().Resources.Single())!;
-            model.ResourceAncestors.GetAncestors(childGrandChild).Select(x => x.Resource).Should().Equal(new[] { parent, child, });
+            model.ResourceAncestors.GetAncestors(childGrandChild).Select(x => x.Resource).Should().Equal([parent, child,]);
 
             var sibling = (DeclaredResourceMetadata)model.ResourceMetadata.TryLookup(model.DeclaredResources.Select(x => x.Symbol).Single(r => r.Name == "sibling").DeclaringSyntax)!;
-            model.ResourceAncestors.GetAncestors(child).Select(x => x.Resource).Should().Equal(new[] { parent, });
+            model.ResourceAncestors.GetAncestors(child).Select(x => x.Resource).Should().Equal([parent,]);
 
             var siblingGrandChild = (DeclaredResourceMetadata)model.ResourceMetadata.TryLookup(sibling.Symbol.DeclaringResource.GetBody().Resources.Single())!;
-            model.ResourceAncestors.GetAncestors(siblingGrandChild).Select(x => x.Resource).Should().Equal(new[] { parent, sibling, });
+            model.ResourceAncestors.GetAncestors(siblingGrandChild).Select(x => x.Resource).Should().Equal([parent, sibling,]);
         }
 
         [TestMethod] // Should turn into positive test when support is added.
@@ -831,7 +828,7 @@ resource res1 'Microsoft.Rp1/resource1@2020-06-01' = {
   }
 
   resource res3 'child' = {
-    name: '${res1.name}/res2'
+    name: '${res1.name}/res3'
   }
 }
 ");

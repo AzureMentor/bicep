@@ -1,10 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
 using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.UnitTests.Utils;
 using Bicep.LanguageServer.Deploy;
@@ -212,7 +209,7 @@ namespace Bicep.LangServer.UnitTests.Deploy
             var bicepUpdatedDeploymentParameter2 = new BicepUpdatedDeploymentParameter("isSku", "false", false, ParameterType.Bool);
             var bicepUpdatedDeploymentParameter3 = new BicepUpdatedDeploymentParameter("count", "2", false, ParameterType.Int);
             var bicepUpdatedDeploymentParameters =
-                new List<BicepUpdatedDeploymentParameter> {  bicepUpdatedDeploymentParameter1, bicepUpdatedDeploymentParameter2, bicepUpdatedDeploymentParameter3 };
+                new List<BicepUpdatedDeploymentParameter> { bicepUpdatedDeploymentParameter1, bicepUpdatedDeploymentParameter2, bicepUpdatedDeploymentParameter3 };
 
             var result = DeploymentParametersHelper.GetUpdatedParametersFileContents(
                 bicepFilePath,

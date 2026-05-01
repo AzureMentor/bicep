@@ -14,15 +14,25 @@
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     <!-- restore pre-.net7 trim behavior https://learn.microsoft.com/en-us/dotnet/core/compatibility/deployment/7.0/trim-all-assemblies -->
     <TrimMode>partial</TrimMode>
+
+    <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishTrimmed>true</PublishTrimmed>
+    <!-- restore pre-.net8 trim behavior https://learn.microsoft.com/en-us/dotnet/core/compatibility/serialization/8.0/publishtrimmed -->
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="7.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Sarif.Sdk" />
+    <PackageReference Include="Spectre.Console" />
+    <PackageReference Include="StreamJsonRpc" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Bicep.Core\Bicep.Core.csproj" />
     <ProjectReference Include="..\Bicep.Decompiler\Bicep.Decompiler.csproj" />
+    <ProjectReference Include="../Bicep.Local.Deploy/Bicep.Local.Deploy.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -46,5 +56,9 @@
 
   <ItemGroup>
     <TrimmerRootDescriptor Include="TrimmerRoots.xml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Nerdbank.GitVersioning" />
   </ItemGroup>
 </Project>

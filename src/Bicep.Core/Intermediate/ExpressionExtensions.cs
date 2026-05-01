@@ -2,7 +2,8 @@
 // Licensed under the MIT License.
 
 using System.Collections.Immutable;
-using System.Linq;
+using Bicep.Core.Analyzers.Linter.Common;
+using Bicep.Core.Semantics;
 
 namespace Bicep.Core.Intermediate;
 
@@ -20,7 +21,7 @@ public static class ExpressionExtensions
 
     public static ObjectExpression MergeProperty(this ObjectExpression? expression, string propertyName, Expression propertyValue)
     {
-        expression ??= new ObjectExpression(null, ImmutableArray<ObjectPropertyExpression>.Empty);
+        expression ??= new ObjectExpression(null, []);
 
         var properties = expression.Properties.ToList();
         int matchingIndex = 0;
@@ -55,7 +56,7 @@ public static class ExpressionExtensions
                 propertyValue));
         }
 
-        return new ObjectExpression(expression.SourceSyntax, properties.ToImmutableArray());
+        return new ObjectExpression(expression.SourceSyntax, [.. properties]);
     }
 
     public static ObjectExpression DeepMerge(this ObjectExpression sourceObject, ObjectExpression targetObject)
@@ -65,4 +66,7 @@ public static class ExpressionExtensions
                 ? mergedObject.MergeProperty(propertyName, property.Value)
                 : mergedObject);
     }
+
+    public static bool IsReferencingSecureOutputs(this PropertyAccessExpression expression, SemanticModel model) => (expression.SourceSyntax is null ||
+                        (FindPossibleSecretsVisitor.FindPossibleSecretsInExpression(model, expression.SourceSyntax).Any()));
 }

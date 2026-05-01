@@ -1,13 +1,12 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "languageVersion": "1.10-experimental",
+  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
     "_generator": {
       "name": "bicep",
       "version": "dev",
-      "templateHash": "12336310512912447555"
+      "templateHash": "1652137765945693868"
     }
   },
   "parameters": {
@@ -25,25 +24,25 @@
     "addressprefixes": {
       "type": "array",
       "metadata": {
-        "description": "Specifices the address prefixes of the remote site"
+        "description": "Specifies the address prefixes of the remote site"
       }
     },
     "bgppeeringpddress": {
       "type": "string",
       "metadata": {
-        "description": "Specifices the VPN Sites BGP Peering IP Addresses"
+        "description": "Specifies the VPN Sites BGP Peering IP Addresses"
       }
     },
     "gwipaddress": {
       "type": "string",
       "metadata": {
-        "description": "Specifices the VPN Sites VPN Device IP Address"
+        "description": "Specifies the VPN Sites VPN Device IP Address"
       }
     },
     "vpngwid": {
       "type": "string",
       "metadata": {
-        "description": "Specifices the resource ID of the VPN Gateway to connect to the site to site vpn"
+        "description": "Specifies the resource ID of the VPN Gateway to connect to the site to site vpn"
       }
     },
     "psk": {

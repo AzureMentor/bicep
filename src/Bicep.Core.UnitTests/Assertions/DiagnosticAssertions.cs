@@ -1,11 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Diagnostics;
 using Bicep.Core.CodeAction;
 using Bicep.Core.Diagnostics;
-using Bicep.Core.Workspaces;
+using Bicep.Core.SourceGraph;
 using FluentAssertions;
 using FluentAssertions.Execution;
 using FluentAssertions.Formatting;
@@ -27,6 +25,7 @@ namespace Bicep.Core.UnitTests.Assertions
         {
             public bool CanHandle(object value)
             {
+
                 return value is Diagnostic;
             }
 
@@ -96,17 +95,20 @@ namespace Bicep.Core.UnitTests.Assertions
                 .Then
                 .Given<IFixable>(_ => (IFixable)Subject)
                 .ForCondition(x => x.Fixes.Single().Replacements.Single().Text == replacement)
-                .FailWith("Expected diagnositc's fix to have replacement '{0}'{reason} but it was '{1}'", _ => replacement, x => x.Fixes.Single().Replacements.Single().Text);
+                .FailWith("Expected diagnostic's fix to have replacement '{0}'{reason} but it was '{1}'", _ => replacement, x => x.Fixes.Single().Replacements.Single().Text);
 
             return new AndConstraint<DiagnosticAssertions>(this);
         }
 
+        // "*abc" means the message should end with "abc"
+        // "abc*" means the message should start with "abc"
+        // "*abc*" means the message should contain "abc"
         public AndConstraint<DiagnosticAssertions> HaveMessage(string message, string because = "", params object[] becauseArgs)
         {
             Execute.Assertion
                 .BecauseOf(because, becauseArgs)
                 .Given<string>(() => Subject.Message)
-                .ForCondition(x => x == message)
+                .ForCondition(x => DiagnosticMessageMatches(x, message))
                 .FailWith("Expected message to be {0}{reason} but it was {1}", _ => message, x => x);
 
             return new AndConstraint<DiagnosticAssertions>(this);
@@ -122,5 +124,26 @@ namespace Bicep.Core.UnitTests.Assertions
 
             return new AndConstraint<DiagnosticAssertions>(this);
         }
+
+        public static bool DiagnosticMessageMatches(string message, string expectedMessage)
+        {
+            if (expectedMessage.StartsWith('*') && expectedMessage.EndsWith('*'))
+            {
+                return message.Contains(message.Substring(1, message.Length - 2));
+            }
+            else if (expectedMessage.StartsWith('*'))
+            {
+                return message.EndsWith(expectedMessage.Substring(1));
+            }
+            else if (expectedMessage.EndsWith('*'))
+            {
+                return message.StartsWith(expectedMessage.Substring(0, expectedMessage.Length - 1));
+            }
+            else
+            {
+                return message == expectedMessage;
+            }
+        }
+
     }
 }

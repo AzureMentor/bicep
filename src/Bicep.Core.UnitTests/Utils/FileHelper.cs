@@ -1,13 +1,12 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
 using System.Collections.Immutable;
-using System.IO;
 using System.IO.Abstractions;
 using System.IO.Abstractions.TestingHelpers;
-using System.Linq;
 using System.Reflection;
 using System.Text;
+using Bicep.IO.Abstraction;
+using Bicep.IO.FileSystem;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -30,18 +29,32 @@ namespace Bicep.Core.UnitTests.Utils
 
         public static string SaveResultFile(TestContext testContext, string fileName, string contents, string? testOutputPath = null, Encoding? encoding = null)
         {
-            var filePath = GetResultFilePath(testContext, fileName, testOutputPath);
+            var outputPath = SaveResultFiles(testContext, [new ResultFile(fileName, contents, encoding)], testOutputPath);
 
-            if (encoding is not null)
+            return Path.Combine(outputPath, fileName);
+        }
+
+        public record ResultFile(string FileName, string Contents, Encoding? Encoding = null);
+
+        public static string SaveResultFiles(TestContext testContext, ResultFile[] files, string? testOutputPath = null)
+        {
+            var outputPath = testOutputPath ?? GetUniqueTestOutputPath(testContext);
+
+            foreach (var (fileName, contents, encoding) in files)
             {
-                File.WriteAllText(filePath, contents, encoding);
-            }
-            else
-            {
-                File.WriteAllText(filePath, contents);
+                var filePath = GetResultFilePath(testContext, fileName, outputPath);
+
+                if (encoding is not null)
+                {
+                    File.WriteAllText(filePath, contents, encoding);
+                }
+                else
+                {
+                    File.WriteAllText(filePath, contents);
+                }
             }
 
-            return filePath;
+            return outputPath;
         }
 
         public static string SaveEmbeddedResourcesWithPathPrefix(TestContext testContext, Assembly containingAssembly, string manifestFilePrefix)
@@ -81,7 +94,13 @@ namespace Bicep.Core.UnitTests.Utils
             return outputDirectory;
         }
 
-        public static string GetCacheRootPath(TestContext testContext) => GetUniqueTestOutputPath(testContext);
+        public static IDirectoryHandle GetCacheRootDirectory(TestContext testContext)
+        {
+            var path = GetUniqueTestOutputPath(testContext);
+            var uri = IOUri.FromFilePath(path);
+
+            return BicepTestConstants.FileExplorer.GetDirectory(uri);
+        }
 
         public static ImmutableDictionary<string, string> BuildEmbeddedFileDictionary(Assembly containingAssembly, string streamNamePrefix)
         {

@@ -112,9 +112,7 @@ resource aibdef 'Microsoft.Authorization/roleDefinitions@2018-01-01-preview' = i
         ]
       }
     ]
-    assignableScopes: [
-      resourceGroup().id
-    ]
+    assignableScopes: [resourceGroup().id]
   }
 }
 
@@ -130,7 +128,11 @@ resource aibrunnerassignment 'Microsoft.Authorization/roleAssignments@2020-04-01
 
 // Map Managed Identity Operator Role to to Managed Identity - Not required if not running Powershell Deployment Script for AIB
 resource miorole 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = if (InvokeRunImageBuildThroughDeploymentScript) {
-  name: guid(resourceGroup().id, '/providers/Microsoft.Authorization/roleDefinitions/f1a07417-d97a-45cb-824c-7a7467783830', managedidentity.id)
+  name: guid(
+    resourceGroup().id,
+    '/providers/Microsoft.Authorization/roleDefinitions/f1a07417-d97a-45cb-824c-7a7467783830',
+    managedidentity.id
+  )
   properties: {
     roleDefinitionId: '/providers/Microsoft.Authorization/roleDefinitions/f1a07417-d97a-45cb-824c-7a7467783830'
     principalId: managedidentity.properties.principalId
@@ -158,7 +160,5 @@ resource scriptName_BuildVMImage 'Microsoft.Resources/deploymentScripts@2020-10-
     cleanupPreference: 'Always'
     retentionInterval: 'P1D'
   }
-  dependsOn: [
-    imageTemplateName_resource
-  ]
+  dependsOn: [imageTemplateName_resource]
 }

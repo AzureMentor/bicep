@@ -1,9 +1,10 @@
 using 'main.bicep'
-//@[00:2208) ProgramSyntax
+//@[00:2488) ProgramSyntax
 //@[00:0018) ├─UsingDeclarationSyntax
 //@[00:0005) | ├─Token(Identifier) |using|
-//@[06:0018) | └─StringSyntax
-//@[06:0018) |   └─Token(StringComplete) |'main.bicep'|
+//@[06:0018) | ├─StringSyntax
+//@[06:0018) | | └─Token(StringComplete) |'main.bicep'|
+//@[18:0018) | └─SkippedTriviaSyntax
 //@[18:0020) ├─Token(NewLine) |\n\n|
 
 param myObject = {
@@ -274,7 +275,7 @@ param myObject = {
 //@[30:0031) |   |   |     ├─VariableAccessSyntax
 //@[30:0031) |   |   |     | └─IdentifierSyntax
 //@[30:0031) |   |   |     |   └─Token(Identifier) |i|
-//@[32:0033) |   |   |     ├─Token(LessThan) |<|
+//@[32:0033) |   |   |     ├─Token(LeftChevron) |<|
 //@[34:0035) |   |   |     └─IntegerLiteralSyntax
 //@[34:0035) |   |   |       └─Token(Integer) |2|
 //@[35:0036) |   |   └─Token(RightParen) |)|
@@ -868,7 +869,7 @@ param myObject = {
 //@[40:0041) |   |   |     ├─VariableAccessSyntax
 //@[40:0041) |   |   |     | └─IdentifierSyntax
 //@[40:0041) |   |   |     |   └─Token(Identifier) |a|
-//@[42:0043) |   |   |     ├─Token(LessThan) |<|
+//@[42:0043) |   |   |     ├─Token(LeftChevron) |<|
 //@[44:0045) |   |   |     └─VariableAccessSyntax
 //@[44:0045) |   |   |       └─IdentifierSyntax
 //@[44:0045) |   |   |         └─Token(Identifier) |b|
@@ -1276,7 +1277,7 @@ param myArray = [
 //@[02:0007) |   | └─BinaryOperationSyntax
 //@[02:0003) |   |   ├─IntegerLiteralSyntax
 //@[02:0003) |   |   | └─Token(Integer) |1|
-//@[04:0005) |   |   ├─Token(LessThan) |<|
+//@[04:0005) |   |   ├─Token(LeftChevron) |<|
 //@[06:0007) |   |   └─IntegerLiteralSyntax
 //@[06:0007) |   |     └─Token(Integer) |2|
 //@[07:0008) |   ├─Token(NewLine) |\n|
@@ -1285,7 +1286,7 @@ param myArray = [
 //@[02:0007) |   | └─BinaryOperationSyntax
 //@[02:0003) |   |   ├─IntegerLiteralSyntax
 //@[02:0003) |   |   | └─Token(Integer) |1|
-//@[04:0005) |   |   ├─Token(GreaterThan) |>|
+//@[04:0005) |   |   ├─Token(RightChevron) |>|
 //@[06:0007) |   |   └─IntegerLiteralSyntax
 //@[06:0007) |   |     └─Token(Integer) |2|
 //@[07:0008) |   ├─Token(NewLine) |\n|
@@ -1317,7 +1318,7 @@ param myString = '''
 //@[06:0014) | | └─Token(Identifier) |myString|
 //@[15:0016) | ├─Token(Assignment) |=|
 //@[17:0072) | └─StringSyntax
-//@[17:0072) |   └─Token(MultilineString) |'''\nTHis\n  is\n    a\n      multiline\n        string!\n'''|
+//@[17:0072) |   └─Token(StringComplete) |'''\nTHis\n  is\n    a\n      multiline\n        string!\n'''|
 THis
   is
     a
@@ -1325,5 +1326,115 @@ THis
         string!
 '''
 //@[03:0004) ├─Token(NewLine) |\n|
+param kvSecret = az.getSecret('subId', 'rgName', 'kvName', 'secretName', 'secretVersion')
+//@[00:0089) ├─ParameterAssignmentSyntax
+//@[00:0005) | ├─Token(Identifier) |param|
+//@[06:0014) | ├─IdentifierSyntax
+//@[06:0014) | | └─Token(Identifier) |kvSecret|
+//@[15:0016) | ├─Token(Assignment) |=|
+//@[17:0089) | └─InstanceFunctionCallSyntax
+//@[17:0019) |   ├─VariableAccessSyntax
+//@[17:0019) |   | └─IdentifierSyntax
+//@[17:0019) |   |   └─Token(Identifier) |az|
+//@[19:0020) |   ├─Token(Dot) |.|
+//@[20:0029) |   ├─IdentifierSyntax
+//@[20:0029) |   | └─Token(Identifier) |getSecret|
+//@[29:0030) |   ├─Token(LeftParen) |(|
+//@[30:0037) |   ├─FunctionArgumentSyntax
+//@[30:0037) |   | └─StringSyntax
+//@[30:0037) |   |   └─Token(StringComplete) |'subId'|
+//@[37:0038) |   ├─Token(Comma) |,|
+//@[39:0047) |   ├─FunctionArgumentSyntax
+//@[39:0047) |   | └─StringSyntax
+//@[39:0047) |   |   └─Token(StringComplete) |'rgName'|
+//@[47:0048) |   ├─Token(Comma) |,|
+//@[49:0057) |   ├─FunctionArgumentSyntax
+//@[49:0057) |   | └─StringSyntax
+//@[49:0057) |   |   └─Token(StringComplete) |'kvName'|
+//@[57:0058) |   ├─Token(Comma) |,|
+//@[59:0071) |   ├─FunctionArgumentSyntax
+//@[59:0071) |   | └─StringSyntax
+//@[59:0071) |   |   └─Token(StringComplete) |'secretName'|
+//@[71:0072) |   ├─Token(Comma) |,|
+//@[73:0088) |   ├─FunctionArgumentSyntax
+//@[73:0088) |   | └─StringSyntax
+//@[73:0088) |   |   └─Token(StringComplete) |'secretVersion'|
+//@[88:0089) |   └─Token(RightParen) |)|
+//@[89:0090) ├─Token(NewLine) |\n|
+param kvSecretExpression = az.getSecret(
+//@[00:0189) ├─ParameterAssignmentSyntax
+//@[00:0005) | ├─Token(Identifier) |param|
+//@[06:0024) | ├─IdentifierSyntax
+//@[06:0024) | | └─Token(Identifier) |kvSecretExpression|
+//@[25:0026) | ├─Token(Assignment) |=|
+//@[27:0189) | └─InstanceFunctionCallSyntax
+//@[27:0029) |   ├─VariableAccessSyntax
+//@[27:0029) |   | └─IdentifierSyntax
+//@[27:0029) |   |   └─Token(Identifier) |az|
+//@[29:0030) |   ├─Token(Dot) |.|
+//@[30:0039) |   ├─IdentifierSyntax
+//@[30:0039) |   | └─Token(Identifier) |getSecret|
+//@[39:0040) |   ├─Token(LeftParen) |(|
+//@[40:0041) |   ├─Token(NewLine) |\n|
+  externalInput('subId'), 
+//@[02:0024) |   ├─FunctionArgumentSyntax
+//@[02:0024) |   | └─FunctionCallSyntax
+//@[02:0015) |   |   ├─IdentifierSyntax
+//@[02:0015) |   |   | └─Token(Identifier) |externalInput|
+//@[15:0016) |   |   ├─Token(LeftParen) |(|
+//@[16:0023) |   |   ├─FunctionArgumentSyntax
+//@[16:0023) |   |   | └─StringSyntax
+//@[16:0023) |   |   |   └─Token(StringComplete) |'subId'|
+//@[23:0024) |   |   └─Token(RightParen) |)|
+//@[24:0025) |   ├─Token(Comma) |,|
+//@[26:0027) |   ├─Token(NewLine) |\n|
+  externalInput('rgName'), 
+//@[02:0025) |   ├─FunctionArgumentSyntax
+//@[02:0025) |   | └─FunctionCallSyntax
+//@[02:0015) |   |   ├─IdentifierSyntax
+//@[02:0015) |   |   | └─Token(Identifier) |externalInput|
+//@[15:0016) |   |   ├─Token(LeftParen) |(|
+//@[16:0024) |   |   ├─FunctionArgumentSyntax
+//@[16:0024) |   |   | └─StringSyntax
+//@[16:0024) |   |   |   └─Token(StringComplete) |'rgName'|
+//@[24:0025) |   |   └─Token(RightParen) |)|
+//@[25:0026) |   ├─Token(Comma) |,|
+//@[27:0028) |   ├─Token(NewLine) |\n|
+  externalInput('kvName'), 
+//@[02:0025) |   ├─FunctionArgumentSyntax
+//@[02:0025) |   | └─FunctionCallSyntax
+//@[02:0015) |   |   ├─IdentifierSyntax
+//@[02:0015) |   |   | └─Token(Identifier) |externalInput|
+//@[15:0016) |   |   ├─Token(LeftParen) |(|
+//@[16:0024) |   |   ├─FunctionArgumentSyntax
+//@[16:0024) |   |   | └─StringSyntax
+//@[16:0024) |   |   |   └─Token(StringComplete) |'kvName'|
+//@[24:0025) |   |   └─Token(RightParen) |)|
+//@[25:0026) |   ├─Token(Comma) |,|
+//@[27:0028) |   ├─Token(NewLine) |\n|
+  externalInput('secretName'), 
+//@[02:0029) |   ├─FunctionArgumentSyntax
+//@[02:0029) |   | └─FunctionCallSyntax
+//@[02:0015) |   |   ├─IdentifierSyntax
+//@[02:0015) |   |   | └─Token(Identifier) |externalInput|
+//@[15:0016) |   |   ├─Token(LeftParen) |(|
+//@[16:0028) |   |   ├─FunctionArgumentSyntax
+//@[16:0028) |   |   | └─StringSyntax
+//@[16:0028) |   |   |   └─Token(StringComplete) |'secretName'|
+//@[28:0029) |   |   └─Token(RightParen) |)|
+//@[29:0030) |   ├─Token(Comma) |,|
+//@[31:0032) |   ├─Token(NewLine) |\n|
+  externalInput('secretVersion'))
+//@[02:0032) |   ├─FunctionArgumentSyntax
+//@[02:0032) |   | └─FunctionCallSyntax
+//@[02:0015) |   |   ├─IdentifierSyntax
+//@[02:0015) |   |   | └─Token(Identifier) |externalInput|
+//@[15:0016) |   |   ├─Token(LeftParen) |(|
+//@[16:0031) |   |   ├─FunctionArgumentSyntax
+//@[16:0031) |   |   | └─StringSyntax
+//@[16:0031) |   |   |   └─Token(StringComplete) |'secretVersion'|
+//@[31:0032) |   |   └─Token(RightParen) |)|
+//@[32:0033) |   └─Token(RightParen) |)|
+//@[33:0034) ├─Token(NewLine) |\n|
 
 //@[00:0000) └─Token(EndOfFile) ||

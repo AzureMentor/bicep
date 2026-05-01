@@ -41,10 +41,59 @@ export const deploymentGraphRequestType = new ProtocolRequestType<
   void
 >("textDocument/deploymentGraph");
 
-export interface BicepCacheParams {
+export interface GetDeploymentDataRequest {
   textDocument: TextDocumentIdentifier;
+}
+
+export interface GetDeploymentDataResponse {
+  localDeployEnabled: boolean;
+  templateJson?: string;
+  parametersJson?: string;
+  errorMessage?: string;
+}
+
+export const getDeploymentDataRequestType = new ProtocolRequestType<
+  GetDeploymentDataRequest,
+  GetDeploymentDataResponse,
+  never,
+  void,
+  void
+>("bicep/getDeploymentData");
+
+export interface LocalDeployRequest {
+  textDocument: TextDocumentIdentifier;
+}
+
+export interface LocalDeploymentOperationError {
+  code: string;
+  message: string;
   target: string;
 }
+
+export interface LocalDeploymentOperationContent {
+  resourceName: string;
+  provisioningState: string;
+  error?: LocalDeploymentOperationError;
+}
+
+interface LocalDeploymentContent {
+  provisioningState: string;
+  outputs: Record<string, unknown>;
+  error?: LocalDeploymentOperationError;
+}
+
+export interface LocalDeployResponse {
+  deployment: LocalDeploymentContent;
+  operations: LocalDeploymentOperationContent[];
+}
+
+export const localDeployRequestType = new ProtocolRequestType<
+  LocalDeployRequest,
+  LocalDeployResponse,
+  never,
+  void,
+  void
+>("bicep/localDeploy");
 
 export interface BicepDeploymentScopeParams {
   textDocument: TextDocumentIdentifier;
@@ -58,17 +107,17 @@ export interface BicepDeploymentScopeResponse {
 
 export interface BicepDeploymentStartParams {
   documentPath: string;
-  parametersFilePath: string;
+  parametersFilePath: string | undefined;
   id: string;
   deploymentScope: string;
   location: string;
   template: string;
   token: string;
-  expiresOnTimestamp: string;
+  expiresOnTimestamp: string | undefined;
   deployId: string;
   deploymentName: string;
   portalUrl: string;
-  parametersFileName: string;
+  parametersFileName: string | undefined;
   parametersFileUpdateOption: ParametersFileUpdateOption;
   updatedDeploymentParameters: BicepUpdatedDeploymentParameter[];
   resourceManagerEndpointUrl: string;
@@ -129,17 +178,23 @@ export enum ParameterType {
   String = 5,
 }
 
-export interface BicepCacheResponse {
-  content: string;
+export interface BicepExternalSourceParams {
+  target: string; // The full module reference to get source for
+  requestedSourceFile: string | undefined; // The relative source path of the file in the module to get source for
 }
 
-export const bicepCacheRequestType = new ProtocolRequestType<
-  BicepCacheParams,
-  BicepCacheResponse,
+export interface BicepExternalSourceResponse {
+  content: string | undefined;
+  error: string | undefined;
+}
+
+export const bicepExternalSourceRequestType = new ProtocolRequestType<
+  BicepExternalSourceParams,
+  BicepExternalSourceResponse,
   never,
   void,
   void
->("textDocument/bicepCache");
+>("textDocument/bicepExternalSource");
 
 export interface InsertResourceParams {
   textDocument: TextDocumentIdentifier;
@@ -147,10 +202,9 @@ export interface InsertResourceParams {
   resourceId: string;
 }
 
-export const insertResourceRequestType = new ProtocolNotificationType<
-  InsertResourceParams,
-  void
->("textDocument/insertResource");
+export const insertResourceRequestType = new ProtocolNotificationType<InsertResourceParams, void>(
+  "textDocument/insertResource",
+);
 
 export interface ImportKubernetesManifestRequest {
   manifestFilePath: string;
@@ -196,6 +250,7 @@ export interface BicepDecompileForPasteCommandParams {
   rangeLength: number;
   jsonContent: string;
   queryCanPaste: boolean;
+  languageId: string;
 }
 
 export interface BicepDecompileForPasteCommandResult {
@@ -204,13 +259,7 @@ export interface BicepDecompileForPasteCommandResult {
   errorMessage?: string;
   pasteContext?: "none" | "string";
   // undefined if can't be pasted
-  pasteType:
-    | undefined
-    | "fullTemplate"
-    | "resource"
-    | "resourceList"
-    | "jsonValue"
-    | "bicepValue";
+  pasteType: undefined | "fullTemplate" | "resource" | "resourceList" | "jsonValue" | "bicepValue" | "fullParams";
   bicep?: string;
   disclaimer?: string;
 }

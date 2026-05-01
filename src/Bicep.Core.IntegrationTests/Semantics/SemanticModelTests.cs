@@ -1,9 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+using System.Diagnostics.CodeAnalysis;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Intermediate;
 using Bicep.Core.Navigation;
-using Bicep.Core.Parsing;
 using Bicep.Core.Samples;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
@@ -16,12 +16,6 @@ using Bicep.Core.UnitTests.Utils;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using OmniSharp.Extensions.LanguageServer.Protocol;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace Bicep.Core.IntegrationTests.Semantics
 {
@@ -31,7 +25,12 @@ namespace Bicep.Core.IntegrationTests.Semantics
         [NotNull]
         public TestContext? TestContext { get; set; }
 
-        private static ServiceBuilder Services => new ServiceBuilder();
+        private static ServiceBuilder Services => new ServiceBuilder()
+            .WithEnvironmentVariables(
+                ("stringEnvVariableName", "test"),
+                ("intEnvVariableName", "100"),
+                ("boolEnvironmentVariable", "true")
+            );
 
         // NOTE: Uses the linter analyzers specified in BicepTestConstants.BuiltInConfigurationWithProblematicAnalyzersDisabled
         //   Problematic ones that should be disabled in this and most other tests by default can be added to BicepTestConstants.AnalyzerRulesToDisableInTests
@@ -56,8 +55,8 @@ namespace Bicep.Core.IntegrationTests.Semantics
             sourceTextWithDiags.Should().EqualWithLineByLineDiffOutput(
                 TestContext,
                 dataSet.Diagnostics,
-                expectedLocation: DataSet.GetBaselineUpdatePath(dataSet, DataSet.TestFileMainDiagnostics),
-                actualLocation: resultsFile);
+                expectedPath: DataSet.GetBaselineUpdatePath(dataSet, DataSet.TestFileMainDiagnostics),
+                actualPath: resultsFile);
         }
 
         [TestMethod]
@@ -95,8 +94,8 @@ namespace Bicep.Core.IntegrationTests.Semantics
             sourceTextWithDiags.Should().EqualWithLineByLineDiffOutput(
                 TestContext,
                 dataSet.Symbols,
-                expectedLocation: DataSet.GetBaselineUpdatePath(dataSet, DataSet.TestFileMainSymbols),
-                actualLocation: resultsFile);
+                expectedPath: DataSet.GetBaselineUpdatePath(dataSet, DataSet.TestFileMainSymbols),
+                actualPath: resultsFile);
         }
 
         [DataTestMethod]
@@ -129,9 +128,15 @@ namespace Bicep.Core.IntegrationTests.Semantics
                         s is ModuleSymbol ||
                         s is OutputSymbol ||
                         s is FunctionSymbol ||
-                        s is ImportedNamespaceSymbol ||
+                        s is DeclaredFunctionSymbol ||
+                        s is ExtensionNamespaceSymbol ||
                         s is BuiltInNamespaceSymbol ||
-                        s is LocalVariableSymbol);
+                        s is LocalVariableSymbol ||
+                        s is TestSymbol ||
+                        s is ImportedTypeSymbol ||
+                        s is ImportedVariableSymbol ||
+                        s is ImportedFunctionSymbol ||
+                        s is WildcardImportSymbol);
                 }
                 else
                 {
@@ -147,9 +152,16 @@ namespace Bicep.Core.IntegrationTests.Semantics
                         s is ModuleSymbol ||
                         s is OutputSymbol ||
                         s is FunctionSymbol ||
-                        s is ImportedNamespaceSymbol ||
+                        s is DeclaredFunctionSymbol ||
+                        s is ExtensionNamespaceSymbol ||
                         s is BuiltInNamespaceSymbol ||
-                        s is LocalVariableSymbol);
+                        s is LocalVariableSymbol ||
+                        s is TestSymbol ||
+                        s is ImportedTypeSymbol ||
+                        s is ImportedVariableSymbol ||
+                        s is ImportedFunctionSymbol ||
+                        s is ErroredImportSymbol ||
+                        s is WildcardImportSymbol);
                 }
 
                 var foundRefs = model.FindReferences(symbol!);
@@ -174,7 +186,7 @@ namespace Bicep.Core.IntegrationTests.Semantics
             var symbolReferences = GetAllBoundSymbolReferences(compilation.SourceFileGrouping.EntryPoint.ProgramSyntax);
 
             var symbols = symbolReferences
-                .Select(symRef => semanticModel.GetSymbolInfo(symRef))
+                .Select(semanticModel.GetSymbolInfo)
                 .Distinct();
 
             symbols.Should().NotContainNulls();
@@ -193,7 +205,7 @@ namespace Bicep.Core.IntegrationTests.Semantics
 resource test";
             var bicepFilePath = FileHelper.SaveResultFile(TestContext, "main.bicep", bicepFileContents);
             var documentUri = DocumentUri.FromFileSystemPath(bicepFilePath);
-            var uri = documentUri.ToUri();
+            var uri = documentUri.ToUriEncoded();
 
             var files = new Dictionary<Uri, string>
             {
@@ -203,17 +215,12 @@ resource test";
             var compilation = Services.BuildCompilation(files, uri);
             var diagnostics = compilation.GetEntrypointSemanticModel().GetAllDiagnostics();
 
-            diagnostics.Count().Should().Be(2);
+            diagnostics.Count().Should().Be(1);
             diagnostics.Should().SatisfyRespectively(
                 x =>
                 {
                     x.Level.Should().Be(DiagnosticLevel.Error);
                     x.Code.Should().Be("BCP068");
-                },
-                x =>
-                {
-                    x.Level.Should().Be(DiagnosticLevel.Error);
-                    x.Code.Should().Be("BCP029");
                 });
         }
 
@@ -239,7 +246,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2020-12-01' = {
 }";
             var bicepFilePath = FileHelper.SaveResultFile(TestContext, "main.bicep", bicepFileContents);
             var documentUri = DocumentUri.FromFileSystemPath(bicepFilePath);
-            var uri = documentUri.ToUri();
+            var uri = documentUri.ToUriEncoded();
 
             var files = new Dictionary<Uri, string>
             {
@@ -258,7 +265,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2020-12-01' = {
 param storageAccount string = 'testStorageAccount'";
             var bicepFilePath = FileHelper.SaveResultFile(TestContext, "main.bicep", bicepFileContents);
             var documentUri = DocumentUri.FromFileSystemPath(bicepFilePath);
-            var uri = documentUri.ToUri();
+            var uri = documentUri.ToUriEncoded();
 
             var files = new Dictionary<Uri, string>
             {
@@ -278,7 +285,7 @@ param storageAccount string = 'testStorageAccount'";
 param storageAccount string = 'testStorageAccount'";
             var bicepFilePath = FileHelper.SaveResultFile(TestContext, "main.bicep", bicepFileContents);
             var documentUri = DocumentUri.FromFileSystemPath(bicepFilePath);
-            var uri = documentUri.ToUri();
+            var uri = documentUri.ToUriEncoded();
 
             var files = new Dictionary<Uri, string>
             {
@@ -333,8 +340,8 @@ param storageAccount string = 'testStorageAccount'";
             sourceTextWithDiags.Should().EqualWithLineByLineDiffOutput(
                 TestContext,
                 dataSet.Ir ?? "",
-                expectedLocation: DataSet.GetBaselineUpdatePath(dataSet, DataSet.TestFileMainIr),
-                actualLocation: resultsFile);
+                expectedPath: DataSet.GetBaselineUpdatePath(dataSet, DataSet.TestFileMainIr),
+                actualPath: resultsFile);
         }
 
         private static List<SyntaxBase> GetAllBoundSymbolReferences(ProgramSyntax program)

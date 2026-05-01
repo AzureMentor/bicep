@@ -1,11 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 using Bicep.Core;
 using Bicep.Core.TypeSystem;
 using Bicep.Core.UnitTests;
@@ -56,7 +52,7 @@ namespace Bicep.LangServer.UnitTests.Handlers
             var bicepDeploymentScopeRequestHandler = CreateHandler(bicepCompilationManager);
 
             var textDocumentIdentifier = new TextDocumentIdentifier(documentUri);
-            BicepDeploymentScopeParams bicepDeploymentScopeParams = new BicepDeploymentScopeParams(textDocumentIdentifier);
+            BicepDeploymentScopeParams bicepDeploymentScopeParams = new(textDocumentIdentifier);
 
             var result = await bicepDeploymentScopeRequestHandler.Handle(bicepDeploymentScopeParams, CancellationToken.None);
 
@@ -81,7 +77,7 @@ namespace Bicep.LangServer.UnitTests.Handlers
             var bicepDeploymentScopeRequestHandler = CreateHandler(bicepCompilationManager);
 
             var textDocumentIdentifier = new TextDocumentIdentifier(documentUri);
-            BicepDeploymentScopeParams bicepDeploymentScopeParams = new BicepDeploymentScopeParams(textDocumentIdentifier);
+            BicepDeploymentScopeParams bicepDeploymentScopeParams = new(textDocumentIdentifier);
 
             var result = await bicepDeploymentScopeRequestHandler.Handle(bicepDeploymentScopeParams, CancellationToken.None);
 
@@ -104,7 +100,7 @@ namespace Bicep.LangServer.UnitTests.Handlers
             var bicepDeploymentScopeRequestHandler = CreateHandler(bicepCompilationManager);
 
             var textDocumentIdentifier = new TextDocumentIdentifier(documentUri);
-            BicepDeploymentScopeParams bicepDeploymentScopeParams = new BicepDeploymentScopeParams(textDocumentIdentifier);
+            BicepDeploymentScopeParams bicepDeploymentScopeParams = new(textDocumentIdentifier);
 
             var result = await bicepDeploymentScopeRequestHandler.Handle(bicepDeploymentScopeParams, CancellationToken.None);
 
@@ -151,7 +147,7 @@ namespace Bicep.LangServer.UnitTests.Handlers
             var bicepDeploymentScopeRequestHandler = CreateHandler(bicepCompilationManager);
 
             var textDocumentIdentifier = new TextDocumentIdentifier(documentUri);
-            BicepDeploymentScopeParams bicepDeploymentScopeParams = new BicepDeploymentScopeParams(textDocumentIdentifier);
+            BicepDeploymentScopeParams bicepDeploymentScopeParams = new(textDocumentIdentifier);
 
             var bicepDeploymentScopeResponse = await bicepDeploymentScopeRequestHandler.Handle(bicepDeploymentScopeParams, CancellationToken.None);
 
@@ -173,7 +169,7 @@ namespace Bicep.LangServer.UnitTests.Handlers
             var bicepDeploymentScopeRequestHandler = CreateHandler(bicepCompilationManager, deploymentFileCompilationCache);
 
             var textDocumentIdentifier = new TextDocumentIdentifier(documentUri);
-            BicepDeploymentScopeParams bicepDeploymentScopeParams = new BicepDeploymentScopeParams(textDocumentIdentifier);
+            BicepDeploymentScopeParams bicepDeploymentScopeParams = new(textDocumentIdentifier);
 
             await bicepDeploymentScopeRequestHandler.Handle(bicepDeploymentScopeParams, CancellationToken.None);
 

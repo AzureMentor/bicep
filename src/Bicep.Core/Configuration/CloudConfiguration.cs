@@ -1,12 +1,12 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Bicep.Core.Extensions;
-using System;
 using System.Collections.Immutable;
-using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Azure.Core;
+using Bicep.Core.Extensions;
+using Bicep.Core.Parsing;
 
 namespace Bicep.Core.Configuration
 {
@@ -17,15 +17,16 @@ namespace Bicep.Core.Configuration
 
         public ImmutableSortedDictionary<string, CloudProfile> Profiles { get; init; } = ImmutableSortedDictionary<string, CloudProfile>.Empty;
 
-        public ImmutableArray<CredentialType> CredentialPrecedence { get; init; } = ImmutableArray<CredentialType>.Empty;
+        public ImmutableArray<CredentialType> CredentialPrecedence { get; init; } = [];
+
+        public CredentialOptions? CredentialOptions { get; init; }
     }
 
-    public record CloudProfile
-    {
-        public string? ResourceManagerEndpoint { get; init; }
+    public record CloudProfile(string? ResourceManagerEndpoint, string? ActiveDirectoryAuthority);
 
-        public string? ActiveDirectoryAuthority { get; init; }
-    }
+    public record CredentialOptions(ManagedIdentity? ManagedIdentity);
+
+    public record ManagedIdentity(ManagedIdentityType Type, string? ClientId, string? ResourceId);
 
     public class CloudConfiguration : ConfigurationSection<Cloud>, IEquatable<CloudConfiguration>
     {
@@ -38,6 +39,8 @@ namespace Bicep.Core.Configuration
 
         public ImmutableArray<CredentialType> CredentialPrecedence => this.Data.CredentialPrecedence;
 
+        public CredentialOptions? CredentialOptions => this.Data.CredentialOptions;
+
         public Uri ResourceManagerEndpointUri { get; }
 
         public Uri ActiveDirectoryAuthorityUri { get; }
@@ -49,33 +52,63 @@ namespace Bicep.Core.Configuration
         // this does not work with regional ARM endpoints
         public string ResourceManagerAudience => ResourceManagerEndpointUri.AbsoluteUri.TrimEnd('/');
 
-        public static CloudConfiguration Bind(JsonElement element, string? configurationPath)
+        public static CloudConfiguration Bind(JsonElement element)
         {
             var cloud = element.ToNonNullObject<Cloud>();
-            var (endpointUri, authorityUri) = ValidateCurrentProfile(cloud, configurationPath);
+            var (endpointUri, authorityUri) = ValidateCurrentProfile(cloud);
+            ValidateCredentialOptions(cloud);
 
             return new(cloud, endpointUri, authorityUri);
         }
 
-        private static (Uri resourceManagerEndpointUri, Uri activeDirectoryAuthorityUri) ValidateCurrentProfile(Cloud cloud, string? configurationPath)
+        private static void ValidateCredentialOptions(Cloud cloud)
         {
-            static string ToCamelCase(string name) => char.ToLowerInvariant(name[0]) + name[1..];
+            if (cloud.CredentialOptions is null ||
+                cloud.CredentialOptions.ManagedIdentity is null ||
+                cloud.CredentialOptions.ManagedIdentity.Type is ManagedIdentityType.SystemAssigned)
+            {
+                return;
+            }
 
+            var clientId = cloud.CredentialOptions.ManagedIdentity.ClientId;
+            var resourceId = cloud.CredentialOptions.ManagedIdentity.ResourceId;
+
+            if (clientId is null && resourceId is null)
+            {
+                throw new ConfigurationException($@"The managed-identity configuration is invalid. Either ""{nameof(clientId)}"" or ""{nameof(resourceId)}"" must be set for user-assigned identity.");
+            }
+
+            if (clientId is not null && resourceId is not null)
+            {
+                throw new ConfigurationException($@"The managed-identity configuration is invalid. ""{nameof(clientId)}"" and ""{nameof(resourceId)}"" cannot be set at the same time for user-assigned identity.");
+            }
+
+            if (clientId is not null && !Guid.TryParse(clientId, out _))
+            {
+                throw new ConfigurationException($@"The managed-identity configuration is invalid. ""{nameof(clientId)}"" must be a GUID.");
+            }
+
+            if (resourceId is not null && !ResourceIdentifier.TryParse(resourceId, out _))
+            {
+                throw new ConfigurationException($@"The managed-identity configuration is invalid. ""{nameof(resourceId)}"" must be a valid Azure resource identifier.");
+            }
+        }
+
+        private static (Uri resourceManagerEndpointUri, Uri activeDirectoryAuthorityUri) ValidateCurrentProfile(Cloud cloud)
+        {
             string BuildAvailableProfileNamesClause() => cloud.Profiles.Keys.Any() ? $"\"{cloud.Profiles.Keys.OrderBy(name => name).ConcatString("\", \"")}\"" : "";
-
-            string BuildConfigurationClause() => configurationPath is not null ? $"Bicep configuration \"{configurationPath}\"" : "built-in Bicep configuration";
 
             Uri ValidateUri(string? value, string propertyName)
             {
                 if (value is null)
                 {
-                    throw new ConfigurationException($"The cloud profile \"{cloud.CurrentProfileName}\" in the {BuildConfigurationClause()}. The \"{propertyName}\" property cannot be null or undefined.");
+                    throw new ConfigurationException($"The cloud profile \"{cloud.CurrentProfileName}\" is invalid. The \"{propertyName}\" property cannot be null or undefined.");
                 }
 
                 if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
                     (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
                 {
-                    throw new ConfigurationException($"The cloud profile \"{cloud.CurrentProfileName}\" in the {BuildConfigurationClause()} is invalid. The value of the \"{propertyName}\" property \"{value}\" is not a valid URL.");
+                    throw new ConfigurationException($"The cloud profile \"{cloud.CurrentProfileName}\" is invalid. The value of the \"{propertyName}\" property \"{value}\" is not a valid URL.");
                 }
 
                 return uri;
@@ -83,11 +116,11 @@ namespace Bicep.Core.Configuration
 
             if (!cloud.Profiles.TryGetValue(cloud.CurrentProfileName, out var currentProfile))
             {
-                throw new ConfigurationException($"The cloud profile \"{cloud.CurrentProfileName}\" does not exist in the {BuildConfigurationClause()}. Available profiles include {BuildAvailableProfileNamesClause()}.");
+                throw new ConfigurationException($"The cloud profile \"{cloud.CurrentProfileName}\" does not exist. Available profiles include {BuildAvailableProfileNamesClause()}.");
             }
 
-            var endpointUri = ValidateUri(currentProfile.ResourceManagerEndpoint, ToCamelCase(nameof(currentProfile.ResourceManagerEndpoint)));
-            var authorityUri = ValidateUri(currentProfile.ActiveDirectoryAuthority, ToCamelCase(nameof(currentProfile.ActiveDirectoryAuthority)));
+            var endpointUri = ValidateUri(currentProfile.ResourceManagerEndpoint, StringUtils.ToCamelCase(nameof(currentProfile.ResourceManagerEndpoint)));
+            var authorityUri = ValidateUri(currentProfile.ActiveDirectoryAuthority, StringUtils.ToCamelCase(nameof(currentProfile.ActiveDirectoryAuthority)));
 
             return (endpointUri, authorityUri);
         }

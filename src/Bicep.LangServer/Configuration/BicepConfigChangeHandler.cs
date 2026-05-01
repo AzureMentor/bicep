@@ -1,10 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using Bicep.Core.Analyzers.Linter;
 using Bicep.Core.Configuration;
-using Bicep.Core.Workspaces;
+using Bicep.Core.SourceGraph;
 using Bicep.LanguageServer.CompilationManager;
 using Bicep.LanguageServer.Telemetry;
 using OmniSharp.Extensions.LanguageServer.Protocol;
@@ -17,13 +16,13 @@ namespace Bicep.LanguageServer.Configuration
         private readonly ConfigurationManager configurationManager;
         private readonly ILinterRulesProvider linterRulesProvider;
         private readonly ITelemetryProvider telemetryProvider;
-        private readonly IWorkspace workspace;
+        private readonly IActiveSourceFileSet workspace;
 
         public BicepConfigChangeHandler(ICompilationManager compilationManager,
                                         ConfigurationManager configurationManager,
                                         ILinterRulesProvider linterRulesProvider,
                                         ITelemetryProvider telemetryProvider,
-                                        IWorkspace workspace)
+                                        IActiveSourceFileSet workspace)
         {
             this.compilationManager = compilationManager;
             this.configurationManager = configurationManager;
@@ -35,11 +34,8 @@ namespace Bicep.LanguageServer.Configuration
         public void RefreshCompilationOfSourceFilesInWorkspace()
         {
             configurationManager.PurgeCache();
-
-            foreach (Uri sourceFileUri in workspace.GetActiveSourceFilesByUri().Keys)
-            {
-                compilationManager.RefreshCompilation(DocumentUri.From(sourceFileUri));
-            }
+            // We shouldn't need to reload auxiliary files if a configuration file has changed.
+            compilationManager.RefreshAllActiveCompilations(forceReloadAuxiliaryFiles: false);
         }
 
         public void HandleBicepConfigOpenEvent(DocumentUri documentUri)
@@ -55,18 +51,18 @@ namespace Bicep.LanguageServer.Configuration
             configurationManager.PurgeLookupCache();
         }
 
-        private void HandleBicepConfigOpenOrChangeEvent(DocumentUri documentUri) 
-            => configurationManager.RefreshConfigCacheEntry(documentUri.ToUri());
+        private void HandleBicepConfigOpenOrChangeEvent(DocumentUri documentUri)
+            => configurationManager.RefreshConfigCacheEntry(documentUri.ToIOUri());
 
         public void HandleBicepConfigSaveEvent(DocumentUri documentUri)
         {
-            if (configurationManager.RefreshConfigCacheEntry(documentUri.ToUri()) is {} update)
+            if (configurationManager.RefreshConfigCacheEntry(documentUri.ToIOUri()) is { } update)
             {
                 TelemetryHelper.SendTelemetryOnBicepConfigChange(update.prevConfiguration, update.newConfiguration, linterRulesProvider, telemetryProvider);
             }
         }
 
         public void HandleBicepConfigCloseEvent(DocumentUri documentUri)
-            => configurationManager.RemoveConfigCacheEntry(documentUri.ToUri());
+            => configurationManager.RemoveConfigCacheEntry(documentUri.ToIOUri());
     }
 }

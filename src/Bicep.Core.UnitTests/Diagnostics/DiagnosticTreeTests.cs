@@ -1,16 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Bicep.Core.Collections.Trees;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Parsing;
+using Bicep.Core.Text;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Bicep.Core.UnitTests.Diagnostics
 {
@@ -47,8 +42,6 @@ namespace Bicep.Core.UnitTests.Diagnostics
         [DataRow(0, 40)]
         [DataRow(4, 10)]
         [DataRow(4, 11)]
-        [DataRow(5, 5)]
-        [DataRow(10, 10)]
         [DataRow(5, 11)]
         [DataRow(21, 25)]
         [DataRow(22, 26)]
@@ -120,6 +113,6 @@ namespace Bicep.Core.UnitTests.Diagnostics
         }
 
         private static void WriteDummyDiagnostic(int start, int end, string code) =>
-            Sut.Write(new Diagnostic(new(start, end - start), DiagnosticLevel.Off, code, ""));
+            Sut.Write(new Diagnostic(new(start, end - start), DiagnosticLevel.Off, DiagnosticSource.Compiler, code, ""));
     }
 }

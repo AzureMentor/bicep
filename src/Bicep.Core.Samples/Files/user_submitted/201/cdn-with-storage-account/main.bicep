@@ -41,13 +41,7 @@ resource endpoint 'Microsoft.Cdn/profiles/endpoints@2020-09-01' = {
     isHttpAllowed: true
     isHttpsAllowed: true
     queryStringCachingBehavior: 'IgnoreQueryString'
-    contentTypesToCompress: [
-      'text/plain'
-      'text/html'
-      'text/css'
-      'application/x-javascript'
-      'text/javascript'
-    ]
+    contentTypesToCompress: ['text/plain', 'text/html', 'text/css', 'application/x-javascript', 'text/javascript']
     isCompressionEnabled: true
     origins: [
       {

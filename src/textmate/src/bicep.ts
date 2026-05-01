@@ -5,7 +5,7 @@ import * as tm from "tmlanguage-generator";
 import path from "path";
 import plist from "plist";
 
-export const grammarPath = path.resolve(__dirname, '../bicep.tmlanguage');
+export const grammarPath = path.resolve(__dirname, "../bicep.tmlanguage");
 
 type Rule = tm.Rule<BicepScope>;
 type IncludeRule = tm.IncludeRule<BicepScope>;
@@ -45,28 +45,32 @@ const directive = bounded(`[_a-zA-Z-0-9]+`);
 const ws = `(?:[ \\t\\r\\n]|\\/\\*(?:\\*(?!\\/)|[^*])*\\*\\/)*`;
 
 const keywords = [
-  'metadata',
-  'targetScope',
-  'resource',
-  'module',
-  'param',
-  'var',
-  'output',
-  'for',
-  'in',
-  'if',
-  'existing',
-  'import',
-  'as',
-  'type',
-  'with',
-  'using',
+  "metadata",
+  "targetScope",
+  "resource",
+  "module",
+  "param",
+  "var",
+  "output",
+  "for",
+  "in",
+  "if",
+  "existing",
+  "import",
+  "as",
+  "type",
+  "with",
+  "using",
+  "extends",
+  "func",
+  "assert",
+  "extension",
 ];
 
 const keywordExpression: MatchRule = {
-  key: 'keyword',
-  scope: 'keyword.control.declaration.bicep',
-  match: bounded(`(${keywords.join('|')})`),
+  key: "keyword",
+  scope: "keyword.control.declaration.bicep",
+  match: bounded(`(${keywords.join("|")})`),
 };
 
 const lineComment: MatchRule = {
@@ -83,7 +87,7 @@ const blockComment: BeginEndRule = {
 };
 
 const comments: IncludeRule = {
-  key: 'comments',
+  key: "comments",
   patterns: [lineComment, blockComment],
 };
 
@@ -104,18 +108,38 @@ const escapeChar: MatchRule = {
   match: `\\\\(u{[0-9A-Fa-f]+}|n|r|t|\\\\|'|\\\${)`,
 };
 
-const stringVerbatim: BeginEndRule = {
-  key: "string-verbatim",
-  scope: "string.quoted.multi.bicep",
-  begin: `'''`,
-  end: `'''`,
-  patterns: [],
-}
-
 const stringSubstitution: BeginEndRule = {
-  key: "string-literal-subst",
+  key: "string-subst",
   scope: meta,
   begin: `${notAfter(`\\\\`)}(\\\${)`,
+  beginCaptures: {
+    "1": { scope: "punctuation.definition.template-expression.begin.bicep" },
+  },
+  end: `(})`,
+  endCaptures: {
+    "1": { scope: "punctuation.definition.template-expression.end.bicep" },
+  },
+  patterns: withComments([expression]),
+};
+
+const multiLine1StringSubstitution: BeginEndRule = {
+  key: "multiline-1-string-subst",
+  scope: meta,
+  begin: `(\\\${)`,
+  beginCaptures: {
+    "1": { scope: "punctuation.definition.template-expression.begin.bicep" },
+  },
+  end: `(})`,
+  endCaptures: {
+    "1": { scope: "punctuation.definition.template-expression.end.bicep" },
+  },
+  patterns: withComments([expression]),
+};
+
+const multiLine2StringSubstitution: BeginEndRule = {
+  key: "multiline-2-string-subst",
+  scope: meta,
+  begin: `(\\$\\\${)`,
   beginCaptures: {
     "1": { scope: "punctuation.definition.template-expression.begin.bicep" },
   },
@@ -131,10 +155,31 @@ const stringLiteral: BeginEndRule = {
   scope: "string.quoted.single.bicep",
   begin: `'${notBefore(`''`)}`,
   end: `'`,
-  patterns: [
-    escapeChar,
-    stringSubstitution
-  ],
+  patterns: [escapeChar, stringSubstitution],
+};
+
+const multiLineString: BeginEndRule = {
+  key: "multiline-string",
+  scope: "string.quoted.multi.bicep",
+  begin: `'''`,
+  end: `'''${notBefore(`'`)}`,
+  patterns: [],
+};
+
+const multiLineString1Interpolation: BeginEndRule = {
+  key: "multiline-string-1-interp",
+  scope: "string.quoted.multi.bicep",
+  begin: `${notAfter(`\\$`)}\\$'''`,
+  end: `'''${notBefore(`'`)}`,
+  patterns: [multiLine1StringSubstitution],
+};
+
+const multiLineString2Interpolation: BeginEndRule = {
+  key: "multiline-string-2-interp",
+  scope: "string.quoted.multi.bicep",
+  begin: `\\$\\$'''`,
+  end: `'''${notBefore(`'`)}`,
+  patterns: [multiLine2StringSubstitution],
 };
 
 const numericLiteral: MatchRule = {
@@ -166,9 +211,9 @@ const objectLiteral: BeginEndRule = {
       scope: "variable.other.property.bicep",
       match: `${identifier}${before(`${ws}:`)}`,
     },
-    expression
+    expression,
   ]),
-}
+};
 
 const arrayLiteral: BeginEndRule = {
   key: "array-literal",
@@ -197,11 +242,12 @@ const decorator: BeginEndRule = {
   patterns: withComments([expression]),
 };
 
-const lambdaStart = `(` +
+const lambdaStart =
+  `(` +
   `\\(${ws}${identifier}${ws}(,${ws}${identifier}${ws})*\\)|` +
   `\\(${ws}\\)|` +
   `${ws}${identifier}${ws}` +
-`)${before(`${ws}=>`)}`;
+  `)${before(`${ws}=>`)}`;
 
 const lambda: BeginEndRule = {
   key: "lambda-start",
@@ -210,10 +256,8 @@ const lambda: BeginEndRule = {
   beginCaptures: {
     "1": {
       scope: meta,
-      patterns: withComments([
-        identifierExpression,
-      ])
-    }
+      patterns: withComments([identifierExpression]),
+    },
   },
   end: `${ws}=>`,
 };
@@ -225,8 +269,8 @@ const directiveStatement: BeginEndRule = {
   end: `$`,
   patterns: withComments([
     {
-      key: 'directive-variable',
-      scope: 'keyword.control.declaration.bicep',
+      key: "directive-variable",
+      scope: "keyword.control.declaration.bicep",
       match: directive,
     },
   ]),
@@ -234,7 +278,9 @@ const directiveStatement: BeginEndRule = {
 
 expression.patterns = [
   stringLiteral,
-  stringVerbatim,
+  multiLineString,
+  multiLineString1Interpolation,
+  multiLineString2Interpolation,
   numericLiteral,
   namedLiteral,
   objectLiteral,
@@ -251,7 +297,7 @@ const grammar: Grammar = {
   $schema: tm.schema,
   name: "Bicep",
   scopeName: "source.bicep",
-  fileTypes: [".bicep"],
+  fileTypes: [".bicep", ".bicepparam"],
   patterns: withComments([expression]),
 };
 

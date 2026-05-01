@@ -1,9 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
+using Bicep.Core.TypeSystem.Types;
 
 namespace Bicep.Core.TypeSystem
 {
@@ -23,7 +23,10 @@ namespace Bicep.Core.TypeSystem
 
         public Decorator? TryGetDecorator(FunctionOverload overload) => this.decoratorsByOverloads.TryGetValue(overload, out Decorator? decorator) ? decorator : null;
 
-        public ImmutableDictionary<string, FunctionSymbol> GetKnownDecoratorFunctions() => this.functionResolver.GetKnownFunctions();
+        public IReadOnlyDictionary<string, FunctionSymbol> GetKnownDecoratorFunctions() => this.functionResolver.GetKnownFunctions();
+
+        public FunctionSymbol? TryGetDecoratorFunctionSymbol(string name)
+            => this.functionResolver.TryGetFunctionSymbol(name);
 
         public IEnumerable<Decorator> GetMatches(FunctionSymbol symbol, IList<TypeSymbol> argumentTypes)
         {

@@ -5,7 +5,6 @@ using Bicep.Core.Analyzers.Linter.Rules;
 using Bicep.Core.UnitTests.Assertions;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System.Linq;
 
 namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
 {

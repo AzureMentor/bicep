@@ -10,11 +10,13 @@ namespace Bicep.LanguageServer.Telemetry
         public static class EventNames
         {
             public const string BicepFileOpen = "file/bicepopen";
+            public const string BicepParamFileOpen = "file/bicepparamopen";
 
             public const string NestedResourceDeclarationSnippetInsertion = "snippet/nestedresource";
             public const string TopLevelDeclarationSnippetInsertion = "snippet/toplevel";
             public const string ResourceBodySnippetInsertion = "snippet/resourcebody";
             public const string ModuleBodySnippetInsertion = "snippet/modulebody";
+            public const string TestBodySnippetInsertion = "snippet/testbody";
             public const string ObjectBodySnippetInsertion = "snippet/object";
 
             public const string DecompileSuccess = "decompile/success";
@@ -44,6 +46,14 @@ namespace Bicep.LanguageServer.Telemetry
             public const string UnhandledException = "unhandledException";
 
             public const string ModuleRegistryPathCompletion = "ModuleRegistryPathCompletion";
+            public const string ModuleRegistryResolution = "ModuleRegistryResolution";
+
+            public const string ExternalSourceRequestSuccess = "ExternalSourceRequest/success";
+            public const string ExternalSourceRequestFailure = "ExternalSourceRequest/failure";
+            public const string ExternalSourceDocLinkClickSuccess = "ExternalSourceDocLinkClick/success";
+            public const string ExternalSourceDocLinkClickFailure = "ExternalSourceDocLinkClick/failure";
+
+            public const string ExtractionRefactoring = "refactoring/extraction";
         }
     }
 }

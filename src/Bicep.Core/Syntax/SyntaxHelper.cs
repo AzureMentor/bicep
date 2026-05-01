@@ -1,10 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Linq;
 using Bicep.Core.Diagnostics;
+using Bicep.Core.Navigation;
+using Bicep.Core.Parsing;
 using Bicep.Core.Semantics;
+using Bicep.Core.SourceGraph;
 using Bicep.Core.TypeSystem;
-using Bicep.Core.Workspaces;
 
 namespace Bicep.Core.Syntax
 {
@@ -24,50 +25,29 @@ namespace Bicep.Core.Syntax
         {
             if (parameterSymbol.DeclaringSyntax is ParameterDeclarationSyntax syntax)
             {
-                return SyntaxHelper.TryGetDefaultValue(syntax);
+                return TryGetDefaultValue(syntax);
             }
 
             return null;
         }
 
-        public static string? TryGetModulePath(ModuleDeclarationSyntax moduleDeclarationSyntax, out DiagnosticBuilder.ErrorBuilderDelegate? failureBuilder)
+        public static ResultWithDiagnosticBuilder<string> TryGetForeignTemplatePath(
+            IArtifactReferenceSyntax foreignTemplateReference,
+            DiagnosticBuilder.DiagnosticBuilderDelegate onUnspecifiedPath)
         {
-            var pathSyntax = moduleDeclarationSyntax.TryGetPath();
-            if (pathSyntax == null)
+            if (foreignTemplateReference.Path is not StringSyntax && foreignTemplateReference.Path is not NoneLiteralSyntax)
             {
-                failureBuilder = x => x.ModulePathHasNotBeenSpecified();
-                return null;
+                return new(onUnspecifiedPath);
             }
 
-            var pathValue = pathSyntax.TryGetLiteralValue();
-            if (pathValue == null)
+            var pathSyntax = foreignTemplateReference.Path is StringSyntax syntax ? syntax : null;
+
+            if (pathSyntax?.TryGetLiteralValue() is not string pathValue)
             {
-                failureBuilder = x => x.FilePathInterpolationUnsupported();
-                return null;
+                return new(x => x.FilePathInterpolationUnsupported());
             }
 
-            failureBuilder = null;
-            return pathValue;
-        }
-
-        public static string? TryGetUsingPath(UsingDeclarationSyntax usingDeclarationSyntax, out DiagnosticBuilder.ErrorBuilderDelegate? failureBuilder)
-        {
-            var pathSyntax = usingDeclarationSyntax.TryGetPath();
-            if (pathSyntax == null)
-            {
-                failureBuilder = x => x.TemplatePathHasNotBeenSpecified();
-                return null;
-            }
-
-            var pathValue = pathSyntax.TryGetLiteralValue();
-            if (pathValue == null)
-            {
-                failureBuilder = x => x.FilePathInterpolationUnsupported();
-                return null;
-            }
-
-            failureBuilder = null;
-            return pathValue;
+            return new(pathValue);
         }
 
         public static ResourceScope GetTargetScope(TargetScopeSyntax targetScopeSyntax)
@@ -94,6 +74,7 @@ namespace Bicep.Core.Syntax
                 LanguageConstants.TargetScopeTypeManagementGroup => ResourceScope.ManagementGroup,
                 LanguageConstants.TargetScopeTypeSubscription => ResourceScope.Subscription,
                 LanguageConstants.TargetScopeTypeResourceGroup => ResourceScope.ResourceGroup,
+                LanguageConstants.TargetScopeTypeLocal => ResourceScope.Local,
                 _ => ResourceScope.None,
             };
         }
@@ -122,5 +103,11 @@ namespace Bicep.Core.Syntax
                 ArrayAccessSyntax arrayAccess => (arrayAccess.BaseExpression, arrayAccess.IndexExpression),
                 _ => (syntax, null),
             };
+
+        public static SyntaxBase UnwrapNonNullAssertion(SyntaxBase syntax) => syntax switch
+        {
+            NonNullAssertionSyntax nonNullAssertion => UnwrapNonNullAssertion(nonNullAssertion.BaseExpression),
+            _ => syntax,
+        };
     }
 }

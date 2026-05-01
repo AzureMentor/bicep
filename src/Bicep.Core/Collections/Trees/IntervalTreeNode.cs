@@ -1,19 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
 namespace Bicep.Core.Collections.Trees
 {
     public class IntervalTreeNode<TData>
     {
         public readonly static IntervalTreeNode<TData> Nil = new(-1, -1, new List<TData>());
 
-        private readonly IntervalTreeNode<TData>[] children = new[] { Nil, Nil };
+        private readonly IntervalTreeNode<TData>[] children = [Nil, Nil];
 
         public IntervalTreeNode(int start, int end, TData data)
             : this(start, end, new List<TData>() { data })

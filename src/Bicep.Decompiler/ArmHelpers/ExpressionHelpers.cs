@@ -1,10 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using Azure.Deployments.Expression.Engines;
@@ -28,7 +25,7 @@ namespace Bicep.Decompiler.ArmHelpers
         }
 
         public static FunctionExpression Concat(params LanguageExpression[] expressions)
-            => new FunctionExpression("concat", expressions, new LanguageExpression[0]);
+            => new("concat", expressions, []);
 
         private static IEnumerable<LanguageExpression> CombineConcatArguments(IEnumerable<LanguageExpression> arguments)
         {
@@ -125,7 +122,7 @@ namespace Bicep.Decompiler.ArmHelpers
                 }
 
                 // overwrite the original expression
-                functionExpression = Concat(concatExpressions.ToArray());
+                functionExpression = Concat([.. concatExpressions]);
             }
 
             // flatten nested 'concat' functions
@@ -164,7 +161,7 @@ namespace Bicep.Decompiler.ArmHelpers
         {
             var pathSegments = nameSegments
                 .Select(FlattenStringOperations)
-                .SelectMany((expression, i) => i == 0 ? new[] { expression } : new[] { new JTokenExpression("/"), expression })
+                .SelectMany((expression, i) => i == 0 ? new[] { expression } : [new JTokenExpression("/"), expression])
                 .ToArray();
 
             return pathSegments.Length > 1 ? Concat(pathSegments) : pathSegments.First();
@@ -218,7 +215,7 @@ namespace Bicep.Decompiler.ArmHelpers
                 functionExpression = new FunctionExpression(
                     "resourceId",
                     typeParam.AsEnumerable().Concat(names).ToArray(),
-                    new LanguageExpression[] { });
+                    []);
             }
 
             if (!functionExpression.NameEquals("resourceId") ||

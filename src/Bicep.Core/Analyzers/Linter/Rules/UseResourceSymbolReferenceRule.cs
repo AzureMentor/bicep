@@ -1,10 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Collections.Immutable;
 using Bicep.Core.CodeAction;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Extensions;
-using Bicep.Core.Navigation;
 using Bicep.Core.Semantics;
 using Bicep.Core.Semantics.Metadata;
 using Bicep.Core.Semantics.Namespaces;
@@ -12,10 +12,6 @@ using Bicep.Core.Syntax;
 using Bicep.Core.Syntax.Comparers;
 using Bicep.Core.Syntax.Visitors;
 using Microsoft.WindowsAzure.ResourceStack.Common.Extensions;
-using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
 
 namespace Bicep.Core.Analyzers.Linter.Rules;
 
@@ -26,8 +22,7 @@ public sealed class UseResourceSymbolReferenceRule : LinterRuleBase
     public UseResourceSymbolReferenceRule() : base(
         code: Code,
         description: CoreResources.UseResourceSymbolReferenceRule_Description,
-        docUri: new Uri($"https://aka.ms/bicep/linter/{Code}"),
-        diagnosticLevel: DiagnosticLevel.Warning)
+        LinterRuleCategory.BestPractice)
     { }
 
     public override string FormatMessage(params object[] values)
@@ -35,8 +30,8 @@ public sealed class UseResourceSymbolReferenceRule : LinterRuleBase
 
     public override IEnumerable<IDiagnostic> AnalyzeInternal(SemanticModel model, DiagnosticLevel diagnosticLevel)
     {
-        var functionCalls = SyntaxAggregator.Aggregate(model.Root.Syntax, syntax => 
-            SemanticModelHelper.TryGetFunctionInNamespace(model, AzNamespaceType.BuiltInName, syntax) is {} functionCall && (
+        var functionCalls = SyntaxAggregator.Aggregate(model.Root.Syntax, syntax =>
+            SemanticModelHelper.TryGetFunctionInNamespace(model, AzNamespaceType.BuiltInName, syntax) is { } functionCall && (
                 functionCall.Name.IdentifierName.StartsWith("list", LanguageConstants.IdentifierComparison) ||
                 functionCall.Name.IdentifierName.Equals("reference", LanguageConstants.IdentifierComparison)))
             .OfType<FunctionCallSyntaxBase>();
@@ -44,13 +39,13 @@ public sealed class UseResourceSymbolReferenceRule : LinterRuleBase
         foreach (var functionCall in functionCalls)
         {
             if (functionCall.Name.IdentifierName.Equals("reference", LanguageConstants.IdentifierComparison) &&
-                AnalyzeReferenceCall(model, diagnosticLevel, functionCall) is {} referenceDiagnostic)
+                AnalyzeReferenceCall(model, diagnosticLevel, functionCall) is { } referenceDiagnostic)
             {
                 yield return referenceDiagnostic;
             }
 
             if (functionCall.Name.IdentifierName.StartsWith("list", LanguageConstants.IdentifierComparison) &&
-                AnalyzeListCall(model, diagnosticLevel, functionCall) is {} listDiagnostic)
+                AnalyzeListCall(model, diagnosticLevel, functionCall) is { } listDiagnostic)
             {
                 yield return listDiagnostic;
             }
@@ -60,14 +55,14 @@ public sealed class UseResourceSymbolReferenceRule : LinterRuleBase
     private IEnumerable<DeclaredResourceMetadata> AnalyzeResourceId(SemanticModel model, SyntaxBase syntax)
     {
         if (syntax is PropertyAccessSyntax idProp &&
-            idProp.PropertyName.NameEquals("id") &&
+            (idProp.PropertyName.NameEquals("id") || idProp.PropertyName.NameEquals("name")) &&
             model.ResourceMetadata.TryLookup(idProp.BaseExpression) is DeclaredResourceMetadata idResource)
         {
             yield return idResource;
             yield break;
         }
-        
-        if (SemanticModelHelper.TryGetFunctionInNamespace(model, AzNamespaceType.BuiltInName, syntax) is not {} functionCall)
+
+        if (SemanticModelHelper.TryGetFunctionInNamespace(model, AzNamespaceType.BuiltInName, syntax) is not { } functionCall)
         {
             yield break;
         }
@@ -76,7 +71,7 @@ public sealed class UseResourceSymbolReferenceRule : LinterRuleBase
         {
             // Only support the scope-less format for now...
             if (functionCall.Arguments[0].Expression is not StringSyntax s ||
-                s.TryGetLiteralValue() is not {} resourceType ||
+                s.TryGetLiteralValue() is not { } resourceType ||
                 !resourceType.Contains('/'))
             {
                 yield break;
@@ -112,8 +107,8 @@ public sealed class UseResourceSymbolReferenceRule : LinterRuleBase
         }
 
         if (syntax is StringSyntax s &&
-            s.TryGetLiteralValue() is {} version &&
-            resourceCandidates.FirstOrDefault(x => x.TypeReference.ApiVersion.EqualsOrdinalInsensitively(version)) is {} resource)
+            s.TryGetLiteralValue() is { } version &&
+            resourceCandidates.FirstOrDefault(x => x.TypeReference.ApiVersion.EqualsOrdinalInsensitively(version)) is { } resource)
         {
             return resource;
         }
@@ -146,16 +141,16 @@ public sealed class UseResourceSymbolReferenceRule : LinterRuleBase
 
         var isFull = functionCall.Arguments.Length > 2 &&
             functionCall.Arguments[2].Expression is StringSyntax fullString &&
-            fullString.TryGetLiteralValue() is {} fullValue &&
+            fullString.TryGetLiteralValue() is { } fullValue &&
             fullValue.EqualsOrdinalInsensitively("full");
 
         SyntaxBase newSyntax = SyntaxFactory.CreateIdentifier(resource.Symbol.Name);
         if (!isFull)
         {
-            newSyntax = SyntaxFactory.CreatePropertyAccess(newSyntax, "properties");
+            newSyntax = SyntaxFactory.CreateAccessSyntax(newSyntax, "properties");
         }
 
-        var codeReplacement = new CodeReplacement(functionCall.Span, newSyntax.ToTextPreserveFormatting());
+        var codeReplacement = new CodeReplacement(functionCall.Span, newSyntax.ToString());
 
         return CreateFixableDiagnosticForSpan(
             diagnosticLevel,
@@ -184,14 +179,14 @@ public sealed class UseResourceSymbolReferenceRule : LinterRuleBase
 
         var newArgs = functionCall.Arguments.Length == 2 ?
             new SyntaxBase[] { } :
-            new SyntaxBase[] { functionCall.Arguments[1].Expression, functionCall.Arguments[2].Expression };
+            [functionCall.Arguments[1].Expression, functionCall.Arguments[2].Expression];
 
         var newFunctionCall = SyntaxFactory.CreateInstanceFunctionCall(
             SyntaxFactory.CreateIdentifier(resource.Symbol.Name),
             functionCall.Name.IdentifierName,
             newArgs);
 
-        var codeReplacement = new CodeReplacement(functionCall.Span, newFunctionCall.ToTextPreserveFormatting());
+        var codeReplacement = new CodeReplacement(functionCall.Span, newFunctionCall.ToString());
 
         return CreateFixableDiagnosticForSpan(
             diagnosticLevel,

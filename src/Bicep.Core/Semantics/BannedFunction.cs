@@ -7,9 +7,9 @@ namespace Bicep.Core.Semantics
 {
     public class BannedFunction
     {
-        private readonly DiagnosticBuilder.ErrorBuilderDelegate errorFunc;
+        private readonly DiagnosticBuilder.DiagnosticBuilderDelegate errorFunc;
 
-        public BannedFunction(string name, DiagnosticBuilder.ErrorBuilderDelegate errorFunc)
+        public BannedFunction(string name, DiagnosticBuilder.DiagnosticBuilderDelegate errorFunc)
         {
             this.Name = name;
             this.errorFunc = errorFunc;
@@ -17,9 +17,9 @@ namespace Bicep.Core.Semantics
 
         public string Name { get; }
 
-        public ErrorSymbol CreateSymbol(DiagnosticBuilder.DiagnosticBuilderInternal builder) => new ErrorSymbol(this.errorFunc(builder));
+        public ErrorSymbol CreateSymbol(DiagnosticBuilder.DiagnosticBuilderInternal builder) => new(this.errorFunc(builder));
 
         public static BannedFunction CreateForOperator(string name, string @operator) =>
-            new BannedFunction(name, builder => builder.FunctionNotSupportedOperatorAvailable(name, @operator));
+            new(name, builder => builder.FunctionNotSupportedOperatorAvailable(name, @operator));
     }
 }

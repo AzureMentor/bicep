@@ -2,31 +2,70 @@
 // Licensed under the MIT License.
 
 using Bicep.Core.UnitTests.Utils;
+using Bicep.IO.Abstraction;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Bicep.Core.UnitTests.Features;
 
 public record FeatureProviderOverrides(
-    string? CacheRootDirectory = null,
+    IDirectoryHandle? CacheRootDirectory = null,
     bool? RegistryEnabled = default,
     bool? SymbolicNameCodegenEnabled = default,
-    bool? ExtensibilityEnabled = default,
     bool? AdvancedListComprehensionEnabled = default,
     bool? ResourceTypedParamsAndOutputsEnabled = default,
     bool? SourceMappingEnabled = default,
-    bool? ParamsFilesEnabled = default,
-    bool? UserDefinedTypesEnabled = default,
-    string? AssemblyVersion = BicepTestConstants.DevAssemblyFileVersion)
+    bool? LegacyFormatterEnabled = default,
+    bool? TestFrameworkEnabled = default,
+    bool? AssertsEnabled = default,
+    bool? WaitUntilEnabled = default,
+    bool? LocalDeployEnabled = default,
+    bool? ResourceInfoCodegenEnabled = default,
+    bool? ExtendableParamFilesEnabled = default,
+    string? AssemblyVersion = BicepTestConstants.DevAssemblyFileVersion,
+    bool? ModuleExtensionConfigsEnabled = default,
+    bool? UserDefinedConstraintsEnabled = default,
+    bool? DeployCommandsEnabled = default,
+    bool? ThisNamespaceEnabled = default,
+    bool? ExistingNullIfNotFoundEnabled = default)
 {
-    public FeatureProviderOverrides(TestContext testContext,
+    public FeatureProviderOverrides(
+        TestContext testContext,
         bool? RegistryEnabled = default,
         bool? SymbolicNameCodegenEnabled = default,
-        bool? ExtensibilityEnabled = default,
         bool? AdvancedListComprehensionEnabled = default,
         bool? ResourceTypedParamsAndOutputsEnabled = default,
         bool? SourceMappingEnabled = default,
-        bool? ParamsFilesEnabled = default,
-        bool? UserDefinedTypesEnabled = default,
-        string? AssemblyVersion = BicepTestConstants.DevAssemblyFileVersion
-    ) : this(FileHelper.GetCacheRootPath(testContext), RegistryEnabled, SymbolicNameCodegenEnabled, ExtensibilityEnabled, AdvancedListComprehensionEnabled, ResourceTypedParamsAndOutputsEnabled, SourceMappingEnabled, ParamsFilesEnabled, UserDefinedTypesEnabled, AssemblyVersion) {}
+        bool? LegacyFormatterEnabled = default,
+        bool? TestFrameworkEnabled = default,
+        bool? AssertsEnabled = default,
+        bool? WaitUntilEnabled = default,
+        bool? LocalDeployEnabled = default,
+        bool? ResourceInfoCodegenEnabled = default,
+        bool? ExtendableParamFilesEnabled = default,
+        string? AssemblyVersion = BicepTestConstants.DevAssemblyFileVersion,
+        bool? ModuleExtensionConfigsEnabled = default,
+        bool? UserDefinedConstraintsEnabled = default,
+        bool? DeployCommandsEnabled = default,
+        bool? ThisNamespaceEnabled = default,
+        bool? ExistingNullIfNotFoundEnabled = default) : this(
+            FileHelper.GetCacheRootDirectory(testContext),
+            RegistryEnabled,
+            SymbolicNameCodegenEnabled,
+            AdvancedListComprehensionEnabled,
+            ResourceTypedParamsAndOutputsEnabled,
+            SourceMappingEnabled,
+            LegacyFormatterEnabled,
+            TestFrameworkEnabled,
+            AssertsEnabled,
+            WaitUntilEnabled,
+            LocalDeployEnabled,
+            ResourceInfoCodegenEnabled,
+            ExtendableParamFilesEnabled,
+            AssemblyVersion,
+            ModuleExtensionConfigsEnabled,
+            UserDefinedConstraintsEnabled,
+            DeployCommandsEnabled,
+            ThisNamespaceEnabled,
+            ExistingNullIfNotFoundEnabled)
+    { }
 }

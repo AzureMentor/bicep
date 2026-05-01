@@ -10,7 +10,9 @@ namespace Bicep.Core.Semantics
         Parameter,
         Variable,
         Resource,
+        Assert,
         Module,
+        Test,
         Output,
         Namespace,
         ImportedNamespace,
@@ -21,5 +23,7 @@ namespace Bicep.Core.Semantics
         ParameterAssignment,
         Metadata,
         TypeAlias,
+        ExtensionConfigAssignment,
+        BaseParameters
     }
 }

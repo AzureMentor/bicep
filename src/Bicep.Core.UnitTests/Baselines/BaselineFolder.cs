@@ -1,16 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Bicep.Core.UnitTests.Utils;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using FluentAssertions;
 using System.Collections.Immutable;
 using Bicep.Core.Extensions;
 using Bicep.Core.UnitTests.Assertions;
+using Bicep.Core.UnitTests.Utils;
+using Bicep.IO.Abstraction;
+using FluentAssertions;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Bicep.Core.UnitTests.Baselines
 {
@@ -63,12 +60,11 @@ namespace Bicep.Core.UnitTests.Baselines
             filePath.Substring(OutputFolderPath.Length).Replace('\\', '/').TrimStart('/') :
             throw new InvalidOperationException($"FilePath {filePath} is not a sub-path of {OutputFolderPath}");
 
-        public BaselineFile GetFileOrEnsureCheckedIn(Uri fileUri)
-            => GetFileOrEnsureCheckedIn(GetBaselineStreamRelativePath(fileUri.LocalPath));
+        public BaselineFile GetFileOrEnsureCheckedIn(IOUri fileUri) => GetFileOrEnsureCheckedIn(GetBaselineStreamRelativePath(fileUri.GetFilePath()));
 
         public BaselineFile GetFileOrEnsureCheckedIn(string relativePath)
         {
-            if (TryGetFile(relativePath) is {} baselineFile)
+            if (TryGetFile(relativePath) is { } baselineFile)
             {
                 return baselineFile;
             }
@@ -83,8 +79,8 @@ namespace Bicep.Core.UnitTests.Baselines
             "".Should().EqualWithLineByLineDiffOutput(
                 this.EntryFile.TestContext,
                 "<missing>",
-                expectedLocation: embeddedFile.RelativeSourcePath,
-                actualLocation: outputFile);
+                expectedPath: embeddedFile.RelativeSourcePath,
+                actualPath: outputFile);
             throw new NotImplementedException("Code cannot reach this point as the previous line will always throw");
         }
     }

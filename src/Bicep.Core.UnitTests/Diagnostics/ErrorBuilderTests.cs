@@ -1,20 +1,25 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+using System.Collections.Immutable;
+using System.Reflection;
 using Bicep.Core.Diagnostics;
+using Bicep.Core.Extensions;
 using Bicep.Core.Parsing;
+using Bicep.Core.Registry;
 using Bicep.Core.Resources;
 using Bicep.Core.Semantics;
+using Bicep.Core.Semantics.Metadata;
+using Bicep.Core.SourceGraph;
+using Bicep.Core.Syntax;
+using Bicep.Core.Text;
 using Bicep.Core.TypeSystem;
+using Bicep.Core.TypeSystem.Types;
+using Bicep.Core.UnitTests.Assertions;
+using Bicep.Core.UnitTests.Mock;
+using Bicep.Core.UnitTests.Utils;
+using Bicep.IO.Abstraction;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
-using System.Reflection;
-using Bicep.Core.Syntax;
-using Bicep.Core.UnitTests.Assertions;
-using Bicep.Core.UnitTests.Utils;
 
 namespace Bicep.Core.UnitTests.Diagnostics
 {
@@ -104,6 +109,11 @@ namespace Bicep.Core.UnitTests.Diagnostics
                 return new List<string> { $"<value_{index}" };
             }
 
+            if (parameter.ParameterType == typeof(string[]))
+            {
+                return new[] { $"<value_{index}" };
+            }
+
             if (parameter.ParameterType == typeof(IDiagnosticLookup))
             {
                 return new DiagnosticTree();
@@ -122,7 +132,7 @@ namespace Bicep.Core.UnitTests.Diagnostics
             if (parameter.ParameterType == typeof(Symbol))
             {
                 // just using this one as it's easy to construct
-                return ErrorType.Create(Enumerable.Empty<ErrorDiagnostic>());
+                return ErrorType.Create([]);
             }
 
             if (parameter.ParameterType == typeof(int) || parameter.ParameterType == typeof(int?))
@@ -175,15 +185,61 @@ namespace Bicep.Core.UnitTests.Diagnostics
                 return TestSyntaxFactory.CreatePropertyAccess(TestSyntaxFactory.CreateVariableAccess("identifier"), "propertyName");
             }
 
+            if (parameter.ParameterType == typeof(ExtensionDeclarationSyntax))
+            {
+                return new ExtensionDeclarationSyntax(
+                    [],
+                    SyntaxFactory.ImportKeywordToken,
+                    SyntaxFactory.CreateStringLiteralWithTextSpan("kubernetes@1.0.0"),
+                    withClause: SyntaxFactory.EmptySkippedTrivia,
+                    asClause: SyntaxFactory.EmptySkippedTrivia);
+            }
+
+            if (parameter.ParameterType == typeof(SpreadExpressionSyntax))
+            {
+                return new SpreadExpressionSyntax(
+                    SyntaxFactory.EllipsisToken,
+                    TestSyntaxFactory.CreateVariableAccess("identifier"));
+            }
+
+            if (parameter.ParameterType == typeof(ParameterizedTypeInstantiationSyntaxBase))
+            {
+                return new ParameterizedTypeInstantiationSyntax(
+                    TestSyntaxFactory.CreateIdentifier("foo"),
+                    SyntaxFactory.CreateToken(TokenType.LeftChevron),
+                    TestSyntaxFactory.CreateString("RP.Namespace/widgets@v1").AsEnumerable(),
+                    SyntaxFactory.CreateToken(TokenType.RightChevron));
+            }
+
+            if (parameter.ParameterType == typeof(ExportMetadataKind))
+            {
+                return ExportMetadataKind.Error;
+            }
+
+            if (parameter.ParameterType == typeof(BicepSourceFileKind))
+            {
+                return BicepSourceFileKind.BicepFile;
+            }
+
+            if (parameter.ParameterType == typeof(ArtifactType))
+            {
+                return ArtifactType.Module;
+            }
+
+            if (parameter.ParameterType == typeof(IOUri))
+            {
+                return new IOUri("file", "", "/foo");
+            }
+
             throw new AssertFailedException($"Unable to generate mock parameter value of type '{parameter.ParameterType}' for the diagnostic builder method.");
         }
 
-        private void ExpectDiagnosticWithFixedText(string text, string expectedText)
+        private static void ExpectDiagnosticWithFixedText(string text, string expectedText)
         {
             var result = CompilationHelper.Compile(text);
             result.Diagnostics.Should().HaveCount(1);
 
-            FixableDiagnostic diagnostic = (FixableDiagnostic)result.Diagnostics.Single();
+            var diagnostic = result.Diagnostics.Single();
             diagnostic.Code.Should().Be("BCP035");
             diagnostic.Fixes.Should().HaveCount(1);
 
@@ -196,8 +252,8 @@ namespace Bicep.Core.UnitTests.Diagnostics
             actualText = actualText.Insert(replacement.Span.Position, replacement.Text);
 
             // Normalize line endings
-            expectedText = expectedText.Replace("\r\n", "\n").Replace("\n", Environment.NewLine);
-            actualText = actualText.Replace("\r\n", "\n").Replace("\n", Environment.NewLine);
+            expectedText = expectedText.ReplaceLineEndings();
+            actualText = actualText.ReplaceLineEndings();
 
             actualText.Should().Be(expectedText);
         }
@@ -222,7 +278,7 @@ namespace Bicep.Core.UnitTests.Diagnostics
         // There is leading whitespace in this one
         [DataRow(@"
                 resource vnet 'Microsoft.Network/virtualNetworks@2018-10-01' = {
-                  "+@"
+                  " + @"
                 }",
            @"
                 resource vnet 'Microsoft.Network/virtualNetworks@2018-10-01' = {
@@ -265,9 +321,9 @@ namespace Bicep.Core.UnitTests.Diagnostics
                          name: 'D1'
 
                        }
-                       // comment
+                       
                        location:
-                       name:
+                       name:// comment
                  }"
         )]
         [DataRow(@"

@@ -1,28 +1,22 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
-using System.Threading.Tasks;
 using Bicep.Core.Samples;
+using Bicep.Core.SourceGraph;
+using Bicep.Core.Text;
+using Bicep.Core.UnitTests;
+using Bicep.Core.UnitTests.Utils;
+using Bicep.LangServer.IntegrationTests.Assertions;
+using Bicep.LangServer.IntegrationTests.Helpers;
+using Bicep.LanguageServer.Extensions;
+using FluentAssertions;
+using FluentAssertions.Execution;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using OmniSharp.Extensions.LanguageServer.Protocol;
-using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
-using System.Linq;
-using FluentAssertions;
-using Bicep.Core.Text;
-using Bicep.Core.Parsing;
-using FluentAssertions.Execution;
-using Bicep.LangServer.IntegrationTests.Assertions;
-using Bicep.LanguageServer.Extensions;
-using Bicep.Core.Workspaces;
-using Bicep.LangServer.IntegrationTests.Helpers;
-using System;
-using System.Collections.Immutable;
-using Bicep.Core.UnitTests.Utils;
-using Bicep.Core.UnitTests;
-using Bicep.Core.UnitTests.FileSystem;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace Bicep.LangServer.IntegrationTests
 {
@@ -53,8 +47,8 @@ namespace Bicep.LangServer.IntegrationTests
         [DynamicData(nameof(GetData), DynamicDataSourceType.Method, DynamicDataDisplayNameDeclaringType = typeof(DataSet), DynamicDataDisplayName = nameof(DataSet.GetDisplayName))]
         public async Task Overlapping_tokens_are_not_returned(DataSet dataSet)
         {
-            var uri = DocumentUri.From($"/{dataSet.Name}");
-            var bicepFile = SourceFileFactory.CreateBicepFile(uri.ToUri(), dataSet.Bicep);
+            var uri = DocumentUri.From($"{dataSet.Name}");
+            var bicepFile = new LanguageClientFile(uri, dataSet.Bicep);
 
             var helper = await DefaultServer.GetAsync();
             await helper.OpenFileOnceAsync(TestContext, dataSet.Bicep, uri);
@@ -88,10 +82,10 @@ namespace Bicep.LangServer.IntegrationTests
         public async Task Correct_semantic_tokens_are_returned_for_params_file(string paramFileText, TextSpan[] spans, SemanticTokenType[] tokenType)
         {
             var baseFilePath = $"file:///{TestContext.TestName}_{Guid.NewGuid():D}";
-            var paramFileUri = new Uri($"{baseFilePath}/main.bicepparam");
-            var bicepFileUri = new Uri($"{baseFilePath}/main.bicep");
+            var paramFileUri = $"{baseFilePath}/main.bicepparam";
+            var bicepFileUri = $"{baseFilePath}/main.bicep";
 
-            var fileTextsByUri = new Dictionary<Uri, string>
+            var fileTextsByUri = new Dictionary<DocumentUri, string>
             {
                 [paramFileUri] = paramFileText,
                 [bicepFileUri] = ""
@@ -102,8 +96,7 @@ namespace Bicep.LangServer.IntegrationTests
                 fileTextsByUri,
                 paramFileUri,
                 services => services
-                    .WithNamespaceProvider(BuiltInTestTypes.Create())
-                    .WithFeatureOverrides(new(TestContext, ParamsFilesEnabled: true)));
+                    .WithNamespaceProvider(BuiltInTestTypes.Create()));
 
             var semanticTokens = await helper.Client.TextDocument.RequestSemanticTokens(new SemanticTokensParams
             {
@@ -129,7 +122,7 @@ namespace Bicep.LangServer.IntegrationTests
             }
         }
 
-        private static IEnumerable<SemanticTokenInfo> CalculateSemanticTokenInfos(IReadOnlyList<int> lineStarts, IEnumerable<int> semanticTokenData, SemanticTokensLegend legend)
+        private static IEnumerable<SemanticTokenInfo> CalculateSemanticTokenInfos(IReadOnlyList<int> lineStarts, IReadOnlyList<int> semanticTokenData, SemanticTokensLegend legend)
         {
             var tokenTypesLegend = legend.TokenTypes.ToImmutableArray();
             var tokenModifiersLegend = legend.TokenModifiers.ToImmutableArray();

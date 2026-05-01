@@ -1,21 +1,30 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-/* eslint-disable jest/no-standalone-expect */
+import { stripVTControlCharacters } from "node:util";
 import spawn from "cross-spawn";
-
+import { expect } from "vitest";
 import { bicepCli } from "./fs";
-import { EnvironmentOverrides } from "./types";
+import { EnvironmentOverrides } from "./liveTestEnvironments";
+import { logStdErr } from "./log";
 
 class StdoutAssertionBuilder {
   constructor(private readonly stdout: string) {}
 
-  withStdout(expectedStdout: string | RegExp): void {
+  withStdout(expectedStdout: string | RegExp, stripAnsiCodes?: boolean): void {
+    const output = stripAnsiCodes ? stripVTControlCharacters(this.stdout) : this.stdout;
     if (typeof expectedStdout === "string") {
-      expect(this.stdout).toBe(expectedStdout);
+      expect(output).toBe(expectedStdout);
     } else {
-      expect(this.stdout).toMatch(expectedStdout);
+      expect(output).toMatch(expectedStdout);
     }
+  }
+
+  withStdoutContaining(contents: string, stripAnsiCodes?: boolean): StdoutAssertionBuilder {
+    const output = stripAnsiCodes ? stripVTControlCharacters(this.stdout) : this.stdout;
+    expect(output).toContain(contents);
+
+    return this;
   }
 
   withEmptyStdout(): void {
@@ -48,19 +57,14 @@ class BicepCommandTestRunner {
 
   constructor(private readonly args: string[]) {}
 
-  withEnvironmentOverrides(
-    environmentOverrides: EnvironmentOverrides
-  ): BicepCommandTestRunner {
+  withEnvironmentOverrides(environmentOverrides: EnvironmentOverrides): BicepCommandTestRunner {
     this.environmentOverrides = environmentOverrides;
     return this;
   }
 
   shouldSucceed(): StdoutAssertionBuilder {
     const result = this.runCommand();
-
-    if (result.stderr.length > 0) {
-      console.error(result.stderr);
-    }
+    logStdErr(result.stderr);
 
     expect(result.status).toBe(0);
 
@@ -69,6 +73,7 @@ class BicepCommandTestRunner {
 
   shouldFail(): StderrAssertionBuilder {
     const result = this.runCommand();
+
     expect(result.status).toBe(1);
 
     return new StderrAssertionBuilder(result.stderr);
@@ -83,18 +88,15 @@ class BicepCommandTestRunner {
     });
 
     expect(result).toBeTruthy();
+
     if (result.status == null) {
-      throw new Error(
-        `Process terminated prematurely. result = ${JSON.stringify(result)}`
-      );
+      throw new Error(`Process terminated prematurely. result = ${JSON.stringify(result)}`);
     }
 
     return result;
   }
 }
 
-export function invokingBicepCommand(
-  ...args: string[]
-): BicepCommandTestRunner {
+export function invokingBicepCommand(...args: string[]): BicepCommandTestRunner {
   return new BicepCommandTestRunner(args);
 }

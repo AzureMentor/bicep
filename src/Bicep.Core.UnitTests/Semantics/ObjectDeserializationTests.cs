@@ -1,16 +1,12 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Microsoft.WindowsAzure.ResourceStack.Common.Extensions;
-using Newtonsoft.Json.Linq;
-using System.Collections.Generic;
-using Bicep.Core.Semantics;
-using Bicep.Core.Diagnostics;
-using System.Reflection;
 using Bicep.Core.Parsing;
+using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
-using Bicep.Core.Semantics.Namespaces;
+using Bicep.Core.Text;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Newtonsoft.Json.Linq;
 
 namespace Bicep.Core.UnitTests.Semantics
 {
@@ -99,7 +95,7 @@ namespace Bicep.Core.UnitTests.Semantics
         private static void CompareSimpleJSON(string json)
         {
             var arguments = new FunctionArgumentSyntax[4];
-            new YamlObjectParser().TryExtractFromObject(json, null, new IPositionable[] { arguments[0] }, out var errorDiagnostic, out JToken? jToken);
+            new YamlObjectParser().TryExtractFromObject(json, null, [arguments[0]]).IsSuccess(out var jToken);
             var correctList = new List<int> { 1, 2 };
             var correctObject = new Dictionary<string, int> { { "nestedInt", 1 }, };
 
@@ -119,7 +115,7 @@ namespace Bicep.Core.UnitTests.Semantics
         }
 
         [TestMethod]
-        public void Unparseable_YAML()
+        public void Unparsable_YAML()
         {
             var invalidYml = @"
                 string: someVal
@@ -137,12 +133,12 @@ namespace Bicep.Core.UnitTests.Semantics
                     - 2";
 
             var span = new TextSpan(0, 10 - 0);
-            new YamlObjectParser().TryExtractFromObject(invalidYml, null, new IPositionable[] { span }, out var errorDiagnostic, out JToken? jToken);
+            new YamlObjectParser().TryExtractFromObject(invalidYml, null, [span]).IsSuccess(out _, out var errorDiagnostic);
             Assert.AreEqual(errorDiagnostic!.Code, "BCP340");
         }
 
         [TestMethod]
-        public void Unparseable_JSON()
+        public void Unparsable_JSON()
         {
             var invalidJson = @"
                 string: someVal
@@ -160,7 +156,7 @@ namespace Bicep.Core.UnitTests.Semantics
                     - 2";
 
             var span = new TextSpan(0, 10 - 0);
-            new JsonObjectParser().TryExtractFromObject(invalidJson, null, new IPositionable[] { span }, out var errorDiagnostic, out JToken? jToken);
+            new JsonObjectParser().TryExtractFromObject(invalidJson, null, [span]).IsSuccess(out _, out var errorDiagnostic);
             Assert.AreEqual(errorDiagnostic!.Code, "BCP186");
         }
 
@@ -169,7 +165,7 @@ namespace Bicep.Core.UnitTests.Semantics
         {
             var json = COMPLEX_JSON;
             var arguments = new FunctionArgumentSyntax[4];
-            new YamlObjectParser().TryExtractFromObject(json, null, new IPositionable[] { arguments[0] }, out var errorDiagnostic, out JToken? jToken);
+            new YamlObjectParser().TryExtractFromObject(json, null, [arguments[0]]).IsSuccess(out var jToken);
             var expectedValue = "```bicep\ndateTimeFromEpoch([epochTime: int]): string\n\n```\nConverts an epoch time integer value to an [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) dateTime string.\n";
             Assert.AreEqual(expectedValue, jToken!["documentation"]!["value"]);
         }
@@ -192,7 +188,7 @@ namespace Bicep.Core.UnitTests.Semantics
                      zip: 99970";
 
             var arguments = new FunctionArgumentSyntax[4];
-            new YamlObjectParser().TryExtractFromObject(yml, null, new IPositionable[] { arguments[0] }, out var errorDiagnostic, out JToken? jToken);
+            new YamlObjectParser().TryExtractFromObject(yml, null, [arguments[0]]).IsSuccess(out var jToken);
 
             Assert.AreEqual("George Washington", jToken!["name"]);
             Assert.AreEqual("400", jToken["addresses"]!["home"]!["street"]!["house_number"]);

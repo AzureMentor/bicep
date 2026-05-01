@@ -1,19 +1,14 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
+
 using System.Collections.Immutable;
-using Bicep.Core.Diagnostics;
 using Bicep.Core.Navigation;
 using Bicep.Core.Syntax;
 
 namespace Bicep.Core.Parsing
 {
-    public class Parser : BaseParser
+    public class Parser(string text) : BaseParser(text)
     {
-        public Parser(string text) : base(text)
-        {
-        }
-
         public override ProgramSyntax Program()
         {
             var declarationsOrTokens = new List<SyntaxBase>();
@@ -39,7 +34,7 @@ namespace Bicep.Core.Parsing
 
             var endOfFile = reader.Read();
 
-            var programSyntax = new ProgramSyntax(declarationsOrTokens, endOfFile, this.LexingErrorLookup, this.ParsingErrorLookup);
+            var programSyntax = new ProgramSyntax(declarationsOrTokens, endOfFile);
 
             var parsingErrorVisitor = new ParseDiagnosticsVisitor(this.ParsingErrorTree);
             parsingErrorVisitor.Visit(programSyntax);
@@ -47,27 +42,31 @@ namespace Bicep.Core.Parsing
             return programSyntax;
         }
 
-        protected override SyntaxBase Declaration() =>
+        protected override SyntaxBase Declaration(params string[] expectedKeywords) =>
             this.WithRecovery(
                 () =>
                 {
                     var leadingNodes = DecorableSyntaxLeadingNodes().ToImmutableArray();
 
-                    Token current = reader.Peek();
+                    var current = reader.Peek();
 
                     return current.Type switch
                     {
-                        TokenType.Identifier => current.Text switch
+                        TokenType.Identifier => ValidateKeyword(current.Text) switch
                         {
                             LanguageConstants.TargetScopeKeyword => this.TargetScope(leadingNodes),
                             LanguageConstants.MetadataKeyword => this.MetadataDeclaration(leadingNodes),
                             LanguageConstants.TypeKeyword => this.TypeDeclaration(leadingNodes),
                             LanguageConstants.ParameterKeyword => this.ParameterDeclaration(leadingNodes),
                             LanguageConstants.VariableKeyword => this.VariableDeclaration(leadingNodes),
+                            LanguageConstants.FunctionKeyword => this.FunctionDeclaration(leadingNodes),
                             LanguageConstants.ResourceKeyword => this.ResourceDeclaration(leadingNodes),
                             LanguageConstants.OutputKeyword => this.OutputDeclaration(leadingNodes),
                             LanguageConstants.ModuleKeyword => this.ModuleDeclaration(leadingNodes),
+                            LanguageConstants.TestKeyword => this.TestDeclaration(leadingNodes),
                             LanguageConstants.ImportKeyword => this.ImportDeclaration(leadingNodes),
+                            LanguageConstants.ExtensionKeyword => this.ExtensionDeclaration(ExpectKeyword(current.Text), leadingNodes),
+                            LanguageConstants.AssertKeyword => this.AssertDeclaration(leadingNodes),
                             _ => leadingNodes.Length > 0
                                 ? new MissingDeclarationSyntax(leadingNodes)
                                 : throw new ExpectedTokenException(current, b => b.UnrecognizedDeclaration()),
@@ -78,6 +77,9 @@ namespace Bicep.Core.Parsing
                             ? new MissingDeclarationSyntax(leadingNodes)
                             : throw new ExpectedTokenException(current, b => b.UnrecognizedDeclaration()),
                     };
+
+                    string? ValidateKeyword(string keyword) =>
+                        expectedKeywords.Length == 0 || expectedKeywords.Contains(keyword) ? keyword : null;
                 },
                 RecoveryFlags.None,
                 TokenType.NewLine);
@@ -99,16 +101,6 @@ namespace Bicep.Core.Parsing
             var value = this.WithRecovery(() => this.Expression(ExpressionFlags.AllowComplexLiterals), GetSuppressionFlag(assignment), TokenType.NewLine);
 
             return new MetadataDeclarationSyntax(leadingNodes, keyword, name, assignment, value);
-        }
-
-        private SyntaxBase TypeDeclaration(IEnumerable<SyntaxBase> leadingNodes)
-        {
-            var keyword = ExpectKeyword(LanguageConstants.TypeKeyword);
-            var name = this.IdentifierWithRecovery(b => b.ExpectedVariableIdentifier(), RecoveryFlags.None, TokenType.Assignment, TokenType.NewLine);
-            var assignment = this.WithRecovery(this.Assignment, GetSuppressionFlag(name), TokenType.NewLine);
-            var value = this.WithRecovery(() => Type(allowOptionalResourceType: false), GetSuppressionFlag(name), TokenType.Assignment, TokenType.LeftBrace, TokenType.NewLine);
-
-            return new TypeDeclarationSyntax(leadingNodes, keyword, name, assignment, value);
         }
 
         private SyntaxBase ParameterDeclaration(IEnumerable<SyntaxBase> leadingNodes)
@@ -148,16 +140,6 @@ namespace Bicep.Core.Parsing
             return new ParameterDefaultValueSyntax(assignmentToken, defaultValue);
         }
 
-        private SyntaxBase VariableDeclaration(IEnumerable<SyntaxBase> leadingNodes)
-        {
-            var keyword = ExpectKeyword(LanguageConstants.VariableKeyword);
-            var name = this.IdentifierWithRecovery(b => b.ExpectedVariableIdentifier(), RecoveryFlags.None, TokenType.Assignment, TokenType.NewLine);
-            var assignment = this.WithRecovery(this.Assignment, GetSuppressionFlag(name), TokenType.NewLine);
-            var value = this.WithRecovery(() => this.Expression(ExpressionFlags.AllowComplexLiterals), GetSuppressionFlag(assignment), TokenType.NewLine);
-
-            return new VariableDeclarationSyntax(leadingNodes, keyword, name, assignment, value);
-        }
-
         private SyntaxBase OutputDeclaration(IEnumerable<SyntaxBase> leadingNodes)
         {
             var keyword = ExpectKeyword(LanguageConstants.OutputKeyword);
@@ -183,6 +165,10 @@ namespace Bicep.Core.Parsing
             var existingKeyword = GetOptionalKeyword(LanguageConstants.ExistingKeyword);
             var assignment = this.WithRecovery(this.Assignment, GetSuppressionFlag(type), TokenType.LeftBrace, TokenType.NewLine);
 
+            var newlines = !assignment.IsSkipped && reader.Peek(skipNewlines: true).IsKeyword(LanguageConstants.IfKeyword)
+                ? this.NewLines().ToImmutableArray()
+                : [];
+
             var value = this.WithRecovery(() =>
                 {
                     var current = reader.Peek();
@@ -197,7 +183,7 @@ namespace Bicep.Core.Parsing
                 GetSuppressionFlag(assignment),
                 TokenType.NewLine);
 
-            return new ResourceDeclarationSyntax(leadingNodes, keyword, name, type, existingKeyword, assignment, value);
+            return new ResourceDeclarationSyntax(leadingNodes, keyword, name, type, existingKeyword, assignment, newlines, value);
         }
 
         private SyntaxBase ModuleDeclaration(IEnumerable<SyntaxBase> leadingNodes)
@@ -212,6 +198,10 @@ namespace Bicep.Core.Parsing
                 TokenType.Assignment, TokenType.NewLine);
 
             var assignment = this.WithRecovery(this.Assignment, GetSuppressionFlag(path), TokenType.LeftBrace, TokenType.NewLine);
+            var newlines = reader.Peek(skipNewlines: true).IsKeyword(LanguageConstants.IfKeyword)
+                ? this.NewLines().ToImmutableArray()
+                : [];
+
             var value = this.WithRecovery(() =>
                 {
                     var current = reader.Peek();
@@ -226,52 +216,61 @@ namespace Bicep.Core.Parsing
                 GetSuppressionFlag(assignment),
                 TokenType.NewLine);
 
-            return new ModuleDeclarationSyntax(leadingNodes, keyword, name, path, assignment, value);
+            return new ModuleDeclarationSyntax(leadingNodes, keyword, name, path, assignment, newlines, value);
         }
-
-        private ImportDeclarationSyntax ImportDeclaration(IEnumerable<SyntaxBase> leadingNodes)
+        private SyntaxBase TestDeclaration(IEnumerable<SyntaxBase> leadingNodes)
         {
-            var keyword = ExpectKeyword(LanguageConstants.ImportKeyword);
-            var providerSpecification = this.WithRecovery(
-                () => ThrowIfSkipped(this.InterpolableString, b => b.ExpectedProviderSpecification()),
-                RecoveryFlags.None,
-                TokenType.Assignment,
+            var keyword = ExpectKeyword(LanguageConstants.TestKeyword);
+            var name = this.IdentifierWithRecovery(b => b.ExpectedTestIdentifier(), RecoveryFlags.None, TokenType.StringComplete, TokenType.StringLeftPiece, TokenType.NewLine);
+
+            // TODO: Unify StringSyntax with TypeSyntax
+            var path = this.WithRecovery(
+                () => ThrowIfSkipped(this.InterpolableString, b => b.ExpectedTestPathString()),
+                GetSuppressionFlag(name),
+                TokenType.Assignment, TokenType.NewLine);
+
+            var assignment = this.WithRecovery(this.Assignment, GetSuppressionFlag(path), TokenType.LeftBrace, TokenType.NewLine);
+
+            var value = this.WithRecovery(() =>
+                {
+                    var current = reader.Peek();
+                    return current.Type switch
+                    {
+                        TokenType.LeftBrace => this.Object(ExpressionFlags.AllowComplexLiterals),
+                        _ => throw new ExpectedTokenException(current, b => b.ExpectedCharacter("{"))
+                    };
+                },
+                GetSuppressionFlag(assignment),
                 TokenType.NewLine);
 
-            var withClause = this.reader.Peek().Type switch
-            {
-                TokenType.EndOfFile or
-                TokenType.NewLine or
-                TokenType.AsKeyword => this.SkipEmpty(),
-
-                _ => this.WithRecovery(() => this.ImportWithClause(), GetSuppressionFlag(providerSpecification), TokenType.NewLine),
-            };
-
-            var asClause = this.reader.Peek().Type switch
-            {
-                TokenType.EndOfFile or
-                TokenType.NewLine => this.SkipEmpty(),
-
-                _ => this.WithRecovery(() => this.ImportAsClause(), GetSuppressionFlag(withClause), TokenType.NewLine),
-            };
-
-            return new(leadingNodes, keyword, providerSpecification, withClause, asClause);
+            return new TestDeclarationSyntax(leadingNodes, keyword, name, path, assignment, value);
         }
 
-        private ImportWithClauseSyntax ImportWithClause()
+        private SyntaxBase ImportDeclaration(IEnumerable<SyntaxBase> leadingNodes)
         {
-            var keyword = this.Expect(TokenType.WithKeyword, b => b.ExpectedWithOrAsKeywordOrNewLine());
-            var config = this.WithRecovery(() => this.Object(ExpressionFlags.AllowComplexLiterals), RecoveryFlags.None, TokenType.AsKeyword, TokenType.NewLine);
+            var keyword = ExpectKeyword(LanguageConstants.ImportKeyword);
 
-            return new(keyword, config);
+            // Provider namespace declarations use the `provider` keyword as of Bicep 0.23, but to avoid breaking
+            // extensibility users without warning, the `import` keyword is shared between provider declarations and
+            // compile-time imports. If the token following the keyword is a string, assume the statement is a provider
+            // declaration.
+            // TODO(extensibility): Consider removing this
+            return reader.Peek().Type switch
+            {
+                TokenType.StringLeftPiece or
+                TokenType.StringComplete => ExtensionDeclaration(keyword, leadingNodes),
+                _ => CompileTimeImportDeclaration(keyword, leadingNodes),
+            };
         }
 
-        private ImportAsClauseSyntax ImportAsClause()
+        private SyntaxBase AssertDeclaration(IEnumerable<SyntaxBase> leadingNodes)
         {
-            var keyword = this.Expect(TokenType.AsKeyword, b => b.ExpectedKeyword(LanguageConstants.AsKeyword));
-            var modifier = this.IdentifierWithRecovery(b => b.ExpectedImportAliasName(), RecoveryFlags.None, TokenType.NewLine);
+            var keyword = ExpectKeyword(LanguageConstants.AssertKeyword);
+            var name = this.IdentifierWithRecovery(b => b.ExpectedAssertIdentifier(), RecoveryFlags.None, TokenType.Assignment, TokenType.NewLine);
+            var assignment = this.WithRecovery(this.Assignment, GetSuppressionFlag(name), TokenType.NewLine);
+            var value = this.WithRecovery(() => this.Expression(ExpressionFlags.AllowComplexLiterals), GetSuppressionFlag(assignment), TokenType.NewLine);
 
-            return new(keyword, modifier);
+            return new AssertDeclarationSyntax(leadingNodes, keyword, name, assignment, value);
         }
     }
 }

@@ -1,9 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
 using System.Diagnostics;
 using Bicep.Core.Diagnostics;
-using Bicep.Core.Parsing;
+using Bicep.Core.Text;
 
 namespace Bicep.Core.Semantics
 {
@@ -32,12 +31,12 @@ namespace Bicep.Core.Semantics
 
         public abstract SymbolKind Kind { get; }
 
-        public virtual IEnumerable<ErrorDiagnostic> GetDiagnostics()
+        public virtual IEnumerable<IDiagnostic> GetDiagnostics()
         {
             yield break;
         }
 
-        protected ErrorDiagnostic CreateError(IPositionable positionable, DiagnosticBuilder.ErrorBuilderDelegate errorFunc)
-            => errorFunc(DiagnosticBuilder.ForPosition(positionable));
+        protected Diagnostic CreateDiagnostic(IPositionable positionable, DiagnosticBuilder.DiagnosticBuilderDelegate diagnosticBuilder)
+            => diagnosticBuilder(DiagnosticBuilder.ForPosition(positionable));
     }
 }

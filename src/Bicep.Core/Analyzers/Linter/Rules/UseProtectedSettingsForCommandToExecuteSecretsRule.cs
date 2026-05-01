@@ -1,14 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Bicep.Core.Diagnostics;
+using System.Collections.Immutable;
 using Bicep.Core.Analyzers.Linter.Common;
+using Bicep.Core.Diagnostics;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
-using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
 
 namespace Bicep.Core.Analyzers.Linter.Rules
 {
@@ -16,19 +13,20 @@ namespace Bicep.Core.Analyzers.Linter.Rules
     {
         public new const string Code = "protect-commandtoexecute-secrets";
 
-        private static readonly ImmutableArray<(string publisher, string type)> _publisherAndNameList = ImmutableArray.Create<(string publisher, string type)>(
-            // NOTE: This list was obtained by running "az vm extension image list"
+        private static readonly ImmutableArray<(string publisher, string type)> publisherAndNameList =
+        [
             ("Microsoft.Azure.Extensions", "CustomScript"),
             ("Microsoft.Compute", "CustomScriptExtension"),
             ("Microsoft.OSTCExtensions", "CustomScriptForLinux")
-        );
+,
+        ];
 
-        public static ImmutableArray<(string publisher, string type)> PublisherAndNameList => _publisherAndNameList;
+        public static ImmutableArray<(string publisher, string type)> PublisherAndNameList => publisherAndNameList;
 
         public ProtectCommandToExecuteSecretsRule() : base(
             code: Code,
             description: CoreResources.ProtectCommandToExecuteSecretsRuleDescription,
-            docUri: new Uri($"https://aka.ms/bicep/linter/{Code}")
+            LinterRuleCategory.Security
         )
         { }
 
@@ -82,9 +80,10 @@ namespace Bicep.Core.Analyzers.Linter.Rules
                                 {
                                     // Does it contain any possible secrets?
                                     var secrets = FindPossibleSecretsVisitor.FindPossibleSecretsInExpression(semanticModel, commandToExecuteSyntax.Value);
-                                    if (secrets.Any())
+
+                                    if (secrets.FirstOrDefault() is { } secret)
                                     {
-                                        diagnostics.Add(CreateDiagnosticForSpan(diagnosticLevel, commandToExecuteSyntax.Key.Span, secrets[0].FoundMessage));
+                                        diagnostics.Add(CreateDiagnosticForSpan(diagnosticLevel, commandToExecuteSyntax.Key.Span, secret.FoundMessage));
                                     }
                                 }
                             }

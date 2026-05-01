@@ -1,14 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using System.Reflection;
-using System.Linq;
-using FluentAssertions;
 using System.Text.RegularExpressions;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Bicep.Core.UnitTests.Assertions;
+using FluentAssertions;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Bicep.Core.UnitTests.Baselines;
 
@@ -39,6 +36,6 @@ public sealed class EmbeddedFilesTestDataAttribute : Attribute, ITestDataSource
     {
         var file = (data?[0] as EmbeddedFile)!;
 
-        return $"{methodInfo.Name}({file.StreamPath})";
+        return $"{methodInfo.Name} ({file.StreamPath})";
     }
 }

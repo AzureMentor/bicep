@@ -1,5 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+
 using Bicep.Core.Parsing;
 
 namespace Bicep.Core.Syntax
@@ -28,9 +29,13 @@ namespace Bicep.Core.Syntax
 
         void VisitModuleDeclarationSyntax(ModuleDeclarationSyntax syntax);
 
+        void VisitTestDeclarationSyntax(TestDeclarationSyntax syntax);
+
         void VisitNullableTypeSyntax(NullableTypeSyntax syntax);
 
         void VisitNullLiteralSyntax(NullLiteralSyntax syntax);
+
+        void VisitNoneLiteralSyntax(NoneLiteralSyntax syntax);
 
         void VisitIntegerLiteralSyntax(IntegerLiteralSyntax syntax);
 
@@ -98,6 +103,8 @@ namespace Bicep.Core.Syntax
 
         void VisitLocalVariableSyntax(LocalVariableSyntax syntax);
 
+        void VisitAssertDeclarationSyntax(AssertDeclarationSyntax syntax);
+
         void VisitIfConditionSyntax(IfConditionSyntax syntax);
 
         void VisitForSyntax(ForSyntax syntax);
@@ -108,16 +115,72 @@ namespace Bicep.Core.Syntax
 
         void VisitMissingDeclarationSyntax(MissingDeclarationSyntax syntax);
 
-        void VisitImportDeclarationSyntax(ImportDeclarationSyntax syntax);
+        void VisitExtensionDeclarationSyntax(ExtensionDeclarationSyntax syntax);
 
-        void VisitImportWithClauseSyntax(ImportWithClauseSyntax syntax);
+        void VisitExtensionConfigAssignmentSyntax(ExtensionConfigAssignmentSyntax syntax);
 
-        void VisitImportAsClauseSyntax(ImportAsClauseSyntax syntax);
+        void VisitExtensionWithClauseSyntax(ExtensionWithClauseSyntax syntax);
+
+        void VisitAliasAsClauseSyntax(AliasAsClauseSyntax syntax);
 
         void VisitUsingDeclarationSyntax(UsingDeclarationSyntax syntax);
+
+        void VisitUsingWithClauseSyntax(UsingWithClauseSyntax syntax);
+
+        void VisitExtendsDeclarationSyntax(ExtendsDeclarationSyntax syntax);
 
         void VisitLambdaSyntax(LambdaSyntax syntax);
 
         void VisitNonNullAssertionSyntax(NonNullAssertionSyntax syntax);
+
+        void VisitTypedVariableBlockSyntax(TypedVariableBlockSyntax syntax);
+
+        void VisitTypedLocalVariableSyntax(TypedLocalVariableSyntax syntax);
+
+        void VisitTypedLambdaSyntax(TypedLambdaSyntax syntax);
+
+        void VisitFunctionDeclarationSyntax(FunctionDeclarationSyntax syntax);
+
+        void VisitCompileTimeImportDeclarationSyntax(CompileTimeImportDeclarationSyntax syntax);
+
+        void VisitImportedSymbolsListSyntax(ImportedSymbolsListSyntax syntax);
+
+        void VisitImportedSymbolsListItemSyntax(ImportedSymbolsListItemSyntax syntax);
+
+        void VisitWildcardImportSyntax(WildcardImportSyntax syntax);
+
+        void VisitCompileTimeImportFromClauseSyntax(CompileTimeImportFromClauseSyntax syntax);
+
+        void VisitParameterizedTypeInstantiationSyntax(ParameterizedTypeInstantiationSyntax syntax);
+
+        void VisitInstanceParameterizedTypeInstantiationSyntax(InstanceParameterizedTypeInstantiationSyntax syntax);
+
+        void VisitParameterizedTypeArgumentSyntax(ParameterizedTypeArgumentSyntax syntax);
+
+        void VisitTypePropertyAccessSyntax(TypePropertyAccessSyntax syntax);
+
+        void VisitTypeAdditionalPropertiesAccessSyntax(TypeAdditionalPropertiesAccessSyntax syntax);
+
+        void VisitTypeArrayAccessSyntax(TypeArrayAccessSyntax syntax);
+
+        void VisitTypeItemsAccessSyntax(TypeItemsAccessSyntax syntax);
+
+        void VisitTypeVariableAccessSyntax(TypeVariableAccessSyntax syntax);
+
+        void VisitStringTypeLiteralSyntax(StringTypeLiteralSyntax syntax);
+
+        void VisitIntegerTypeLiteralSyntax(IntegerTypeLiteralSyntax syntax);
+
+        void VisitBooleanTypeLiteralSyntax(BooleanTypeLiteralSyntax syntax);
+
+        void VisitNullTypeLiteralSyntax(NullTypeLiteralSyntax syntax);
+
+        void VisitUnaryTypeOperationSyntax(UnaryTypeOperationSyntax syntax);
+
+        void VisitNonNullableTypeSyntax(NonNullableTypeSyntax syntax);
+
+        void VisitParenthesizedTypeSyntax(ParenthesizedTypeSyntax syntax);
+
+        void VisitSpreadExpressionSyntax(SpreadExpressionSyntax syntax);
     }
 }

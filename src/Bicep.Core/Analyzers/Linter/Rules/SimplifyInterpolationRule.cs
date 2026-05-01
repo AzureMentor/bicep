@@ -4,13 +4,9 @@
 using Bicep.Core.Analyzers.Linter.Common;
 using Bicep.Core.CodeAction;
 using Bicep.Core.Diagnostics;
-using Bicep.Core.Navigation;
-using Bicep.Core.Parsing;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using Bicep.Core.Text;
 
 namespace Bicep.Core.Analyzers.Linter.Rules
 {
@@ -21,7 +17,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
         public SimplifyInterpolationRule() : base(
             code: Code,
             description: CoreResources.SimplifyInterpolationRuleDescription,
-            docUri: new Uri($"https://aka.ms/bicep/linter/{Code}"))
+            LinterRuleCategory.Style)
         { }
 
         public override IEnumerable<IDiagnostic> AnalyzeInternal(SemanticModel model, DiagnosticLevel diagnosticLevel)
@@ -91,14 +87,14 @@ namespace Bicep.Core.Analyzers.Linter.Rules
                 // resource AutomationAccount 'Microsoft.Automation/automationAccounts@2020-01-13-preview' = {
                 //   name: '${AutomationAccountName}'   <<= a string literal with a single interpolated value
 
-                if (valueSyntax is StringSyntax strSyntax && TrySimplify(strSyntax) is {} expression)
+                if (valueSyntax is StringSyntax strSyntax && TrySimplify(strSyntax) is { } expression)
                 {
                     // We only want to trigger if the expression is of type string (because interpolation
                     // using non-string types can be a perfectly valid way to convert to string, e.g. '${intVar}')
                     var type = model.GetTypeInfo(expression);
                     if (type.IsString())
                     {
-                        AddCodeFix(valueSyntax.Span, expression.ToText());
+                        AddCodeFix(valueSyntax.Span, expression.ToString());
                     }
                 }
                 return null;

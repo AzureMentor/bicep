@@ -60,7 +60,10 @@ var hyperVSubnetNSGName = '${hyperVSubnetName}NSG'
 var ghostedSubnetNSGName = '${ghostedSubnetName}NSG'
 var azureVMsSubnetNSGName = '${azureVMsSubnetName}NSG'
 var azureVMsSubnetUDRName = '${azureVMsSubnetName}UDR'
-var DSCInstallWindowsFeaturesUri = uri(_artifactsLocation, 'dsc/dscinstallwindowsfeatures.zip${_artifactsLocationSasToken}')
+var DSCInstallWindowsFeaturesUri = uri(
+  _artifactsLocation,
+  'dsc/dscinstallwindowsfeatures.zip${_artifactsLocationSasToken}'
+)
 var HVHostSetupScriptUri = uri(_artifactsLocation, 'hvhostsetup.ps1${_artifactsLocationSasToken}')
 
 resource publicIp 'Microsoft.Network/publicIpAddresses@2019-04-01' = {
@@ -106,9 +109,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2019-04-01' = {
   location: location
   properties: {
     addressSpace: {
-      addressPrefixes: [
-        virtualNetworkAddressPrefix
-      ]
+      addressPrefixes: [virtualNetworkAddressPrefix]
     }
     subnets: [
       {
@@ -299,9 +300,7 @@ resource hostVmSetupExtension 'Microsoft.Compute/virtualMachines/extensions@2019
     typeHandlerVersion: '1.9'
     autoUpgradeMinorVersion: true
     settings: {
-      fileUris: [
-        HVHostSetupScriptUri
-      ]
+      fileUris: [HVHostSetupScriptUri]
       commandToExecute: 'powershell -ExecutionPolicy Unrestricted -File HVHostSetup.ps1 -NIC1IPAddress ${createNic1.outputs.assignedIp} -NIC2IPAddress ${createNic2.outputs.assignedIp} -GhostedSubnetPrefix ${ghostedSubnetPrefix} -VirtualNetworkPrefix ${virtualNetworkAddressPrefix}'
     }
   }

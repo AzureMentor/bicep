@@ -17,9 +17,9 @@ namespace Bicep.VSLanguageServerClient.MiddleLayerProviders
     /// Also choice snippet pattern is not currently supported by vs lsp. To workaround this issue, we will convert choice snippet
     /// pattern to placeholder snippet pattern.
     /// </summary>
-    public class HandleSnippetCompletionsMiddleLayer : ILanguageClientMiddleLayer
+    public class HandleSnippetCompletionsMiddleLayer : ILanguageClientMiddleLayer2<JToken>
     {
-        private static readonly Regex ChoiceSnippetPlaceholderPattern = new Regex(@"\${\d+\|(.*)\|}", RegexOptions.Compiled | RegexOptions.ExplicitCapture);
+        private static readonly Regex ChoiceSnippetPlaceholderPattern = new(@"\${\d+\|(.*)\|}", RegexOptions.Compiled | RegexOptions.ExplicitCapture);
         private readonly bool ShouldShowSnippets;
 
         public HandleSnippetCompletionsMiddleLayer(string vsInstallationVersion)
@@ -47,7 +47,7 @@ namespace Bicep.VSLanguageServerClient.MiddleLayerProviders
             if (CanHandle(methodName))
             {
                 JToken? jToken = await sendRequest(methodParam);
-                List<CompletionItem> updatedCompletions = new List<CompletionItem>();
+                List<CompletionItem> updatedCompletions = new();
 
                 if (jToken is not null)
                 {
@@ -113,10 +113,10 @@ namespace Bicep.VSLanguageServerClient.MiddleLayerProviders
                 var replacementText = regexForSlash.Replace(value, ":", 1);
                 replacementText = regexForSlash.Replace(replacementText, string.Empty);
 
-                var firstOccurenceOfComma = replacementText.IndexOf(',');
-                var lastOccurenceOfCloseCurlyBrace = replacementText.LastIndexOf('}');
+                var firstOccurrenceOfComma = replacementText.IndexOf(',');
+                var lastOccurrenceOfCloseCurlyBrace = replacementText.LastIndexOf('}');
 
-                var remainingChoices = replacementText.Substring(firstOccurenceOfComma, lastOccurenceOfCloseCurlyBrace - firstOccurenceOfComma);
+                var remainingChoices = replacementText.Substring(firstOccurrenceOfComma, lastOccurrenceOfCloseCurlyBrace - firstOccurrenceOfComma);
                 replacementText = replacementText.Replace(remainingChoices, string.Empty);
 
                 text = text.Replace(value, replacementText);

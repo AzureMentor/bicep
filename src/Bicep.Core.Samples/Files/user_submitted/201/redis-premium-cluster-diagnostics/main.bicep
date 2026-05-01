@@ -5,30 +5,15 @@ param redisCacheName string
 param location string = resourceGroup().location
 
 @description('Specify the pricing tier of the new Azure Redis Cache.')
-@allowed([
-  'Basic'
-  'Standard'
-  'Premium'
-])
+@allowed(['Basic', 'Standard', 'Premium'])
 param redisCacheSKU string = 'Premium'
 
 @description('Specify the family for the sku. C = Basic/Standard, P = Premium.')
-@allowed([
-  'C'
-  'P'
-])
+@allowed(['C', 'P'])
 param redisCacheFamily string = 'P'
 
 @description('Specify the size of the new Azure Redis Cache instance. Valid values: for C (Basic/Standard) family (0, 1, 2, 3, 4, 5, 6), for P (Premium) family (1, 2, 3, 4)')
-@allowed([
-  0
-  1
-  2
-  3
-  4
-  5
-  6
-])
+@allowed([0, 1, 2, 3, 4, 5, 6])
 param redisCacheCapacity int = 1
 
 @description('Set to true to allow access to redis on port 6379, without SSL tunneling (less secure).')
@@ -59,15 +44,5 @@ resource diagSettings 'Microsoft.Insights/diagnosticsettings@2017-05-01-preview'
   name: redisCacheName
   properties: {
     storageAccountId: existingDiagnosticsStorageAccountId
-    metrics: [
-      {
-        timeGrain: 'AllMetrics'
-        enabled: diagnosticsEnabled
-        retentionPolicy: {
-          days: 90
-          enabled: diagnosticsEnabled
-        }
-      }
-    ]
   }
 }

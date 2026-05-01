@@ -13,7 +13,7 @@ param hostpoolDescription string = ''
 @description('The location where the resources will be deployed.')
 param location string
 
-@description('The name of the workspace to be attach to new Applicaiton Group.')
+@description('The name of the workspace to be attach to new Application Group.')
 param workSpaceName string = ''
 
 @description('The location of the workspace.')
@@ -42,58 +42,25 @@ param vmAdministratorAccountUsername string = ''
 @secure()
 param vmAdministratorAccountPassword string = ''
 
-@allowed([
-  'None'
-  'AvailabilitySet'
-  'AvailabilityZone'
-])
+@allowed(['None', 'AvailabilitySet', 'AvailabilityZone'])
 @description('Select the availability options for the VMs.')
 param availabilityOption string = 'None'
 
-@description('The name of avaiability set to be used when create the VMs.')
+@description('The name of availability set to be used when create the VMs.')
 param availabilitySetName string = ''
 
 @description('Whether to create a new availability set for the VMs.')
 param createAvailabilitySet bool = false
 
-@allowed([
-  1
-  2
-  3
-  4
-  5
-  6
-  7
-  8
-  9
-  10
-  11
-  12
-  13
-  14
-  15
-  16
-  17
-  18
-  19
-  20
-])
-@description('The platform update domain count of avaiability set to be created.')
+@allowed([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
+@description('The platform update domain count of availability set to be created.')
 param availabilitySetUpdateDomainCount int = 5
 
-@allowed([
-  1
-  2
-  3
-])
-@description('The platform fault domain count of avaiability set to be created.')
+@allowed([1, 2, 3])
+@description('The platform fault domain count of availability set to be created.')
 param availabilitySetFaultDomainCount int = 2
 
-@allowed([
-  1
-  2
-  3
-])
+@allowed([1, 2, 3])
 @description('The number of availability zone to be used when create the VMs.')
 param availabilityZone int = 1
 
@@ -112,11 +79,7 @@ param vmNumberOfInstances int = 0
 @description('This prefix will be used in combination with the VM number to create the VM name. If using \'rdsh\' as the prefix, VMs would be named \'rdsh-0\', \'rdsh-1\', etc. You should use a unique prefix to reduce name collisions in Active Directory.')
 param vmNamePrefix string = ''
 
-@allowed([
-  'CustomVHD'
-  'CustomImage'
-  'Gallery'
-])
+@allowed(['CustomVHD', 'CustomImage', 'Gallery'])
 @description('Select the image source for the session host vms. VMs from a Gallery image will be created with Managed Disks.')
 param vmImageType string = 'Gallery'
 
@@ -135,11 +98,7 @@ param vmImageVhdUri string = ''
 @description('(Required when vmImageType = CustomImage) Resource ID of the image')
 param vmCustomImageSourceId string = ''
 
-@allowed([
-  'Premium_LRS'
-  'StandardSSD_LRS'
-  'Standard_LRS'
-])
+@allowed(['Premium_LRS', 'StandardSSD_LRS', 'Standard_LRS'])
 @description('The VM disk type for the VM: HDD or SSD.')
 param vmDiskType string = 'StandardSSD_LRS'
 
@@ -167,29 +126,18 @@ param networkSecurityGroupId string = ''
 @description('The rules to be given to the new network security group')
 param networkSecurityGroupRules array = []
 
-@allowed([
-  'Personal'
-  'Pooled'
-])
+@allowed(['Personal', 'Pooled'])
 @description('Set this parameter to Personal if you would like to enable Persistent Desktop experience. Defaults to false.')
 param hostpoolType string
 
-@allowed([
-  'Automatic'
-  'Direct'
-  ''
-])
+@allowed(['Automatic', 'Direct', ''])
 @description('Set the type of assignment for a Personal hostpool type')
 param personalDesktopAssignmentType string = ''
 
 @description('Maximum number of sessions.')
 param maxSessionLimit int = 99999
 
-@allowed([
-  'BreadthFirst'
-  'DepthFirst'
-  'Persistent'
-])
+@allowed(['BreadthFirst', 'DepthFirst', 'Persistent'])
 @description('Type of load balancer algorithm.')
 param loadBalancerType string = 'BreadthFirst'
 
@@ -229,7 +177,7 @@ param apiVersion string = '2019-12-10-preview'
 @description('GUID for the deployment')
 param deploymentId string = ''
 
-@description('Whether to use validation enviroment.')
+@description('Whether to use validation environment.')
 param validationEnvironment bool = false
 
 @description('Preferred App Group type to display')
@@ -252,21 +200,28 @@ var rdshManagedDisks = ((vmImageType == 'CustomVHD') ? vmUseManagedDisks : bool(
 var rdshPrefix = '${vmNamePrefix}-'
 var avSetSKU = (rdshManagedDisks ? 'Aligned' : 'Classic')
 var vhds = 'vhds/${rdshPrefix}'
-var subnet_id = resourceId(virtualNetworkResourceGroupName, 'Microsoft.Network/virtualNetworks/subnets', existingVnetName, existingSubnetName)
+var subnet_id = resourceId(
+  virtualNetworkResourceGroupName,
+  'Microsoft.Network/virtualNetworks/subnets',
+  existingVnetName,
+  existingSubnetName
+)
 var hostpoolName_var = replace(hostpoolName, '"', '')
-var rdshVmNamesOutput = [for j in range(0, (createVMs ? vmNumberOfInstances : 1)): {
-  name: '${rdshPrefix}${j}'
-}]
-var appGroupName_var = '${hostpoolName_var}-DAG'
-var appGroupResourceId = [
-  resourceId('Microsoft.DesktopVirtualization/applicationgroups/', appGroupName_var)
+var rdshVmNamesOutput = [
+  for j in range(0, (createVMs ? vmNumberOfInstances : 1)): {
+    name: '${rdshPrefix}${j}'
+  }
 ]
+var appGroupName_var = '${hostpoolName_var}-DAG'
+var appGroupResourceId = [resourceId('Microsoft.DesktopVirtualization/applicationgroups/', appGroupName_var)]
 var workspaceResourceGroup_var = (empty(workspaceResourceGroup) ? resourceGroup().name : workspaceResourceGroup)
-var applicationGroupReferencesArr = (('' == allApplicationGroupReferences) ? appGroupResourceId : concat(split(allApplicationGroupReferences, ','), appGroupResourceId))
+var applicationGroupReferencesArr = (('' == allApplicationGroupReferences)
+  ? appGroupResourceId
+  : concat(split(allApplicationGroupReferences, ','), appGroupResourceId))
 var hostpoolRequiredProps = {
   friendlyName: hostpoolFriendlyName
   description: hostpoolDescription
-  hostpoolType: hostpoolType
+  hostPoolType: hostpoolType
   personalDesktopAssignmentType: personalDesktopAssignmentType
   maxSessionLimit: maxSessionLimit
   loadBalancerType: loadBalancerType
@@ -325,9 +280,7 @@ module AVSet './modules/AVSet.bicep' = if (createVMs && (availabilityOption == '
     availabilitySetFaultDomainCount: availabilitySetFaultDomainCount
     avSetSKU: avSetSKU
   }
-  dependsOn: [
-    appGroupName
-  ]
+  dependsOn: [appGroupName]
 }
 
 // Deploy vmImageType = CustomVHD, managed disks
@@ -372,9 +325,7 @@ module vmCreation_customVHD_managedDisks './modules/managedDisks-customvhdvm.bic
     intune: intune
     guidValue: deploymentId
   }
-  dependsOn: [
-    AVSet
-  ]
+  dependsOn: [AVSet]
 }
 
 // Deploy vmImageType = CustomVHD, unmanaged disks
@@ -419,13 +370,11 @@ module vmCreation_customVHD_unmanagedDisks './modules/unmanagedDisks-customvhdvm
     intune: intune
     guidValue: deploymentId
   }
-  dependsOn: [
-    AVSet
-  ]
+  dependsOn: [AVSet]
 }
 
 // Deploy vmImageType = CustomImage
-module vmCreation_customeImage './modules/managedDisks-customimagevm.bicep' = if ((createVMs) && (vmImageType == 'CustomImage')) {
+module vmCreation_customImage './modules/managedDisks-customimagevm.bicep' = if ((createVMs) && (vmImageType == 'CustomImage')) {
   name: 'vmCreation-linkedTemplate-${deploymentId}-managedDisks-customimagevm'
   scope: resourceGroup(vmResourceGroup)
   params: {
@@ -466,9 +415,7 @@ module vmCreation_customeImage './modules/managedDisks-customimagevm.bicep' = if
     intune: intune
     guidValue: deploymentId
   }
-  dependsOn: [
-    AVSet
-  ]
+  dependsOn: [AVSet]
 }
 
 // Deploy vmImageType = CustomVHD, managed disks
@@ -513,9 +460,7 @@ module vmCreation_Gallery './modules/managedDisks-galleryvm.bicep' = if ((create
     intune: intune
     guidValue: deploymentId
   }
-  dependsOn: [
-    AVSet
-  ]
+  dependsOn: [AVSet]
 }
 
 output rdshVmNamesObject array = rdshVmNamesOutput

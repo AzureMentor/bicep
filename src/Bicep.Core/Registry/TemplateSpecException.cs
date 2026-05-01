@@ -1,11 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-
 namespace Bicep.Core.Registry
 {
-    public class TemplateSpecException : ExternalModuleException
+    public class TemplateSpecException : ExternalArtifactException
     {
         public TemplateSpecException(string message)
             : base(message)

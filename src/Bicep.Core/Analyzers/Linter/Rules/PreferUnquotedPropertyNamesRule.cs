@@ -1,16 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Diagnostics.CodeAnalysis;
 using Bicep.Core.CodeAction;
 using Bicep.Core.Diagnostics;
-using Bicep.Core.Navigation;
 using Bicep.Core.Parsing;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.Linq;
+using Bicep.Core.Text;
 
 namespace Bicep.Core.Analyzers.Linter.Rules
 {
@@ -21,7 +18,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
         public PreferUnquotedPropertyNamesRule() : base(
             code: Code,
             description: CoreResources.PreferUnquotedPropertyNamesRule_Description,
-            docUri: new Uri($"https://aka.ms/bicep/linter/{Code}"))
+            LinterRuleCategory.Style)
         { }
 
         public override IEnumerable<IDiagnostic> AnalyzeInternal(SemanticModel model, DiagnosticLevel diagnosticLevel)
@@ -57,7 +54,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
                 if (TryGetValidIdentifierToken(syntax.IndexExpression, out string? literal))
                 {
                     var replacement = $".{literal}";
-                    var message = string.Format(CoreResources.PreferUnquotedPropertyNames_DereferenceFixTitle, $"{syntax.BaseExpression.ToText()}{replacement}");
+                    var message = string.Format(CoreResources.PreferUnquotedPropertyNames_DereferenceFixTitle, $"{syntax.BaseExpression}{replacement}");
                     AddCodeFix(TextSpan.Between(syntax.OpenSquare, syntax.CloseSquare), replacement, message);
                 }
 
@@ -73,10 +70,9 @@ namespace Bicep.Core.Analyzers.Linter.Rules
 
             private static bool TryGetValidIdentifierToken(SyntaxBase syntax, [NotNullWhen(true)] out string? validToken)
             {
-                if (syntax is StringSyntax @string)
+                if (syntax is StringSyntax stringSyntax && stringSyntax.TryGetLiteralValue() is { } literalValue)
                 {
-                    string? literalValue = @string.TryGetLiteralValue();
-                    if (literalValue is not null && Lexer.IsValidIdentifier(literalValue))
+                    if (!StringUtils.IsPropertyNameEscapingRequired(literalValue))
                     {
                         validToken = literalValue;
                         return true;

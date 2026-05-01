@@ -1,25 +1,19 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using System.Linq;
-using System.Security.Policy;
 using Bicep.Core;
-using Bicep.Core.Analyzers.Interfaces;
 using Bicep.Core.Analyzers.Linter;
 using Bicep.Core.Configuration;
 using Bicep.Core.Extensions;
-using Bicep.Core.FileSystem;
 using Bicep.Core.Registry;
 using Bicep.Core.Semantics;
+using Bicep.Core.SourceGraph;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.FileSystem;
-using Bicep.Core.UnitTests.Mock;
 using Bicep.Core.UnitTests.Utils;
-using Bicep.Core.Workspaces;
+using Bicep.IO.FileSystem;
+using Bicep.IO.InMemory;
 using Bicep.LanguageServer;
 using Bicep.LanguageServer.Extensions;
 using Bicep.LanguageServer.Providers;
@@ -30,20 +24,32 @@ using Moq;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
-using IOFileSystem = System.IO.Abstractions.FileSystem;
+using LocalFileSystem = System.IO.Abstractions.FileSystem;
 
 namespace Bicep.LangServer.UnitTests
 {
     [TestClass]
     public class BicepCompilationManagerTests
     {
-        private static ServiceBuilder Services => new ServiceBuilder().WithEmptyAzResources();
-
         private const int BaseVersion = 42;
 
         private static readonly MockRepository Repository = new(MockBehavior.Strict);
 
         private static readonly LinterRulesProvider linterRulesProvider = new();
+
+        private static BicepCompilationManager GetTestBicepCompilationManager(Mock<ITextDocumentLanguageServer> document, ActiveSourceFileSet? workspace = null)
+        {
+            workspace ??= new ActiveSourceFileSet();
+            return new BicepCompilationManager(
+                BicepCompilationManagerHelper.CreateMockServer(document).Object,
+                BicepCompilationManagerHelper.CreateEmptyCompilationProvider(),
+                workspace,
+                BicepCompilationManagerHelper.CreateMockScheduler().Object,
+                BicepTestConstants.CreateMockTelemetryProvider().Object,
+                linterRulesProvider,
+                BicepTestConstants.SourceFileFactory,
+                BicepTestConstants.AuxiliaryFileCache);
+        }
 
         [NotNull]
         public TestContext? TestContext { get; set; }
@@ -58,8 +64,8 @@ namespace Bicep.LangServer.UnitTests
 
             var document = BicepCompilationManagerHelper.CreateMockDocument(p => receivedParams = p);
             var server = BicepCompilationManagerHelper.CreateMockServer(document);
-            var uri = DocumentUri.File(this.TestContext.TestName + fileExtension).ToUri();
-            var workspace = new Workspace();
+            var uri = DocumentUri.File(this.TestContext.TestName + fileExtension);
+            var workspace = new ActiveSourceFileSet();
             var manager = BicepCompilationManagerHelper.CreateCompilationManager(uri, string.Empty);
 
             // first get should not return anything
@@ -71,7 +77,7 @@ namespace Bicep.LangServer.UnitTests
             // second get should not return anything
             manager.GetCompilation(uri).Should().BeNull();
 
-            workspace.TryGetSourceFile(uri, out var file);
+            var file = workspace.TryGetSourceFile(uri.ToIOUri());
 
             // The workspace should remain empty.
             file.Should().BeNull();
@@ -88,14 +94,13 @@ namespace Bicep.LangServer.UnitTests
             PublishDiagnosticsParams? receivedParams = null;
 
             var document = BicepCompilationManagerHelper.CreateMockDocument(p => receivedParams = p);
-            var server = BicepCompilationManagerHelper.CreateMockServer(document);
-            var uri = DocumentUri.File(this.TestContext.TestName + fileExtension).ToUri();
+            var uri = DocumentUri.File(this.TestContext.TestName + fileExtension);
 
-            var originalFile = SourceFileFactory.CreateArmTemplateFile(uri, "{}");
-            var workspace = new Workspace();
+            var originalFile = BicepTestConstants.SourceFileFactory.CreateArmTemplateFile(uri.ToIOUri(), "{}");
+            var workspace = new ActiveSourceFileSet();
             workspace.UpsertSourceFile(originalFile);
 
-            var manager = new BicepCompilationManager(server.Object, BicepCompilationManagerHelper.CreateEmptyCompilationProvider(), workspace, BicepCompilationManagerHelper.CreateMockScheduler().Object, BicepTestConstants.CreateMockTelemetryProvider().Object, linterRulesProvider, BicepTestConstants.LinterAnalyzer);
+            var manager = GetTestBicepCompilationManager(document, workspace);
 
             // first get should not return anything
             manager.GetCompilation(uri).Should().BeNull();
@@ -106,11 +111,11 @@ namespace Bicep.LangServer.UnitTests
             // second get should not return anything
             manager.GetCompilation(uri).Should().BeNull();
 
-            workspace.TryGetSourceFile(uri, out var updatedFile);
+            var updatedFile = workspace.TryGetSourceFile(uri.ToIOUri());
 
             // The workspace should be refreshed.
             updatedFile.Should().NotBeNull();
-            updatedFile!.FileUri.Should().Be(originalFile.FileUri);
+            updatedFile!.FileHandle.Uri.Should().Be(originalFile.FileHandle.Uri);
             updatedFile.Should().NotBeSameAs(originalFile);
 
             document.Verify(m => m.SendNotification(It.IsAny<PublishDiagnosticsParams>()), Times.Never);
@@ -124,11 +129,8 @@ namespace Bicep.LangServer.UnitTests
             PublishDiagnosticsParams? receivedParams = null;
 
             var document = BicepCompilationManagerHelper.CreateMockDocument(p => receivedParams = p);
-            var server = BicepCompilationManagerHelper.CreateMockServer(document);
+            var manager = GetTestBicepCompilationManager(document);
             var uri = CreateUri(languageId);
-            var workspace = new Workspace();
-
-            var manager = new BicepCompilationManager(server.Object, BicepCompilationManagerHelper.CreateEmptyCompilationProvider(), workspace, BicepCompilationManagerHelper.CreateMockScheduler().Object, BicepTestConstants.CreateMockTelemetryProvider().Object, linterRulesProvider, BicepTestConstants.LinterAnalyzer);
 
             // first get should not return anything
             manager.GetCompilation(uri).Should().BeNull();
@@ -168,11 +170,8 @@ namespace Bicep.LangServer.UnitTests
             PublishDiagnosticsParams? receivedParams = null;
 
             var document = BicepCompilationManagerHelper.CreateMockDocument(p => receivedParams = p);
-            var server = BicepCompilationManagerHelper.CreateMockServer(document);
             var uri = CreateUri(languageId);
-            var workspace = new Workspace();
-
-            var manager = new BicepCompilationManager(server.Object, BicepCompilationManagerHelper.CreateEmptyCompilationProvider(), workspace, BicepCompilationManagerHelper.CreateMockScheduler().Object, BicepTestConstants.CreateMockTelemetryProvider().Object, linterRulesProvider, BicepTestConstants.LinterAnalyzer);
+            var manager = GetTestBicepCompilationManager(document);
 
             // first get should not return anything
             manager.GetCompilation(uri).Should().BeNull();
@@ -235,11 +234,8 @@ namespace Bicep.LangServer.UnitTests
             PublishDiagnosticsParams? receivedParams = null;
 
             var document = BicepCompilationManagerHelper.CreateMockDocument(p => receivedParams = p);
-            var server = BicepCompilationManagerHelper.CreateMockServer(document);
             var uri = CreateUri(languageId);
-            var workspace = new Workspace();
-
-            var manager = new BicepCompilationManager(server.Object, BicepCompilationManagerHelper.CreateEmptyCompilationProvider(), workspace, BicepCompilationManagerHelper.CreateMockScheduler().Object, BicepTestConstants.CreateMockTelemetryProvider().Object, linterRulesProvider, BicepTestConstants.LinterAnalyzer);
+            var manager = GetTestBicepCompilationManager(document);
 
             // first get should not return anything
             manager.GetCompilation(uri).Should().BeNull();
@@ -299,7 +295,15 @@ namespace Bicep.LangServer.UnitTests
         {
             var server = Repository.Create<ILanguageServerFacade>();
 
-            var manager = new BicepCompilationManager(server.Object, BicepCompilationManagerHelper.CreateEmptyCompilationProvider(), new Workspace(), BicepCompilationManagerHelper.CreateMockScheduler().Object, BicepTestConstants.CreateMockTelemetryProvider().Object, linterRulesProvider, BicepTestConstants.LinterAnalyzer);
+            var manager = new BicepCompilationManager(
+                server.Object,
+                BicepCompilationManagerHelper.CreateEmptyCompilationProvider(),
+                new ActiveSourceFileSet(),
+                BicepCompilationManagerHelper.CreateMockScheduler().Object,
+                BicepTestConstants.CreateMockTelemetryProvider().Object,
+                linterRulesProvider,
+                BicepTestConstants.SourceFileFactory,
+                BicepTestConstants.AuxiliaryFileCache);
 
             var uri = DocumentUri.File($"{TestContext.TestName}.bicep");
 
@@ -312,10 +316,7 @@ namespace Bicep.LangServer.UnitTests
             PublishDiagnosticsParams? receivedParams = null;
 
             var document = BicepCompilationManagerHelper.CreateMockDocument(p => receivedParams = p);
-            var server = BicepCompilationManagerHelper.CreateMockServer(document);
-
-            var manager = new BicepCompilationManager(server.Object, BicepCompilationManagerHelper.CreateEmptyCompilationProvider(), new Workspace(), BicepCompilationManagerHelper.CreateMockScheduler().Object, BicepTestConstants.CreateMockTelemetryProvider().Object, linterRulesProvider, BicepTestConstants.LinterAnalyzer);
-
+            var manager = GetTestBicepCompilationManager(document);
             var uri = DocumentUri.File($"{TestContext.TestName}.bicep");
 
             manager.CloseCompilation(uri);
@@ -345,12 +346,24 @@ namespace Bicep.LangServer.UnitTests
 
             var provider = Repository.Create<ICompilationProvider>();
             const string expectedMessage = "Internal bicep exception.";
-            provider.Setup(m => m.Create(It.IsAny<IReadOnlyWorkspace>(), It.IsAny<DocumentUri>(), It.IsAny<ImmutableDictionary<ISourceFile, ISemanticModel>>())).Throws(new InvalidOperationException(expectedMessage));
+            provider.Setup(
+                m => m.Create(
+                    It.IsAny<IActiveSourceFileLookup>(),
+                    It.IsAny<DocumentUri>(),
+                    It.IsAny<ImmutableDictionary<ISourceFile, ISemanticModel>>()))
+                    .Throws(new InvalidOperationException(expectedMessage));
 
             var uri = CreateUri(languageId);
-            var workspace = new Workspace();
 
-            var manager = new BicepCompilationManager(server.Object, provider.Object, workspace, BicepCompilationManagerHelper.CreateMockScheduler().Object, BicepTestConstants.CreateMockTelemetryProvider().Object, linterRulesProvider, BicepTestConstants.LinterAnalyzer);
+            var manager = new BicepCompilationManager(
+                server.Object,
+                provider.Object,
+                new ActiveSourceFileSet(),
+                BicepCompilationManagerHelper.CreateMockScheduler().Object,
+                BicepTestConstants.CreateMockTelemetryProvider().Object,
+                linterRulesProvider,
+                BicepTestConstants.SourceFileFactory,
+                BicepTestConstants.AuxiliaryFileCache);
 
             // upsert should fail because of the mock fatal exception
             manager.OpenCompilation(uri, BaseVersion, "fake", languageId);
@@ -404,14 +417,25 @@ namespace Bicep.LangServer.UnitTests
             // start by failing
             bool failUpsert = true;
             provider
-                .Setup(m => m.Create(It.IsAny<IReadOnlyWorkspace>(), It.IsAny<DocumentUri>(), It.IsAny<ImmutableDictionary<ISourceFile, ISemanticModel>>()))
-                .Returns<IReadOnlyWorkspace, DocumentUri, ImmutableDictionary<ISourceFile, ISemanticModel>>((grouping, documentUri, modelLookup) => failUpsert
+                .Setup(m => m.Create(
+                    It.IsAny<IActiveSourceFileLookup>(),
+                    It.IsAny<DocumentUri>(),
+                    It.IsAny<ImmutableDictionary<ISourceFile, ISemanticModel>>()))
+                .Returns<IActiveSourceFileLookup, DocumentUri, ImmutableDictionary<ISourceFile, ISemanticModel>>((grouping, documentUri, modelLookup) => failUpsert
                     ? throw new InvalidOperationException(expectedMessage)
                     : BicepCompilationManagerHelper.CreateEmptyCompilationProvider().Create(grouping, documentUri, modelLookup));
 
-            var workspace = new Workspace();
+            var workspace = new ActiveSourceFileSet();
 
-            var manager = new BicepCompilationManager(server.Object, provider.Object, workspace, BicepCompilationManagerHelper.CreateMockScheduler().Object, BicepTestConstants.CreateMockTelemetryProvider().Object, linterRulesProvider, BicepTestConstants.LinterAnalyzer);
+            var manager = new BicepCompilationManager(
+                server.Object,
+                provider.Object,
+                workspace,
+                BicepCompilationManagerHelper.CreateMockScheduler().Object,
+                BicepTestConstants.CreateMockTelemetryProvider().Object,
+                linterRulesProvider,
+                BicepTestConstants.SourceFileFactory,
+                BicepTestConstants.AuxiliaryFileCache);
 
             // upsert should fail because of the mock fatal exception
             manager.OpenCompilation(uri, version, "fake", languageId);
@@ -488,16 +512,40 @@ module moduleB './moduleB.bicep' = {
 ",
             };
 
-            var diagsReceieved = new List<PublishDiagnosticsParams>();
-            var document = BicepCompilationManagerHelper.CreateMockDocument(p => diagsReceieved.Add(p));
+            var fileExplorer = new InMemoryFileExplorer();
+
+            foreach (var (uri, content) in fileDict)
+            {
+                fileExplorer.GetFile(uri.ToIOUri()).Write(content);
+            }
+
+            var diagsReceived = new List<PublishDiagnosticsParams>();
+            var document = BicepCompilationManagerHelper.CreateMockDocument(p => diagsReceived.Add(p));
             var server = BicepCompilationManagerHelper.CreateMockServer(document);
 
-            var fileResolver = new InMemoryFileResolver(fileDict);
-            var compilationProvider = new BicepCompilationProvider(BicepTestConstants.FeatureProviderFactory, TestTypeHelper.CreateEmptyProvider(), fileResolver, new ModuleDispatcher(new DefaultModuleRegistryProvider(fileResolver, BicepTestConstants.ClientFactory, BicepTestConstants.TemplateSpecRepositoryFactory, BicepTestConstants.FeatureProviderFactory, BicepTestConstants.BuiltInOnlyConfigurationManager), BicepTestConstants.BuiltInOnlyConfigurationManager), BicepTestConstants.ApiVersionProviderFactory, BicepTestConstants.BuiltInOnlyConfigurationManager, BicepTestConstants.LinterAnalyzer);
+            var services = new ServiceBuilder()
+                .WithFileExplorer(fileExplorer)
+                .Build();
 
-            var compilationManager = new BicepCompilationManager(server.Object, compilationProvider, new Workspace(), BicepCompilationManagerHelper.CreateMockScheduler().Object, BicepTestConstants.CreateMockTelemetryProvider().Object, linterRulesProvider, BicepTestConstants.LinterAnalyzer);
+            var compilationProvider = new BicepCompilationProvider(
+                BicepTestConstants.EmptyEnvironment,
+                TestTypeHelper.CreateEmptyNamespaceProvider(),
+                fileExplorer,
+                services.Construct<IModuleDispatcher>(),
+                BicepTestConstants.LinterAnalyzer,
+                BicepTestConstants.SourceFileFactory);
 
-            diagsReceieved.Should().BeEmpty();
+            var compilationManager = new BicepCompilationManager(
+                server.Object,
+                compilationProvider,
+                new ActiveSourceFileSet(),
+                BicepCompilationManagerHelper.CreateMockScheduler().Object,
+                BicepTestConstants.CreateMockTelemetryProvider().Object,
+                linterRulesProvider,
+                BicepTestConstants.SourceFileFactory,
+                BicepTestConstants.AuxiliaryFileCache);
+
+            diagsReceived.Should().BeEmpty();
 
             IReadOnlyDictionary<Uri, Compilation> GetCompilations() => new Dictionary<Uri, Compilation>
             {
@@ -521,10 +569,10 @@ module moduleB './moduleB.bicep' = {
             {
                 compilationManager.OpenCompilation(uris.main, 1, fileDict[uris.main], "bicep");
 
-                diagsReceieved.Should().SatisfyRespectively(
-                    x => x.Uri.ToUri().Should().Be(uris.main)
+                diagsReceived.Should().SatisfyRespectively(
+                    x => x.Uri.ToUriEncoded().Should().Be(uris.main)
                 );
-                diagsReceieved.Clear();
+                diagsReceived.Clear();
             }
 
             // open all files
@@ -532,7 +580,7 @@ module moduleB './moduleB.bicep' = {
                 compilationManager.OpenCompilation(uris.moduleA, 1, fileDict[uris.moduleA], "bicep");
                 compilationManager.OpenCompilation(uris.moduleB, 1, fileDict[uris.moduleB], "bicep");
                 compilationManager.OpenCompilation(uris.moduleC, 1, fileDict[uris.moduleC], "bicep");
-                diagsReceieved.Clear();
+                diagsReceived.Clear();
 
                 EnsureSemanticModelsAndSourceFilesDeduplicated();
             }
@@ -541,11 +589,11 @@ module moduleB './moduleB.bicep' = {
             {
                 compilationManager.OpenCompilation(uris.moduleA, 2, fileDict[uris.moduleA], "bicep");
 
-                diagsReceieved.Should().SatisfyRespectively(
-                    x => x.Uri.ToUri().Should().Be(uris.moduleA),
-                    x => x.Uri.ToUri().Should().Be(uris.main)
+                diagsReceived.Should().SatisfyRespectively(
+                    x => x.Uri.ToUriEncoded().Should().Be(uris.moduleA),
+                    x => x.Uri.ToUriEncoded().Should().Be(uris.main)
                 );
-                diagsReceieved.Clear();
+                diagsReceived.Clear();
 
                 var compilations = GetCompilations();
                 var moduleBSource = compilations[uris.moduleB].SourceFileGrouping.EntryPoint;
@@ -561,11 +609,11 @@ module moduleB './moduleB.bicep' = {
             {
                 compilationManager.OpenCompilation(uris.moduleC, 2, fileDict[uris.moduleC], "bicep");
 
-                diagsReceieved.Should().SatisfyRespectively(
-                    x => x.Uri.ToUri().Should().Be(uris.moduleC),
-                    x => x.Uri.ToUri().Should().Be(uris.main)
+                diagsReceived.Should().SatisfyRespectively(
+                    x => x.Uri.ToUriEncoded().Should().Be(uris.moduleC),
+                    x => x.Uri.ToUriEncoded().Should().Be(uris.main)
                 );
-                diagsReceieved.Clear();
+                diagsReceived.Clear();
 
                 EnsureSemanticModelsAndSourceFilesDeduplicated();
             }
@@ -574,10 +622,10 @@ module moduleB './moduleB.bicep' = {
             {
                 compilationManager.OpenCompilation(uris.main, 3, fileDict[uris.main], "bicep");
 
-                diagsReceieved.Should().SatisfyRespectively(
-                    x => x.Uri.ToUri().Should().Be(uris.main)
+                diagsReceived.Should().SatisfyRespectively(
+                    x => x.Uri.ToUriEncoded().Should().Be(uris.main)
                 );
-                diagsReceieved.Clear();
+                diagsReceived.Clear();
 
                 EnsureSemanticModelsAndSourceFilesDeduplicated();
             }
@@ -589,19 +637,9 @@ module moduleB './moduleB.bicep' = {
             PublishDiagnosticsParams? receivedParams = null;
 
             var document = BicepCompilationManagerHelper.CreateMockDocument(p => receivedParams = p);
-            var server = BicepCompilationManagerHelper.CreateMockServer(document);
             var bicepFileUri = DocumentUri.File("untitled-1");
             var paramsFileUri = DocumentUri.File("untitled-2");
-            var workspace = new Workspace();
-
-            var manager = new BicepCompilationManager(
-                server: server.Object,
-                provider: BicepCompilationManagerHelper.CreateEmptyCompilationProvider(),
-                workspace: workspace,
-                scheduler: BicepCompilationManagerHelper.CreateMockScheduler().Object,
-                telemetryProvider: BicepTestConstants.CreateMockTelemetryProvider().Object,
-                LinterRulesProvider: linterRulesProvider,
-                bicepAnalyzer: BicepTestConstants.LinterAnalyzer);
+            var manager = GetTestBicepCompilationManager(document);
 
             // first gets should not return anything
             manager.GetCompilation(bicepFileUri).Should().BeNull();
@@ -695,10 +733,8 @@ module moduleB './moduleB.bicep' = {
     }
   }
 }";
-            var configurationManager = new ConfigurationManager(new IOFileSystem());
-            var testOutputPath = FileHelper.GetUniqueTestOutputPath(TestContext);
 
-            var rootConfiguration = GetRootConfiguration(testOutputPath, bicepConfigFileContents, configurationManager);
+            var rootConfiguration = BicepTestConstants.GetConfiguration(bicepConfigFileContents);
 
             var telemetryEvent = compilationManager.GetLinterStateTelemetryOnBicepFileOpen(rootConfiguration);
 
@@ -747,10 +783,7 @@ module moduleB './moduleB.bicep' = {
     }
   }
 }";
-            var configurationManager = new ConfigurationManager(new IOFileSystem());
-            var testOutputPath = FileHelper.GetUniqueTestOutputPath(TestContext);
-
-            var rootConfiguration = GetRootConfiguration(testOutputPath, bicepConfigFileContents, configurationManager);
+            var rootConfiguration = BicepTestConstants.GetConfiguration(bicepConfigFileContents);
 
             var telemetryEvent = compilationManager.GetLinterStateTelemetryOnBicepFileOpen(rootConfiguration);
 
@@ -770,10 +803,7 @@ module moduleB './moduleB.bicep' = {
             var compilationManager = CreateBicepCompilationManager();
 
             var bicepConfigFileContents = @"{}";
-            var configurationManager = new ConfigurationManager(new IOFileSystem());
-            var testOutputPath = FileHelper.GetUniqueTestOutputPath(TestContext);
-
-            var rootConfiguration = GetRootConfiguration(testOutputPath, bicepConfigFileContents, configurationManager);
+            var rootConfiguration = BicepTestConstants.GetConfiguration(bicepConfigFileContents);
 
             var telemetryEvent = compilationManager.GetLinterStateTelemetryOnBicepFileOpen(rootConfiguration);
 
@@ -802,9 +832,9 @@ module moduleB './moduleB.bicep' = {
         }
 
         [TestMethod]
-        public void GetTelemetryAboutSourceFiles_ShouldReturnTelemetryEvent()
+        public void GetBicepOpenTelemetryEvent_ShouldReturnTelemetryEvent()
         {
-            string bicepFileContents = @"param appInsightsName string = 'testAppInsightsName'
+            var result = CompilationHelper.Compile(@"param appInsightsName string = 'testAppInsightsName'
 
 resource applicationInsights 'Microsoft.Insights/components@2015-05-01' = {
   name: appInsightsName
@@ -815,37 +845,31 @@ resource applicationInsights 'Microsoft.Insights/components@2015-05-01' = {
   }
 }
 
-param location string = 'testLocation'";
-            var testOutputPath = FileHelper.GetUniqueTestOutputPath(TestContext);
-            var bicepFilePath = FileHelper.SaveResultFile(TestContext, "main.bicep", bicepFileContents, testOutputPath);
-            var mainUri = DocumentUri.FromFileSystemPath(bicepFilePath).ToUri();
+param location string = 'testLocation'");
 
-            var bicepFile = SourceFileFactory.CreateBicepFile(mainUri, bicepFileContents);
-
-            var compilation = Services.BuildCompilation(bicepFileContents);
-            var diagnostics = compilation.GetEntrypointSemanticModel().GetAllDiagnostics().ToDiagnostics(bicepFile.LineStarts);
+            var model = result.Compilation.GetEntrypointSemanticModel();
+            var sourceFile = (model.SourceFile as BicepFile)!;
 
             var compilationManager = CreateBicepCompilationManager();
-
-            var telemetryEvent = compilationManager.GetTelemetryAboutSourceFiles(compilation.GetEntrypointSemanticModel(),
-                                                                                 bicepFile.FileUri,
-                                                                                 ImmutableHashSet.Create<ISourceFile>(bicepFile),
-                                                                                 diagnostics);
+            var telemetryEvent = compilationManager.GetBicepOpenTelemetryEvent(
+                model,
+                sourceFile,
+                model.GetAllDiagnostics().ToDiagnostics(sourceFile.LineStarts));
 
             var properties = new Dictionary<string, string>
             {
-                { "Modules", "0" },
-                { "Parameters", "2" },
-                { "Resources", "1" },
-                { "Variables", "0" },
-                { "FileSizeInBytes", "294" },
-                { "LineCount", "12" },
-                { "Errors", "0" },
-                { "Warnings", "3" },
-                { "ModulesInReferencedFiles", "0" },
-                { "ParentResourcesInReferencedFiles", "0" },
-                { "ParametersInReferencedFiles", "0" },
-                { "VariablesInReferencedFiles", "0" }
+                ["Modules"] = "0",
+                ["Parameters"] = "2",
+                ["Resources"] = "1",
+                ["Variables"] = "0",
+                ["CharCount"] = "294",
+                ["LineCount"] = "12",
+                ["Errors"] = "0",
+                ["Warnings"] = "1",
+                ["ModulesInReferencedFiles"] = "0",
+                ["ParentResourcesInReferencedFiles"] = "0",
+                ["ParametersInReferencedFiles"] = "0",
+                ["VariablesInReferencedFiles"] = "0",
             };
 
             telemetryEvent.Should().NotBeNull();
@@ -853,12 +877,39 @@ param location string = 'testLocation'";
             telemetryEvent.Properties.Should().Contain(properties);
         }
 
-        private RootConfiguration GetRootConfiguration(string testOutputPath, string bicepConfigContents, ConfigurationManager configurationManager)
+        [TestMethod]
+        public void GetBicepParamOpenTelemetryEvent_ShouldReturnTelemetryEvent()
         {
-            var bicepConfigFilePath = FileHelper.SaveResultFile(TestContext, "bicepconfig.json", bicepConfigContents, testOutputPath);
-            var bicepConfigUri = DocumentUri.FromFileSystemPath(bicepConfigFilePath);
+            var result = CompilationHelper.CompileParams(
+                ("main.bicep", """
+                    param intParam int
+                    """),
+                ("parameters.bicepparam", """
+                    using 'main.bicep'
 
-            return configurationManager.GetConfiguration(bicepConfigUri.ToUri());
+                    param intParam = 123
+                    """));
+
+            var model = result.Compilation.GetEntrypointSemanticModel();
+            var sourceFile = (model.SourceFile as BicepParamFile)!;
+
+            var compilationManager = CreateBicepCompilationManager();
+            var telemetryEvent = compilationManager.GetBicepParamOpenTelemetryEvent(
+                model,
+                sourceFile,
+                model.GetAllDiagnostics().ToDiagnostics(sourceFile.LineStarts));
+
+            var properties = new Dictionary<string, string>
+            {
+                ["CharCount"] = "40",
+                ["LineCount"] = "3",
+                ["Errors"] = "0",
+                ["Warnings"] = "0",
+            };
+
+            telemetryEvent.Should().NotBeNull();
+            telemetryEvent!.EventName.Should().Be(TelemetryConstants.EventNames.BicepParamFileOpen);
+            telemetryEvent.Properties.Should().Contain(properties);
         }
 
         private BicepCompilationManager CreateBicepCompilationManager()
@@ -868,9 +919,17 @@ param location string = 'testLocation'";
             var document = BicepCompilationManagerHelper.CreateMockDocument(p => receivedParams = p);
             var server = BicepCompilationManagerHelper.CreateMockServer(document);
             var uri = DocumentUri.File($"{TestContext.TestName}.bicep");
-            var workspace = new Workspace();
+            var workspace = new ActiveSourceFileSet();
 
-            return new BicepCompilationManager(server.Object, BicepCompilationManagerHelper.CreateEmptyCompilationProvider(), workspace, BicepCompilationManagerHelper.CreateMockScheduler().Object, BicepTestConstants.CreateMockTelemetryProvider().Object, linterRulesProvider, BicepTestConstants.LinterAnalyzer);
+            return new BicepCompilationManager(
+                server.Object,
+                BicepCompilationManagerHelper.CreateEmptyCompilationProvider(),
+                workspace,
+                BicepCompilationManagerHelper.CreateMockScheduler().Object,
+                BicepTestConstants.CreateMockTelemetryProvider().Object,
+                linterRulesProvider,
+                BicepTestConstants.SourceFileFactory,
+                BicepTestConstants.AuxiliaryFileCache);
         }
 
         private DocumentUri CreateUri(string languageId) => DocumentUri.File(this.TestContext.TestName + (languageId switch

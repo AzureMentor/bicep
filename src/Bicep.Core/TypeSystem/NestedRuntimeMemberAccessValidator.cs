@@ -3,14 +3,10 @@
 
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Semantics;
-using Bicep.Core.Semantics.Namespaces;
 using Bicep.Core.Syntax;
-using Bicep.Core.TypeSystem.Az;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Bicep.Core.TypeSystem.Providers;
+using Bicep.Core.TypeSystem.Providers.Az;
+using Bicep.Core.TypeSystem.Types;
 
 namespace Bicep.Core.TypeSystem
 {
@@ -22,7 +18,7 @@ namespace Bicep.Core.TypeSystem
 
         private readonly IDiagnosticWriter diagnosticWriter;
 
-        public NestedRuntimeMemberAccessValidator(SemanticModel semanticModel ,ResourceTypeResolver resourceTypeResolver, IDiagnosticWriter diagnosticWriter)
+        public NestedRuntimeMemberAccessValidator(SemanticModel semanticModel, ResourceTypeResolver resourceTypeResolver, IDiagnosticWriter diagnosticWriter)
         {
             this.semanticModel = semanticModel;
             this.resourceTypeResolver = resourceTypeResolver;
@@ -82,7 +78,7 @@ namespace Bicep.Core.TypeSystem
 
         private void FlagIfNotReadableAtDeployTime(SyntaxBase syntax, string propertyName, ResourceSymbol resourceSymbol, ObjectType resourceBodyType)
         {
-            if (!propertyName.Equals(AzResourceTypeProvider.ResourceNamePropertyName, LanguageConstants.IdentifierComparison) &&
+            if (!AzResourceTypeProvider.ReadWriteDeployTimeConstantPropertyNames.Contains(propertyName) &&
                 resourceBodyType.Properties.TryGetValue(propertyName, out var propertyType) &&
                 !propertyType.Flags.HasFlag(TypePropertyFlags.ReadableAtDeployTime))
             {
@@ -120,7 +116,8 @@ namespace Bicep.Core.TypeSystem
         private static IEnumerable<string> GetAccessiblePropertyNames(ObjectType resourceBodyType) => resourceBodyType.Properties
             .Where(kv => kv.Value.Flags.HasFlag(TypePropertyFlags.ReadableAtDeployTime) && !kv.Value.Flags.HasFlag(TypePropertyFlags.WriteOnly))
             .Select(kv => kv.Key)
-            .Append(AzResourceTypeProvider.ResourceNamePropertyName) // Adding "name" because it will be inlined.
+            .Append(AzResourceTypeProvider.ResourceNamePropertyName) // Adding "name" and "id" because they will be inlined.
+            .Append(AzResourceTypeProvider.ResourceIdPropertyName)
             .Distinct();
 
         private static IEnumerable<string> GetAccessibleFunctionNames(ObjectType resourceBodyType) => resourceBodyType.MethodResolver.functionOverloads

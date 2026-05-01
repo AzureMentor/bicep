@@ -1,12 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Linq;
 using Bicep.Core.Extensions;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
-using Bicep.Core.TypeSystem;
+using Bicep.Core.TypeSystem.Types;
 
 namespace Bicep.Core.Decompiler.Rewriters
 {
@@ -44,7 +42,7 @@ namespace Bicep.Core.Decompiler.Rewriters
                             return null;
                         }
 
-                        if (!childName.SegmentValues[1].StartsWith("/"))
+                        if (!childName.SegmentValues[1].StartsWith('/'))
                         {
                             return null;
                         }
@@ -143,6 +141,7 @@ namespace Bicep.Core.Decompiler.Rewriters
                     syntax.Type,
                     syntax.ExistingKeyword,
                     syntax.Assignment,
+                    syntax.Newlines,
                     replacementValue);
             }
 

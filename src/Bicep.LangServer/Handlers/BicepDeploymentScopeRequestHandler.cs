@@ -1,12 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using Bicep.Core;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Emit;
@@ -55,7 +50,7 @@ namespace Bicep.LanguageServer.Handlers
             try
             {
                 var documentUri = request.TextDocument.Uri;
-                var compilation = await new CompilationHelper(bicepCompiler, compilationManager).GetCompilation(documentUri);
+                var compilation = await new CompilationHelper(bicepCompiler, compilationManager).GetRefreshedCompilation(documentUri);
 
                 // Cache the compilation so that it can be reused by BicepDeploymentParametersHandler
                 deploymentFileCompilationCache.CacheCompilation(documentUri, compilation);
@@ -81,13 +76,10 @@ namespace Bicep.LanguageServer.Handlers
 
         private string GetCompiledFile(Compilation compilation, DocumentUri documentUri)
         {
-            var fileUri = documentUri.ToUri();
-
-            var diagnosticsByFile = compilation.GetAllDiagnosticsByBicepFile()
-                .FirstOrDefault(x => x.Key.FileUri == fileUri);
-
-            if (diagnosticsByFile.Value.Any(x => x.Level == DiagnosticLevel.Error))
+            if (compilation.HasErrors())
             {
+                var diagnosticsByFile = compilation.GetAllDiagnosticsByBicepFile();
+
                 throw new Exception(DiagnosticsHelper.GetDiagnosticsMessage(diagnosticsByFile));
             }
 

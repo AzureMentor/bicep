@@ -1,12 +1,5 @@
 //Array Lookup of a complex object
-var subnetArray = [
-  'GatewaySubnet'
-  'AzureBastionSubnet'
-  'AzureFirewallSubnet'
-  'websubnet'
-  'appsubnet'
-  'sqlsubnet'
-]
+var subnetArray = ['GatewaySubnet', 'AzureBastionSubnet', 'AzureFirewallSubnet', 'websubnet', 'appsubnet', 'sqlsubnet']
 
 //This complex object is used for lookups.
 var subnetObj = {
@@ -42,9 +35,11 @@ var subnetObj = {
   }
 }
 
-output bicepObject array = [for (name, i) in subnetArray: {
-  name: subnetArray[i]
-  AddressSpace: subnetObj[subnetArray[i]].AddressSpace
-  NSG: subnetObj[subnetArray[i]].NSG
-  RouteTable: subnetObj[subnetArray[i]].RouteTable
-}]
+output bicepObject array = [
+  for (name, i) in subnetArray: {
+    name: subnetArray[i]
+    AddressSpace: subnetObj[subnetArray[i]].AddressSpace
+    NSG: subnetObj[subnetArray[i]].NSG
+    RouteTable: subnetObj[subnetArray[i]].RouteTable
+  }
+]

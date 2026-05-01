@@ -2,14 +2,10 @@
 // Licensed under the MIT License.
 import vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
-
-import { BicepVisualizerView } from "./view";
 import { Disposable } from "../utils/disposable";
+import { BicepVisualizerView } from "./view";
 
-export class BicepVisualizerViewManager
-  extends Disposable
-  implements vscode.WebviewPanelSerializer
-{
+export class BicepVisualizerViewManager extends Disposable implements vscode.WebviewPanelSerializer {
   private static readonly visualizerActiveContextKey = "bicepVisualizerFocus";
 
   private readonly viewsByPath = new Map<string, BicepVisualizerView>();
@@ -18,16 +14,13 @@ export class BicepVisualizerViewManager
 
   constructor(
     private readonly extensionUri: vscode.Uri,
-    private readonly languageClient: LanguageClient
+    private readonly languageClient: LanguageClient,
   ) {
     super();
 
-    this.register(
-      vscode.window.registerWebviewPanelSerializer(
-        BicepVisualizerView.viewType,
-        this
-      )
-    );
+    this.register(vscode.window.registerWebviewPanelSerializer(BicepVisualizerView.viewType, this));
+
+    const existingMiddleware = languageClient.clientOptions.middleware?.handleDiagnostics;
 
     this.languageClient.clientOptions.middleware = {
       ...(this.languageClient.clientOptions.middleware ?? {}),
@@ -36,7 +29,11 @@ export class BicepVisualizerViewManager
           view.render();
         }
 
-        next(uri, diagnostics);
+        if (existingMiddleware) {
+          existingMiddleware(uri, diagnostics, next);
+        } else {
+          next(uri, diagnostics);
+        }
       },
     };
   }
@@ -45,10 +42,7 @@ export class BicepVisualizerViewManager
     return this.activeUri;
   }
 
-  public async openView(
-    documentUri: vscode.Uri,
-    viewColumn: vscode.ViewColumn
-  ): Promise<void> {
+  public async openView(documentUri: vscode.Uri, viewColumn: vscode.ViewColumn): Promise<void> {
     const existingView = this.viewsByPath.get(documentUri.fsPath);
 
     if (existingView) {
@@ -58,32 +52,19 @@ export class BicepVisualizerViewManager
 
     this.registerView(
       documentUri,
-      BicepVisualizerView.create(
-        this.languageClient,
-        viewColumn,
-        this.extensionUri,
-        documentUri
-      )
+      BicepVisualizerView.create(this.languageClient, viewColumn, this.extensionUri, documentUri),
     );
 
     await this.setVisualizerActiveContext(true);
     this.activeUri = documentUri;
   }
 
-  public async deserializeWebviewPanel(
-    webviewPanel: vscode.WebviewPanel,
-    documentPath: string
-  ): Promise<void> {
+  public async deserializeWebviewPanel(webviewPanel: vscode.WebviewPanel, documentPath: string): Promise<void> {
     const documentUri = vscode.Uri.file(documentPath);
 
     this.registerView(
       documentUri,
-      BicepVisualizerView.revive(
-        this.languageClient,
-        webviewPanel,
-        this.extensionUri,
-        documentUri
-      )
+      BicepVisualizerView.revive(this.languageClient, webviewPanel, this.extensionUri, documentUri),
     );
   }
 
@@ -102,10 +83,7 @@ export class BicepVisualizerViewManager
     this.viewsByPath.clear();
   }
 
-  private registerView(
-    documentUri: vscode.Uri,
-    view: BicepVisualizerView
-  ): BicepVisualizerView {
+  private registerView(documentUri: vscode.Uri, view: BicepVisualizerView): BicepVisualizerView {
     this.viewsByPath.set(documentUri.fsPath, view);
 
     view.onDidChangeViewState((e) => {
@@ -131,10 +109,6 @@ export class BicepVisualizerViewManager
   }
 
   private async setVisualizerActiveContext(value: boolean) {
-    await vscode.commands.executeCommand(
-      "setContext",
-      BicepVisualizerViewManager.visualizerActiveContextKey,
-      value
-    );
+    await vscode.commands.executeCommand("setContext", BicepVisualizerViewManager.visualizerActiveContextKey, value);
   }
 }

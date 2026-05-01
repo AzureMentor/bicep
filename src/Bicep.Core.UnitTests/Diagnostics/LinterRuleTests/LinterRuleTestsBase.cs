@@ -1,21 +1,20 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Collections.Immutable;
 using Bicep.Core.Analyzers.Interfaces;
-using Bicep.Core.Analyzers.Linter.ApiVersions;
 using Bicep.Core.CodeAction;
 using Bicep.Core.Configuration;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Extensions;
+using Bicep.Core.Semantics;
 using Bicep.Core.Text;
+using Bicep.Core.TypeSystem.Providers;
 using Bicep.Core.UnitTests.Assertions;
+using Bicep.Core.UnitTests.Features;
 using Bicep.Core.UnitTests.Utils;
 using FluentAssertions;
 using FluentAssertions.Execution;
-using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
 
 namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests;
 
@@ -43,8 +42,9 @@ public class LinterRuleTestsBase
         OnCompileErrors OnCompileErrors = OnCompileErrors.Default,
         IncludePosition IncludePosition = IncludePosition.Default,
         Func<RootConfiguration, RootConfiguration>? ConfigurationPatch = null,
-        ApiVersionProvider? ApiVersionProvider = null,
-        (string path, string contents)[]? AdditionalFiles = null
+        IResourceTypeLoader? AzResourceTypeLoader = null,
+        (string path, string contents)[]? AdditionalFiles = null,
+        FeatureProviderOverrides? FeatureOverrides = null
     );
 
     private static string FormatDiagnostic(IDiagnostic diagnostic, ImmutableArray<int> lineStarts, IncludePosition includePosition)
@@ -92,11 +92,11 @@ public class LinterRuleTestsBase
         }
 
         RunWithDiagnosticAnnotations(
-            files.ToArray(),
+            [.. files],
             diag =>
                 diag.Code == ruleCode
-                || (IsCompilerDiagnostic(diag) && options.OnCompileErrors == OnCompileErrors.IncludeErrors && diag.Level == DiagnosticLevel.Error)
-                || (IsCompilerDiagnostic(diag) && options.OnCompileErrors == OnCompileErrors.IncludeErrorsAndWarnings && (diag.Level == DiagnosticLevel.Error || diag.Level == DiagnosticLevel.Warning)),
+                || (IsCompilerDiagnostic(diag) && options.OnCompileErrors == OnCompileErrors.IncludeErrors && diag.IsError())
+                || (IsCompilerDiagnostic(diag) && options.OnCompileErrors == OnCompileErrors.IncludeErrorsAndWarnings && (diag.IsError() || diag.Level == DiagnosticLevel.Warning)),
             assertAction,
             options);
     }
@@ -108,9 +108,10 @@ public class LinterRuleTestsBase
         Options? options)
     {
         options ??= new Options();
-        var services = new ServiceBuilder();
-        services = options.ConfigurationPatch is {} ? services.WithConfigurationPatch(options.ConfigurationPatch) : services;
-        services = options.ApiVersionProvider is {} ? services.WithApiVersionProvider(options.ApiVersionProvider) : services;
+        var services = new ServiceBuilder().WithConfiguration(BicepTestConstants.BuiltInConfigurationWithStableAnalyzers);
+        services = options.ConfigurationPatch is not null ? services.WithConfigurationPatch(options.ConfigurationPatch) : services;
+        services = options.AzResourceTypeLoader is { } ? services.WithAzResourceTypeLoader(options.AzResourceTypeLoader) : services;
+        services = options.FeatureOverrides is not null ? services.WithFeatureOverrides(options.FeatureOverrides) : services;
         var result = CompilationHelper.Compile(services, files);
         using (new AssertionScope().WithFullSource(result.BicepFile))
         {
@@ -127,15 +128,16 @@ public class LinterRuleTestsBase
         return diagnostic.Code.StartsWith("BCP");
     }
 
-    protected static void AssertCodeFix(string expectedCode, string expectedFixTitle, string inputFile, string resultFile)
+    protected static void AssertCodeFix(string expectedCode, string expectedFixTitle, string inputFile, string resultFile, CompilationHelper.InputFile[]? supportingFiles = null)
     {
+        supportingFiles ??= [];
         var (file, cursor) = ParserHelper.GetFileWithSingleCursor(inputFile, '|');
-        var result = CompilationHelper.Compile(file);
+        var result = CompilationHelper.Compile([.. supportingFiles, new("main.bicep", file)]);
 
         using (new AssertionScope().WithVisualCursor(result.Compilation.GetEntrypointSemanticModel().SourceFile, cursor))
         {
             var matchingDiagnostics = result.Diagnostics
-                .OfType<IBicepAnalyerFixableDiagnostic>()
+                .Where(x => x.Source == DiagnosticSource.CoreLinter)
                 .Where(x => x.Span.IsOverlapping(cursor));
 
             matchingDiagnostics.Should().ContainSingle(x => x.Code == expectedCode);

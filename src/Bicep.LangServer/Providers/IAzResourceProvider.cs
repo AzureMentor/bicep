@@ -1,9 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 using System.Text.Json;
-using System.Threading.Tasks;
 using Bicep.Core.Configuration;
-using System.Threading;
 
 namespace Bicep.LanguageServer.Providers
 {

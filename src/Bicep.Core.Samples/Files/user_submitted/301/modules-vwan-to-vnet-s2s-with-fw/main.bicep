@@ -181,9 +181,7 @@ module vnets2s './vnetsitetosite.bicep' = {
   params: {
     location: location
     localnetworkgwname: lgwname
-    addressprefixes: [
-      vhub.outputs.vhubaddress
-    ]
+    addressprefixes: [vhub.outputs.vhubaddress]
     connectionname: vpnconname
     bgppeeringpddress: vhubvpngw.outputs.gwprivateip
     gwipaddress: vhubvpngw.outputs.gwpublicip

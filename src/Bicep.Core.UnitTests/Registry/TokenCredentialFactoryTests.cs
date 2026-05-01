@@ -1,15 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Reflection;
 using Azure.Core;
 using Azure.Identity;
+using Bicep.Core.AzureApi;
 using Bicep.Core.Configuration;
-using Bicep.Core.Registry.Auth;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
-using System.Linq;
-using System.Reflection;
 
 namespace Bicep.Core.UnitTests.Registry
 {
@@ -18,30 +16,39 @@ namespace Bicep.Core.UnitTests.Registry
     {
         private static readonly Uri exampleAuthorityUri = new("https://bicep.test.invalid");
 
-        [DataRow(CredentialType.Environment, typeof(EnvironmentCredential))]
-        [DataRow(CredentialType.ManagedIdentity, typeof(ManagedIdentityCredential))]
-        [DataRow(CredentialType.VisualStudio, typeof(VisualStudioCredential))]
-        [DataRow(CredentialType.VisualStudioCode, typeof(VisualStudioCodeCredential))]
-        [DataRow(CredentialType.AzureCLI, typeof(AzureCliCredential))]
-        [DataRow(CredentialType.AzurePowerShell, typeof(AzurePowerShellCredential))]
         [DataTestMethod]
-        public void ShouldCreateExpectedSingleCredential(CredentialType credentialType, Type expectedCredentialType)
+        [DataRow(CredentialType.Environment, null, typeof(EnvironmentCredential))]
+        [DataRow(CredentialType.ManagedIdentity, null, typeof(ManagedIdentityCredential))]
+        [DataRow(CredentialType.VisualStudio, null, typeof(VisualStudioCredential))]
+        [DataRow(CredentialType.VisualStudioCode, null, typeof(VisualStudioCodeCredential))]
+        [DataRow(CredentialType.AzureCLI, null, typeof(AzureCliCredential))]
+        [DataRow(CredentialType.AzurePowerShell, null, typeof(AzurePowerShellCredential))]
+        public void ShouldCreateExpectedSingleCredential(CredentialType credentialType, CredentialOptions? credentialOptions, Type expectedCredentialType)
         {
             var f = new TokenCredentialFactory();
-            f.CreateSingle(credentialType, exampleAuthorityUri).Should().BeOfType(expectedCredentialType);
+            f.CreateSingle(credentialType, credentialOptions, exampleAuthorityUri).Should().BeOfType(expectedCredentialType);
         }
 
+        [DataTestMethod]
+        [DynamicData(nameof(CreateManagedIdentityOptionsData), DynamicDataSourceType.Method)]
+        public void ShouldCreateExpectedSingleManagedIdentityCredential(CredentialOptions? credentialOptions)
+        {
+            var f = new TokenCredentialFactory();
+            f.CreateSingle(CredentialType.ManagedIdentity, credentialOptions, exampleAuthorityUri).Should().BeOfType(typeof(ManagedIdentityCredential));
+        }
+
+        [TestMethod]
         public void EmptyListOfCredentialTypesShouldThrow()
         {
             var f = new TokenCredentialFactory();
-            FluentActions.Invoking(() => f.CreateChain(Enumerable.Empty<CredentialType>(), exampleAuthorityUri)).Should().Throw<ArgumentException>();
+            FluentActions.Invoking(() => f.CreateChain([], null, exampleAuthorityUri)).Should().Throw<ArgumentException>();
         }
 
         [TestMethod]
         public void ShouldCreateExpectedSingleItemChain()
         {
             var f = new TokenCredentialFactory();
-            var credential = f.CreateChain(new[] { CredentialType.VisualStudioCode }, exampleAuthorityUri);
+            var credential = f.CreateChain(new[] { CredentialType.VisualStudioCode }, null, exampleAuthorityUri);
             AssertCredentialTypes(credential, typeof(VisualStudioCodeCredential));
         }
 
@@ -49,11 +56,21 @@ namespace Bicep.Core.UnitTests.Registry
         public void ShouldCreateExpectedMultiItemChain()
         {
             var f = new TokenCredentialFactory();
-            var credential = f.CreateChain(new[] { CredentialType.AzureCLI, CredentialType.ManagedIdentity, CredentialType.VisualStudio }, exampleAuthorityUri);
+            var credential = f.CreateChain(new[] { CredentialType.AzureCLI, CredentialType.ManagedIdentity, CredentialType.VisualStudio }, null, exampleAuthorityUri);
             AssertCredentialTypes(credential, typeof(AzureCliCredential), typeof(ManagedIdentityCredential), typeof(VisualStudioCredential));
         }
 
-        private void AssertCredentialTypes(TokenCredential credential, params Type[] expectedTypes)
+        private static IEnumerable<object[]> CreateManagedIdentityOptionsData()
+        {
+            yield return CreateTestsCase(null);
+            yield return CreateTestsCase(new ManagedIdentity(ManagedIdentityType.SystemAssigned, null, null));
+            yield return CreateTestsCase(new ManagedIdentity(ManagedIdentityType.SystemAssigned, Guid.Empty.ToString(), null));
+            yield return CreateTestsCase(new ManagedIdentity(ManagedIdentityType.SystemAssigned, null, $"/subscriptions/{Guid.Empty}/providers/resourceGroups/myRG/providers/Microsoft.Storage/storageAccounts/mySA"));
+
+            static object[] CreateTestsCase(ManagedIdentity? managedIdentity) => [new CredentialOptions(managedIdentity)];
+        }
+
+        private static void AssertCredentialTypes(TokenCredential credential, params Type[] expectedTypes)
         {
             credential.Should().BeOfType<ChainedTokenCredential>();
 

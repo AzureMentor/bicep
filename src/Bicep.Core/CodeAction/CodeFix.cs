@@ -1,8 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
-
 namespace Bicep.Core.CodeAction
 {
     public class CodeFix
@@ -22,11 +19,11 @@ namespace Bicep.Core.CodeAction
             {
                 throw new ArgumentException("Code fix title should not be empty");
             }
-            if (title.EndsWith(".") || title.EndsWith("!"))
+            if (title.EndsWith('.') || title.EndsWith('!'))
             {
                 throw new ArgumentException($"Code fix title should not end with a period or exclamation mark: \"{title}\"", nameof(title));
             }
-            if (char.IsLower( title[0]))
+            if (char.IsLower(title[0]))
             {
                 throw new ArgumentException($"Code fix title should not start with a lowercase letter: \"{title}\"", nameof(title));
             }

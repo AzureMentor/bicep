@@ -1,9 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
-using System.Threading.Tasks;
-
 namespace Bicep.LangServer.IntegrationTests
 {
     /// <summary>
@@ -38,7 +35,7 @@ namespace Bicep.LangServer.IntegrationTests
 
         public async Task<List<T>> WaitForAll(int timeout = DefaultTimeout)
         {
-            List<T> onMessageTasks = new List<T>();
+            List<T> onMessageTasks = new();
 
             foreach (var completionSource in completionSources)
             {

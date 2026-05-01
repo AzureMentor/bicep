@@ -1,9 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using Bicep.Core.Parsing;
+using Bicep.Core.Text;
 
 namespace Bicep.Core.Syntax
 {
@@ -14,9 +14,9 @@ namespace Bicep.Core.Syntax
             AssertTokenType(openParen, nameof(openParen), TokenType.LeftParen);
 
             this.OpenParen = openParen;
-            this.Children = children.ToImmutableArray();
+            this.Children = [.. children];
             this.CloseParen = closeParen;
-            this.Arguments = Children.OfType<LocalVariableSyntax>().ToImmutableArray();
+            this.Arguments = [.. this.Children.OfType<LocalVariableSyntax>()];
         }
 
         public Token OpenParen { get; }

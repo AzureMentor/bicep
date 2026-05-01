@@ -1,10 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
+using Bicep.Core.Features;
 using Bicep.Core.Navigation;
 using Bicep.Core.Parsing;
+using Bicep.Core.Text;
 using Bicep.Core.TypeSystem;
 
 namespace Bicep.Core.Syntax
@@ -45,14 +45,22 @@ namespace Bicep.Core.Syntax
 
         public override TextSpan Span => TextSpan.Between(this.LeadingNodes.FirstOrDefault() ?? this.Keyword, this.Value);
 
-        public TypeSymbol GetDeclaredType()
+        public static TypeSymbol GetDeclaredType(IFeatureProvider features)
         {
-            // TODO: Implement the ability to declare a file targeting multiple scopes
+            List<string> scopes = [
+                LanguageConstants.TargetScopeTypeTenant,
+                LanguageConstants.TargetScopeTypeManagementGroup,
+                LanguageConstants.TargetScopeTypeSubscription,
+                LanguageConstants.TargetScopeTypeResourceGroup,
+            ];
+
+            if (features.LocalDeployEnabled)
+            {
+                scopes.Add(LanguageConstants.TargetScopeTypeLocal);
+            }
+
             return TypeHelper.CreateTypeUnion(
-                TypeFactory.CreateStringLiteralType(LanguageConstants.TargetScopeTypeTenant),
-                TypeFactory.CreateStringLiteralType(LanguageConstants.TargetScopeTypeManagementGroup),
-                TypeFactory.CreateStringLiteralType(LanguageConstants.TargetScopeTypeSubscription),
-                TypeFactory.CreateStringLiteralType(LanguageConstants.TargetScopeTypeResourceGroup));
+                scopes.Select(x => TypeFactory.CreateStringLiteralType(x)).ToImmutableArray());
         }
     }
 }

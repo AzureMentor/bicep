@@ -1,19 +1,16 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Bicep.Core.Analyzers.Linter;
 using Bicep.Core.Analyzers.Linter.ApiVersions;
 using Bicep.Core.Analyzers.Linter.Rules;
-using Bicep.Core.Navigation;
+using Bicep.Core.Resources;
 using Bicep.Core.TypeSystem;
 using Bicep.Core.UnitTests.Assertions;
+using Bicep.Core.UnitTests.Mock;
 using Bicep.Core.UnitTests.Utils;
 using FluentAssertions;
 using FluentAssertions.Execution;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System.Linq;
-
-#pragma warning disable CA1825 // Avoid zero-length array allocations
 
 namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
 {
@@ -29,25 +26,31 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             {
                 // Test with the linter using the fake resource types from FakeResourceTypes (to guard against failures due to Azure changes)
                 // Note: The compiler does not know about these fake types, only the linter.
-                apiVersionProvider = new ApiVersionProvider(BicepTestConstants.Features, BicepTestConstants.AzResourceTypeLoader);
-                apiVersionProvider.InjectTypeReferences(ResourceScope.ResourceGroup, FakeResourceTypes.GetFakeResourceTypeReferences(FakeResourceTypes.ResourceScopeTypes));
+                apiVersionProvider = new ApiVersionProvider(
+                    BicepTestConstants.Features,
+                    []);
+                apiVersionProvider.InjectTypeReferences(
+                    ResourceScope.ResourceGroup,
+                    FakeResourceTypes.GetFakeResourceTypeReferences(FakeResourceTypes.ResourceScopeTypes));
             }
 
             private static void TestGetFunctionCallInfo(string bicep, string expectedFunctionCall, string? expectedResourceType, string? expectedApiVerion)
             {
                 ExpectedFunctionInfo typedExpected = new(expectedFunctionCall, expectedResourceType, expectedApiVerion);
-
+                var mockTypeLoader = FakeResourceTypes.GetAzResourceTypeLoaderWithInjectedTypes(FakeResourceTypes.ResourceScopeTypes).Object;
                 var result = CompilationHelper.Compile(
-                    new ServiceBuilder().WithApiVersionProvider(apiVersionProvider),
+                    new ServiceBuilder().WithAzResourceTypeLoader(mockTypeLoader),
                     bicep);
                 using (new AssertionScope().WithFullSource(result.BicepFile))
                 {
-                    var actual = UseRecentApiVersionRule.GetFunctionCallInfos(result.Compilation.GetEntrypointSemanticModel());
+                    UseRecentApiVersionRuleTests.VerifyAllTypesAndDatesAreFake(result.BicepFile.Text);
+
+                    var actual = UseRecentApiVersionRule.GetFunctionCallInfos(result.Compilation.GetEntrypointSemanticModel()).ToArray();
                     actual.Should().HaveCount(1, "Expecting a single function call per test");
                     var typedActual = new ExpectedFunctionInfo(
-                            actual.First().FunctionCallSyntax.ToText(),
-                            actual.First().ResourceType,
-                            actual.First().ApiVersion?.Formatted);
+                            actual[0].FunctionCallSyntax.ToString(),
+                            actual[0].ResourceType,
+                            actual[0].ApiVersion?.ToString());
 
                     typedActual.Should().BeEquivalentTo(typedExpected);
                 }
@@ -104,71 +107,71 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             )]
             [DataRow(
                 @"
-                    param apiversion string = '2022-01-01'
+                    param apiversion string = '2422-01-01'
                     output a object = reference('Fake.DBforMySQL/servers', apiversion)
                 ",
                 "reference('Fake.DBforMySQL/servers', apiversion)",
                 "Fake.DBforMySQL/servers",
-                "2022-01-01"
+                "2422-01-01"
             )]
             [DataRow(
                 @"
-                    var apiversion = '2022-01-01'
+                    var apiversion = '2422-01-01'
                     output a object = reference('Fake.DBforMySQL/servers', apiversion)
                 ",
                 "reference('Fake.DBforMySQL/servers', apiversion)",
                 "Fake.DBforMySQL/servers",
-                "2022-01-01"
+                "2422-01-01"
             )]
             [DataRow(
                 @"
-                    param p string = '2022-01-01'
+                    param p string = '2422-01-01'
                     var apiversion = p
                     output a object = reference('Fake.DBforMySQL/servers', apiversion)
                 ",
                 "reference('Fake.DBforMySQL/servers', apiversion)",
                 "Fake.DBforMySQL/servers",
-                "2022-01-01"
+                "2422-01-01"
             )]
             [DataRow(
                 @"
                     param p2 string = 'Fake.DBforMySQL/servers'
                     var resType = p2
-                    param p1 string = '2022-01-01'
+                    param p1 string = '2422-01-01'
                     var apiversion = p1
                     output a object = reference(resType, apiversion)
                 ",
                 "reference(resType, apiversion)",
                 "Fake.DBforMySQL/servers",
-                "2022-01-01"
+                "2422-01-01"
             )]
             [DataRow(
                 @"
                     param p2 string = 'Fake.DBforMySQL-servers'
                     var resType = p2
-                    param p1 string = '2022-01-01'
+                    param p1 string = '2422-01-01'
                     var apiversion = p1
                     output a object = reference(resType, apiversion)
                 ",
                 "reference(resType, apiversion)",
                 null, // not valid
-                "2022-01-01"
+                "2422-01-01"
             )]
             [DataRow(
                 @"
-                    output o1 string = reference('Fake.Resources/deployments/SettingUpVirtualNetwork', '2015-01-01').outputs.dbSubnetRef.value
+                    output o1 string = reference('Fake.Resources/deployments/SettingUpVirtualNetwork', '2415-01-01').outputs.dbSubnetRef.value
                 ",
-                "reference('Fake.Resources/deployments/SettingUpVirtualNetwork', '2015-01-01')",
+                "reference('Fake.Resources/deployments/SettingUpVirtualNetwork', '2415-01-01')",
                 "Fake.Resources/deployments",
-                "2015-01-01"
+                "2415-01-01"
             )]
             [DataRow(
                 @"
-                    output o1 string = reference(resourceId('Fake.Resources/deployments/SettingUpVirtualNetwork'), '2015-01-01').outputs.dbSubnetRef.value
+                    output o1 string = reference(resourceId('Fake.Resources/deployments/SettingUpVirtualNetwork'), '2415-01-01').outputs.dbSubnetRef.value
                 ",
-                "reference(resourceId('Fake.Resources/deployments/SettingUpVirtualNetwork'), '2015-01-01')",
+                "reference(resourceId('Fake.Resources/deployments/SettingUpVirtualNetwork'), '2415-01-01')",
                 "Fake.Resources/deployments",
-                "2015-01-01"
+                "2415-01-01"
             )]
             [DataTestMethod]
             public void GetFunctionCallInfo_Reference_NoResourceId(string bicep, string expectedFunctionCall, string? expectedResourceType, string? expectedApiVerion)
@@ -179,11 +182,11 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             [DataRow(
                 @"
                     var lbPublicIPName = 'lbPublicIPName'
-                    output o string = reference(resourceId('Microsoft.Network/publicIPAddresses', lbPublicIPName),'2020-08-01').dnsSettings.fqdn
+                    output o string = reference(resourceId('Fake.Network/publicIPAddresses', lbPublicIPName),'2420-08-01').dnsSettings.fqdn
                 ",
-                "reference(resourceId('Microsoft.Network/publicIPAddresses', lbPublicIPName), '2020-08-01')",
-                "Microsoft.Network/publicIPAddresses",
-                "2020-08-01"
+                "reference(resourceId('Fake.Network/publicIPAddresses', lbPublicIPName),'2420-08-01')",
+                "Fake.Network/publicIPAddresses",
+                "2420-08-01"
             )]
             [DataRow(
                 @"
@@ -195,35 +198,35 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             )]
             [DataRow(
                 @"
-                    output a object = reference(resourceId('Fake.DBforMySQL/servers'), '2022-01-01')
+                    output a object = reference(resourceId('Fake.DBforMySQL/servers'), '2422-01-01')
                 ",
-                "reference(resourceId('Fake.DBforMySQL/servers'), '2022-01-01')",
+                "reference(resourceId('Fake.DBforMySQL/servers'), '2422-01-01')",
                 "Fake.DBforMySQL/servers",
-                "2022-01-01"
+                "2422-01-01"
             )]
             [DataRow(
                 @"
-                    output a object = reference(resourceId('FakeDBforMySQL/servers'), '2022-01-01')
+                    output a object = reference(resourceId('FakeDBforMySQL/servers'), '2422-01-01')
                 ",
-                "reference(resourceId('FakeDBforMySQL/servers'), '2022-01-01')",
+                "reference(resourceId('FakeDBforMySQL/servers'), '2422-01-01')",
                 null, // not valid
-                "2022-01-01"
+                "2422-01-01"
             )]
             [DataRow(
                 @"
-                    output a object = reference(resourceId('Fake.DBforMySQL'), '2022-01-01')
+                    output a object = reference(resourceId('Fake.DBforMySQL'), '2422-01-01')
                 ",
-                "reference(resourceId('Fake.DBforMySQL'), '2022-01-01')",
+                "reference(resourceId('Fake.DBforMySQL'), '2422-01-01')",
                 null, // not valid
-                "2022-01-01"
+                "2422-01-01"
             )]
             [DataRow(
                 @"
-                    output a object = reference(resourceId('Fake.DBforMySQL/servers/whatever'), '2022-01-01')
+                    output a object = reference(resourceId('Fake.DBforMySQL/servers/whatever'), '2422-01-01')
                 ",
-                "reference(resourceId('Fake.DBforMySQL/servers/whatever'), '2022-01-01')",
+                "reference(resourceId('Fake.DBforMySQL/servers/whatever'), '2422-01-01')",
                 "Fake.DBforMySQL/servers",
-                "2022-01-01"
+                "2422-01-01"
             )]
             [DataRow(
                 @"
@@ -252,8 +255,8 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     var listAccountSasRequestContent = {
                       signedServices: 'bfqt'
                       signedPermission: 'rwdlacup'
-                      signedStart: '2021-06-02T00:00:00Z'
-                      signedExpiry: '2030-10-30T00:00:00Z'
+                      signedStart: '2421-06-02T00:00:00Z'
+                      signedExpiry: '2430-10-30T00:00:00Z'
                       signedResourceTypes: 'sco'
                     }
                     output output1 object = listAccountSas(resourceId('Fake.Network/publicIPAddresses', 'test'), '2415-06-15', listAccountSasRequestContent)
@@ -519,7 +522,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             {
                 string bicep = @"
                     targetScope = 'managementGroup'
-                    resource diagnostics_aa_deploy_policy 'Microsoft.Authorization/policyDefinitions@2021-06-01' = {
+                    resource diagnostics_aa_deploy_policy 'Fake.Authorization/policyDefinitions@2423-04-01' = {
                       name: 'diagnostics-aa-deploy-policy'
                       properties: {
                         parameters: {
@@ -545,27 +548,27 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         policyRule: {
                           if: {
                             field: 'type'
-                            equals: 'Microsoft.Automation/automationAccounts'
+                            equals: 'Fake.Automation/automationAccounts'
                           }
                           then: {
                             effect: 'deployIfNotExists'
                             details: {
-                              type: 'Microsoft.Insights/diagnosticSettings'
+                              type: 'Fake.Insights/diagnosticSettings'
                               roleDefinitionIds: [
-                                '/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c'
+                                '/providers/Fake.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c'
                               ]
                               existenceCondition: {
                                 allOf: [
                                   {
-                                    field: 'Microsoft.Insights/diagnosticSettings/logs.enabled'
+                                    field: 'Fake.Insights/diagnosticSettings/logs.enabled'
                                     equals: 'True'
                                   }
                                   {
-                                    field: 'Microsoft.Insights/diagnosticSettings/metrics.enabled'
+                                    field: 'Fake.Insights/diagnosticSettings/metrics.enabled'
                                     equals: 'True'
                                   }
                                   {
-                                    field: 'Microsoft.Insights/diagnosticSettings/workspaceId'
+                                    field: 'Fake.Insights/diagnosticSettings/workspaceId'
                                     matchInsensitively: '[parameters(\'logAnalytics\')]'
                                   }
                                 ]
@@ -590,9 +593,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                                     resources: [
                                       {
                                         name: '[parameters(\'profileName\')]'
-                                        type: 'Microsoft.Insights/diagnosticSettings'
-                                        apiVersion: '2021-05-01-preview'
-                                        scope: '[resourceId(\'Microsoft.Automation/automationAccounts\', parameters(\'resourceName\'))]'
+                                        type: 'Fake.Insights/diagnosticSettings'
+                                        apiVersion: '2421-05-01-preview'
+                                        scope: '[resourceId(\'Fake.Automation/automationAccounts\', parameters(\'resourceName\'))]'
                                         properties: {
                                           workspaceId: '[parameters(\'logAnalytics\')]'
                                           metrics: [
@@ -644,9 +647,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 ";
                 CompileAndTestWithFakeDateAndTypes(bicep,
                     ResourceScope.ResourceGroup,
-                    FakeResourceTypes.ResourceScopeTypes,
+                    FakeResourceTypes.SubscriptionScopeTypes,
                     "2422-07-04",
-                    new string[] { });
+                    []);
             }
 
             [TestMethod]
@@ -660,9 +663,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
-                        // pass
-                    });
+                    []);
             }
 
             [TestMethod]
@@ -675,10 +676,10 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
+                    [
                         // Compiler error
                         "[2] Expected 1 to 3 arguments, but got 0."
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -691,8 +692,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
-                    });
+                    []);
             }
 
             [TestMethod]
@@ -705,8 +705,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
-                    });
+                    []);
             }
 
             [TestMethod]
@@ -720,8 +719,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
-                    });
+                    []);
             }
 
             [TestMethod]
@@ -729,16 +727,16 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             {
                 string bicep = @"
                     param resourceType string = 'Fake.DBforMySQL/servers'
-                    param apiversion string = '2000-01-01'
+                    param apiversion string = '2400-01-01'
                     output a object = reference(resourceType, apiversion)
                 ";
                 CompileAndTestWithFakeDateAndTypes(bicep,
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                new string[] {
-                    "[4] Could not find apiVersion 2000-01-01 for Fake.DBforMySQL/servers. Acceptable versions: 2417-12-01"
-                });
+                [
+                    "[4] Could not find apiVersion 2400-01-01 for Fake.DBforMySQL/servers. Acceptable versions: 2417-12-01"
+                ]);
             }
 
             [TestMethod]
@@ -752,9 +750,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
+                    [
                         "[3] Use more recent API version for 'Fake.DBforMySQL/servers'. '2417-12-01-preview' is 1676 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2417-12-01",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -769,9 +767,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
+                    [
                          "[4] Could not find resource type \"Fake.DBforMySQLOrWhatever/servers\". Did you mean \"Fake.DBForMySql/flexibleServers\"?",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -786,9 +784,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
+                    [
                         "[4] Could not find apiVersion 2417-12-02 for Fake.DBforMySQL/servers. Acceptable versions: 2417-12-01",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -803,24 +801,20 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
-                        // ignore (pass)
-                    });
+                    []);
             }
 
             [TestMethod]
             public void ReferenceFunction_NoResourceType_Ignore()
             {
                 string bicep = @"
-                    output a object = reference(resourceId('Fake.DBforMySQL.servers', 'test'), '2001-01-01')
+                    output a object = reference(resourceId('Fake.DBforMySQL.servers', 'test'), '2401-01-01')
                 ";
                 CompileAndTestWithFakeDateAndTypes(bicep,
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
-                        // ignore (pass)
-                    });
+                    []);
             }
 
             [TestMethod]
@@ -833,9 +827,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
-                        // ignore (pass)
-                    });
+                    []);
             }
 
             [TestMethod]
@@ -848,9 +840,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                new string[] {
-                    "[2] Use more recent API version for 'Fake.DBforMySQL/servers'. '2417-12-01-preview' is 1676 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2417-12-01",
-                });
+                    [
+                        "[2] Use more recent API version for 'Fake.DBforMySQL/servers'. '2417-12-01-preview' is 1676 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2417-12-01",
+                    ]);
             }
 
             [TestMethod]
@@ -865,9 +857,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
+                    [
                         "[3] Could not find apiVersion 2406-06-01 for Fake.Web/connections. Acceptable versions: 2416-06-01"
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -891,24 +883,24 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                 FakeResourceTypes.ResourceScopeTypes,
                 "2422-07-04",
-                    new string[] {
+                    [
                         // TTK result:
                         //    [-] apiVersions Should Be Recent In Reference Functions(12 ms)
                         //        reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userAssignedIdentityName')), '2015-08-31-PREVIEW')  uses a preview version(2015 - 08 - 31 - PREVIEW) and there are more recent
                         //           versions available.Line: 15, Column: 24
                         //        Valid Api Versions Microsoft.ManagedIdentity / userAssignedIdentities :
                         //        2018 - 11 - 30
-                        //        2022 - 01 - 31 - PREVIEW
+                        //        2422 - 01 - 31 - PREVIEW
                         //        2021 - 09 - 30 - PREVIEW
                         //        Api versions must be the latest or under 2 years old(730 days) - API version used by:
                         //            reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userAssignedIdentityName')), '2015-08-31-PREVIEW')
                         //        is 2535 days old Line: 15, Column: 24
                         //        Valid Api Versions for Microsoft.ManagedIdentity / userAssignedIdentities :
                         //        2018 - 11 - 30
-                        //        2022 - 01 - 31 - PREVIEW
+                        //        2422 - 01 - 31 - PREVIEW
                         "[7] Use more recent API version for 'Fake.ManagedIdentity/userAssignedIdentities'. '2415-08-31-preview' is 2499 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2418-11-30",
                         "[12] Use more recent API version for 'Fake.ManagedIdentity/userAssignedIdentities'. '2415-08-31-preview' is 2499 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2418-11-30",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -922,9 +914,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
+                    [
                         "[2] Use more recent API version for 'Fake.Web/connections'. '2415-08-01-preview' is 2529 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2416-06-01",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -938,9 +930,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
+                    [
                         "[2] Use more recent API version for 'Fake.Network/virtualNetworks/subnets'. '2415-06-15' is 2576 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2420-11-01, 2420-08-01",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -954,26 +946,26 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
-                         // TTK results:
-                         // [-] apiVersions Should Be Recent In Reference Functions(24 ms)
-                         //       Api versions must be the latest or under 2 years old(730 days) - API version used by:
-                         //           list(resourceId('Microsoft.Network/publicIPAddresses', 'test'), '2015-06-15')
-                         //       is 2612 days old Line: 11, Column: 24
-                         //       Valid Api Versions for Microsoft.Network/publicIPAddresses :
-                         //       2022 - 01 - 01
-                         //       2022 - 01 - 01
-                         //       2021 - 12 - 01
-                         //       2021 - 08 - 01
-                         //       2021 - 06 - 01
-                         //       2021 - 05 - 01
-                         //       2021 - 04 - 01
-                         //       2021 - 03 - 01
-                         //       2021 - 02 - 01
-                         //       2021 - 01 - 01
-                         //       2020 - 11 - 01
+                    [
+                        // TTK results:
+                        // [-] apiVersions Should Be Recent In Reference Functions(24 ms)
+                        //       Api versions must be the latest or under 2 years old(730 days) - API version used by:
+                        //           list(resourceId('Microsoft.Network/publicIPAddresses', 'test'), '2015-06-15')
+                        //       is 2612 days old Line: 11, Column: 24
+                        //       Valid Api Versions for Microsoft.Network/publicIPAddresses :
+                        //       2422 - 01 - 01
+                        //       2422 - 01 - 01
+                        //       2021 - 12 - 01
+                        //       2021 - 08 - 01
+                        //       2021 - 06 - 01
+                        //       2021 - 05 - 01
+                        //       2021 - 04 - 01
+                        //       2021 - 03 - 01
+                        //       2021 - 02 - 01
+                        //       2021 - 01 - 01
+                        //       2020 - 11 - 01
                         "[2] Use more recent API version for 'Fake.Network/publicIPAddresses'. '2415-06-15' is 2576 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2420-11-01, 2420-08-01",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -984,8 +976,8 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     var listAccountSasRequestContent = {
                       signedServices: 'bfqt'
                       signedPermission: 'rwdlacup'
-                      signedStart: '2021-06-02T00:00:00Z'
-                      signedExpiry: '2030-10-30T00:00:00Z'
+                      signedStart: '2421-06-02T00:00:00Z'
+                      signedExpiry: '2430-10-30T00:00:00Z'
                       signedResourceTypes: 'sco'
                     }
 
@@ -996,9 +988,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
+                    [
                          "[11] Use more recent API version for 'Fake.Network/publicIPAddresses'. '2415-06-15' is 2576 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2420-11-01, 2420-08-01",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -1013,9 +1005,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
+                    [
                         "[3] Use more recent API version for 'Fake.Network/publicIPAddresses'. '2415-06-15' is 2576 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2420-11-01, 2420-08-01"
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -1029,9 +1021,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
+                    [
                         "[2] Use more recent API version for 'Fake.Network/publicIPAddresses'. '2415-06-15' is 2576 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2420-11-01, 2420-08-01"
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -1051,9 +1043,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
+                    [
                         "[8] Use more recent API version for 'Fake.DBforMySQL/servers'. '2417-12-01-preview' is 1676 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2417-12-01",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -1061,20 +1053,15 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             {
                 string bicep = @"
                     var lbPublicIPName = 'lbPublicIPName'
-                    output o string = reference(resourceId('Microsoft.Network/publicIPAddresses', lbPublicIPName),'2020-08-01').dnsSettings.fqdn
+                    output o string = reference(resourceId('Fake.Network/privateIPAddresses', lbPublicIPName),'2420-08-01').dnsSettings.fqdn
                 ";
                 CompileAndTestWithFakeDateAndTypes(bicep,
                     ResourceScope.ResourceGroup,
                 FakeResourceTypes.ResourceScopeTypes,
                 "2422-07-04",
-                    new string[] {
-                        // TTK result:
-                        //[-] apiVersions Should Be Recent In Reference Functions(57 ms)
-                        //    Api versions must be the latest or under 2 years old(730 days) - API version used by:
-                        //        reference(resourceId('Microsoft.Network/publicIPAddresses', variables('lbPublicIPName')), '2020-08-01')
-                        //    is 742 days old Line: 499, Column: 18
-                        "[3] Could not find resource type \"Microsoft.Network/publicIPAddresses\"."
-                    });
+                    [
+                        "[3] Could not find resource type \"Fake.Network/privateIPAddresses\". Did you mean \"Fake.Network/publicIPAddresses\"?"
+                    ]);
             }
 
             [TestMethod]
@@ -1082,15 +1069,15 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             {
                 string bicep = @"
                     var lbPublicIPName = 'lbPublicIPName'
-                    output o string = reference(resourceId('Fake.Network/publicIPAddress', lbPublicIPName),'2020-08-01').dnsSettings.fqdn
+                    output o string = reference(resourceId('Fake.Network/publicIPAddress', lbPublicIPName),'2420-08-01').dnsSettings.fqdn
                 ";
                 CompileAndTestWithFakeDateAndTypes(bicep,
                     ResourceScope.ResourceGroup,
                 FakeResourceTypes.ResourceScopeTypes,
                 "2422-07-04",
-                    new string[] {
+                    [
                         "[3] Could not find resource type \"Fake.Network/publicIPAddress\". Did you mean \"Fake.Network/publicIPAddresses\"?"
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -1104,9 +1091,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                new string[] {
+                [
                     "[2] Use more recent API version for 'Fake.Compute/virtualMachineScaleSets/virtualMachines/runCommands'. '2420-06-01' is 763 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2421-07-01, 2421-04-01, 2421-03-01, 2420-12-01",
-                });
+                ]);
             }
 
             [TestMethod]
@@ -1135,7 +1122,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                 FakeResourceTypes.ResourceScopeTypes,
                 "2422-07-04",
-                    new string[] {
+                    [
                     // TTK result:
                     //    Api versions must be the latest or under 2 years old (730 days) - API version used by:
                     //        reference(resourceId(parameters('storageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/', parameters('storageAccountName')), '2019-06-01')
@@ -1150,16 +1137,16 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     //    2021-02-01
                     //    2021-01-01
                     "[14] Could not find apiVersion 2420-12-01 for Fake.Storage/storageAccounts. Acceptable versions: 2421-06-01, 2421-04-01, 2421-02-01, 2421-01-01",
-                    });
+                    ]);
             }
 
             [TestMethod]
             public void Reference_ResourceName()
             {
                 string bicep = @"
-                    output output string = reference('lbPublicIPName', '2020-01-01').outputs.dbSubnetRef.value
+                    output output string = reference('lbPublicIPName', '2420-01-01').outputs.dbSubnetRef.value
 
-                    resource lbPublicIPName 'Fake.Network/publicIPAddresses@2020-11-01' = {
+                    resource lbPublicIPName 'Fake.Network/publicIPAddresses@2420-12-01' = {
                       name: 'lbPublicIPName'
                     #disable-next-line no-hardcoded-location
                       location: 'location'
@@ -1175,9 +1162,10 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                 FakeResourceTypes.ResourceScopeTypes,
                 "2422-07-04",
-                    new string[] {
-                        "[2] Could not find apiVersion 2020-01-01 for Fake.Network/publicIPAddresses. Acceptable versions: 2420-11-01, 2420-08-01", "[4] Could not find apiVersion 2020-11-01 for Fake.Network/publicIPAddresses. Acceptable versions: 2420-11-01, 2420-08-01",
-                    });
+                    [
+                        "[2] Could not find apiVersion 2420-01-01 for Fake.Network/publicIPAddresses. Acceptable versions: 2420-11-01, 2420-08-01",
+                        "[4] Could not find apiVersion 2420-12-01 for Fake.Network/publicIPAddresses. Acceptable versions: 2420-11-01, 2420-08-01",
+                    ]);
             }
 
             [TestMethod]
@@ -1194,12 +1182,12 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 ";
                 CompileAndTestWithFakeDateAndTypes(bicep,
                     ResourceScope.ResourceGroup,
-                FakeResourceTypes.ResourceScopeTypes,
-                "2422-07-04",
-                    new string[] {
+                    FakeResourceTypes.ResourceScopeTypes,
+                    "2422-07-04",
+                    [
                         "[4] Use more recent API version for 'Fake.ManagedIdentity/userAssignedIdentities'. '2415-08-31-preview' is 2499 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2418-11-30",
                         "[8] Use more recent API version for 'Fake.ManagedIdentity/userAssignedIdentities'. '2415-08-31-preview' is 2499 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2418-11-30",
-                    });
+                    ]);
             }
         }
     }

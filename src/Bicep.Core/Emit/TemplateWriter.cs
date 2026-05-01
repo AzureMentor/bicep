@@ -1,27 +1,22 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
+using System.Globalization;
 using Azure.Deployments.Core.Definitions.Schema;
 using Azure.Deployments.Core.Helpers;
-using Azure.Deployments.Expression.Expressions;
 using Bicep.Core.Extensions;
 using Bicep.Core.Intermediate;
-using Bicep.Core.Parsing;
+using Bicep.Core.Resources;
 using Bicep.Core.Semantics;
 using Bicep.Core.Semantics.Metadata;
 using Bicep.Core.Semantics.Namespaces;
 using Bicep.Core.Syntax;
 using Bicep.Core.TypeSystem;
-using Bicep.Core.TypeSystem.Az;
-using Microsoft.WindowsAzure.ResourceStack.Common.Extensions;
+using Bicep.Core.TypeSystem.Providers.Az;
+using Bicep.Core.TypeSystem.Types;
 using Microsoft.WindowsAzure.ResourceStack.Common.Json;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace Bicep.Core.Emit
@@ -32,25 +27,15 @@ namespace Bicep.Core.Emit
         public const string GeneratorMetadataPath = "metadata._generator";
         public const string NestedDeploymentResourceType = AzResourceTypeProvider.ResourceTypeDeployments;
         public const string TemplateHashPropertyName = "templateHash";
+        public const string LanguageVersionPropertyName = "languageVersion";
 
-        // IMPORTANT: Do not update this API version until the new one is confirmed to be deployed and available in ALL the clouds.
-        public const string NestedDeploymentResourceApiVersion = "2022-09-01";
-
-        private static readonly ImmutableHashSet<string> DecoratorsToEmitAsResourceProperties = new[] {
-            LanguageConstants.ParameterSecurePropertyName,
-            LanguageConstants.ParameterAllowedPropertyName,
-            LanguageConstants.ParameterMinValuePropertyName,
-            LanguageConstants.ParameterMaxValuePropertyName,
-            LanguageConstants.ParameterMinLengthPropertyName,
-            LanguageConstants.ParameterMaxLengthPropertyName,
-            LanguageConstants.ParameterMetadataPropertyName,
-            LanguageConstants.MetadataDescriptionPropertyName,
-            LanguageConstants.ParameterSealedPropertyName,
-        }.ToImmutableHashSet();
+        private const string TypePropertyName = "type";
+        private const string InternalTypeRefStart = "#";
+        private const string TypeDefinitionsProperty = "definitions";
 
         private static ISemanticModel GetModuleSemanticModel(ModuleSymbol moduleSymbol)
         {
-            if (!moduleSymbol.TryGetSemanticModel(out var moduleSemanticModel, out _))
+            if (!moduleSymbol.TryGetSemanticModel().IsSuccess(out var moduleSemanticModel))
             {
                 // this should have already been checked during type assignment
                 throw new InvalidOperationException($"Unable to find referenced compilation for module {moduleSymbol.Name}");
@@ -80,15 +65,17 @@ namespace Bicep.Core.Emit
 
         private EmitterContext Context => ExpressionBuilder.Context;
         private ExpressionBuilder ExpressionBuilder { get; }
+        private ImmutableDictionary<string, DeclaredTypeExpression> declaredTypesByName;
 
         public TemplateWriter(SemanticModel semanticModel)
         {
             ExpressionBuilder = new ExpressionBuilder(new EmitterContext(semanticModel));
+            declaredTypesByName = [];
         }
 
         public void Write(SourceAwareJsonTextWriter writer)
         {
-            // Template is used for calcualting template hash, template jtoken is used for writing to file.
+            // Template is used for calculating template hash, template jtoken is used for writing to file.
             var (template, templateJToken) = GenerateTemplateWithoutHash(writer.TrackingJsonWriter);
             var templateHash = TemplateHelpers.ComputeTemplateHash(template.ToJToken());
             if (templateJToken.SelectToken(GeneratorMetadataPath) is not JObject generatorObject)
@@ -100,35 +87,60 @@ namespace Bicep.Core.Emit
             writer.ProcessSourceMap(templateJToken);
         }
 
+        public (Template, JToken) GetTemplate(SourceAwareJsonTextWriter writer)
+        {
+            return GenerateTemplateWithoutHash(writer.TrackingJsonWriter);
+        }
+
         private (Template, JToken) GenerateTemplateWithoutHash(PositionTrackingJsonTextWriter jsonWriter)
         {
             var emitter = new ExpressionEmitter(jsonWriter, this.Context);
+
             var program = (ProgramExpression)ExpressionBuilder.Convert(Context.SemanticModel.Root.Syntax);
+
+            var programTypes = program.Types.Concat(Context.SemanticModel.ImportClosureInfo.ImportedTypesInClosure);
+            declaredTypesByName = programTypes.ToImmutableDictionary(t => t.Name);
 
             jsonWriter.WriteStartObject();
 
             emitter.EmitProperty("$schema", GetSchema(Context.SemanticModel.TargetScope));
 
-            if (Context.Settings.EnableSymbolicNames)
+            if (Context.Settings.UseExperimentalTemplateLanguageVersion)
             {
-                emitter.EmitProperty("languageVersion", "1.10-experimental");
+                // Note (tasmalligan): 2.2 epxerimental is being used for extensibility migration and local deploy
+                if (Context.SemanticModel.Features.ModuleExtensionConfigsEnabled)
+                {
+                    emitter.EmitProperty(LanguageVersionPropertyName, "2.2-experimental");
+                }
+                else
+                {
+                    emitter.EmitProperty(LanguageVersionPropertyName, "2.1-experimental");
+                }
+            }
+            else if (Context.Settings.EnableSymbolicNames)
+            {
+                emitter.EmitProperty(LanguageVersionPropertyName, "2.0");
             }
 
             emitter.EmitProperty("contentVersion", "1.0.0.0");
 
-            this.EmitMetadata(emitter, program.Metadata);
+            this.EmitMetadata(emitter, program.Metadata, program.Variables.Concat(Context.SemanticModel.ImportClosureInfo.ImportedVariablesInClosure));
 
-            this.EmitTypeDefinitionsIfPresent(jsonWriter, emitter);
+            this.EmitTypeDefinitionsIfPresent(emitter, programTypes);
+
+            this.EmitUserDefinedFunctions(emitter, program.Functions.Concat(Context.SemanticModel.ImportClosureInfo.ImportedFunctionsInClosure));
 
             this.EmitParametersIfPresent(emitter, program.Parameters);
 
-            this.EmitVariablesIfPresent(emitter, program.Variables);
+            this.EmitVariablesIfPresent(emitter, program.Variables.Concat(Context.SemanticModel.ImportClosureInfo.ImportedVariablesInClosure));
 
-            this.EmitImports(emitter, program.Imports);
+            this.EmitExtensionsIfPresent(emitter, program.Extensions);
 
-            this.EmitResources(jsonWriter, emitter, program.Resources, program.Modules);
+            this.EmitResources(jsonWriter, emitter, program.Extensions, program.Resources, program.Modules);
 
             this.EmitOutputsIfPresent(emitter, program.Outputs);
+
+            this.EmitAssertsIfPresent(emitter, program.Asserts);
 
             jsonWriter.WriteEndObject();
 
@@ -136,25 +148,47 @@ namespace Bicep.Core.Emit
             return (Template.FromJson<Template>(content), content.FromJson<JToken>());
         }
 
-        private void EmitTypeDefinitionsIfPresent(PositionTrackingJsonTextWriter jsonWriter, ExpressionEmitter emitter)
+        private void EmitTypeDefinitionsIfPresent(ExpressionEmitter emitter, IEnumerable<DeclaredTypeExpression> types)
         {
-            if (Context.SemanticModel.Root.TypeDeclarations.Length == 0)
+            if (!types.Any())
             {
                 return;
             }
 
-            jsonWriter.WritePropertyName("definitions");
-            jsonWriter.WriteStartObject();
-
-            foreach (var declaredTypeSymbol in Context.SemanticModel.Root.TypeDeclarations)
+            emitter.EmitObjectProperty(TypeDefinitionsProperty, () =>
             {
-                jsonWriter.WritePropertyWithPosition(
-                    declaredTypeSymbol.DeclaringType,
-                    declaredTypeSymbol.Name,
-                    () => EmitTypeDeclaration(jsonWriter, declaredTypeSymbol, emitter));
+                foreach (var type in types)
+                {
+                    EmitTypeDeclaration(emitter, type);
+                }
+            });
+        }
+
+        private void EmitUserDefinedFunctions(ExpressionEmitter emitter, IEnumerable<DeclaredFunctionExpression> functions)
+        {
+            if (!functions.Any())
+            {
+                return;
             }
 
-            jsonWriter.WriteEndObject();
+            emitter.EmitArrayProperty("functions", () =>
+            {
+                foreach (var ns in functions.GroupBy(f => f.Namespace))
+                {
+                    emitter.EmitObject(() =>
+                    {
+                        emitter.EmitProperty("namespace", ns.Key);
+
+                        emitter.EmitObjectProperty("members", () =>
+                        {
+                            foreach (var function in ns)
+                            {
+                                EmitUserDefinedFunction(emitter, function);
+                            }
+                        });
+                    });
+                }
+            });
         }
 
         private void EmitParametersIfPresent(ExpressionEmitter emitter, ImmutableArray<DeclaredParameterExpression> parameters)
@@ -164,7 +198,8 @@ namespace Bicep.Core.Emit
                 return;
             }
 
-            emitter.EmitObjectProperty("parameters", () => {
+            emitter.EmitObjectProperty("parameters", () =>
+            {
                 foreach (var parameter in parameters)
                 {
                     EmitParameter(emitter, parameter);
@@ -172,52 +207,144 @@ namespace Bicep.Core.Emit
             });
         }
 
-        private ObjectExpression AddDecoratorsToBody(DecorableSyntax decorated, ObjectExpression input, TypeSymbol targetType)
+        private static ObjectExpression ApplyTypeModifiers(TypeDeclaringExpression expression, ObjectExpression input)
         {
             var result = input;
-            foreach (var decoratorSyntax in decorated.Decorators.Reverse())
+
+            if (expression.Secure is { } secure)
             {
-                var symbol = this.Context.SemanticModel.GetSymbolInfo(decoratorSyntax.Expression);
-
-                if (symbol is FunctionSymbol decoratorSymbol &&
-                    decoratorSymbol.DeclaringObject is NamespaceType namespaceType &&
-                    DecoratorsToEmitAsResourceProperties.Contains(decoratorSymbol.Name))
+                result = result.Properties.Where(p => p.Key is StringLiteralExpression { Value: string name } && name == "type").Single().Value switch
                 {
-                    var argumentTypes = decoratorSyntax.Arguments
-                        .Select(argument => this.Context.SemanticModel.TypeManager.GetTypeInfo(argument))
-                        .ToArray();
+                    StringLiteralExpression { Value: string typeName } when typeName == LanguageConstants.TypeNameString
+                        => result.MergeProperty("type", ExpressionFactory.CreateStringLiteral("securestring", secure.SourceSyntax)),
+                    StringLiteralExpression { Value: string typeName } when typeName == LanguageConstants.ObjectType
+                        => result.MergeProperty("type", ExpressionFactory.CreateStringLiteral("secureObject", secure.SourceSyntax)),
+                    _ => result,
+                };
+            }
 
-                    // There should be exact one matching decorator since there's no errors.
-                    var decorator = namespaceType.DecoratorResolver.GetMatches(decoratorSymbol, argumentTypes).Single();
+            if (expression.Sealed is { } @sealed)
+            {
+                result = result.MergeProperty("additionalProperties", ExpressionFactory.CreateBooleanLiteral(false, @sealed.SourceSyntax));
+            }
 
-                    var functionCall = ExpressionBuilder.Convert(decoratorSyntax.Expression) as FunctionCallExpression
-                        ?? throw new InvalidOperationException($"Failed to convert decorator expression {decoratorSyntax.Expression.GetType()}");
+            if (expression is DeclaredTypeExpression declaredTypeExpression && declaredTypeExpression.Exported is { } exported)
+            {
+                result = ApplyMetadataProperty(result, LanguageConstants.MetadataExportedPropertyName, ExpressionFactory.CreateBooleanLiteral(true, exported.SourceSyntax));
+            }
 
-                    var evaluated = decorator.Evaluate(functionCall, targetType, result);
-                    if (evaluated is not null)
-                    {
-                        result = evaluated;
-                    }
+            foreach (var (modifier, propertyName) in new[]
+            {
+                (expression.Metadata, LanguageConstants.ParameterMetadataPropertyName),
+                (expression.MinLength, LanguageConstants.ParameterMinLengthPropertyName),
+                (expression.MaxLength, LanguageConstants.ParameterMaxLengthPropertyName),
+                (expression.MinValue, LanguageConstants.ParameterMinValuePropertyName),
+                (expression.MaxValue, LanguageConstants.ParameterMaxValuePropertyName),
+                (expression.UserDefinedConstraint, LanguageConstants.ParameterUserDefinedConstraintPropertyName),
+            })
+            {
+                if (modifier is not null)
+                {
+                    result = result.MergeProperty(propertyName, modifier);
                 }
             }
 
-            return result;
+            return ApplyDescription(expression, result);
         }
+
+        private static ObjectExpression ApplyDescription(DescribableExpression expression, ObjectExpression input)
+            => ApplyMetadataProperty(input, LanguageConstants.MetadataDescriptionPropertyName, expression.Description);
+
+        private static ObjectExpression ApplyMetadataProperty(ObjectExpression input, string propertyName, Expression? propertyValue) => propertyValue is not null
+            ? input.MergeProperty(LanguageConstants.ParameterMetadataPropertyName, ExpressionFactory.CreateObject(
+                ExpressionFactory.CreateObjectProperty(propertyName, propertyValue, propertyValue.SourceSyntax).AsEnumerable(),
+                propertyValue.SourceSyntax))
+            : input;
 
         private void EmitParameter(ExpressionEmitter emitter, DeclaredParameterExpression parameter)
         {
             emitter.EmitObjectProperty(parameter.Name, () =>
             {
-                var declaringParameter = parameter.Symbol.DeclaringParameter;
-                var parameterObject = TypePropertiesForTypeExpression(declaringParameter.Type);
+                var parameterObject = TypePropertiesForTypeExpression(parameter.Type);
 
                 if (parameter.DefaultValue is not null)
                 {
                     parameterObject = parameterObject.MergeProperty("defaultValue", parameter.DefaultValue);
                 }
 
-                EmitProperties(emitter, AddDecoratorsToBody(declaringParameter, parameterObject, parameter.Symbol.Type));
+                if (parameter.AllowedValues is not null)
+                {
+                    parameterObject = parameterObject.MergeProperty("allowedValues", parameter.AllowedValues);
+                }
+
+                EmitProperties(emitter, ApplyTypeModifiers(parameter, parameterObject));
             }, parameter.SourceSyntax);
+        }
+
+        private void EmitUserDefinedFunction(ExpressionEmitter emitter, DeclaredFunctionExpression function)
+        {
+            if (function.Lambda is not LambdaExpression lambda)
+            {
+                throw new ArgumentException("Invalid function expression lambda encountered.");
+            }
+
+            emitter.EmitObjectProperty(function.Name, () =>
+            {
+                emitter.EmitArrayProperty("parameters", () =>
+                {
+                    for (var i = 0; i < lambda.Parameters.Length; i++)
+                    {
+                        var parameterObject = TypePropertiesForTypeExpression(lambda.ParameterTypes[i]!);
+                        parameterObject = parameterObject.MergeProperty("name", new StringLiteralExpression(null, lambda.Parameters[i]));
+
+                        emitter.EmitObject(() =>
+                        {
+                            EmitProperties(emitter, parameterObject);
+                        });
+                    }
+                });
+
+                emitter.EmitObjectProperty("output", () =>
+                {
+                    var outputObject = TypePropertiesForTypeExpression(lambda.OutputType!);
+                    outputObject = outputObject.MergeProperty("value", lambda.Body);
+
+                    EmitProperties(emitter, outputObject);
+                });
+
+                var originMetadataLookupKey = function.Namespace == EmitConstants.UserDefinedFunctionsNamespace
+                    ? function.Name
+                    : $"{function.Namespace}.{function.Name}";
+
+                if (function.Description is not null || function.Exported is not null || Context.SemanticModel.ImportClosureInfo.ImportedSymbolOriginMetadata.ContainsKey(originMetadataLookupKey))
+                {
+                    emitter.EmitObjectProperty(LanguageConstants.ParameterMetadataPropertyName, () =>
+                    {
+                        if (function.Description is not null)
+                        {
+                            emitter.EmitProperty(LanguageConstants.MetadataDescriptionPropertyName, function.Description);
+                        }
+
+                        if (function.Exported is not null)
+                        {
+                            emitter.EmitProperty(LanguageConstants.MetadataExportedPropertyName, ExpressionFactory.CreateBooleanLiteral(true, function.Exported.SourceSyntax));
+                        }
+
+                        if (Context.SemanticModel.ImportClosureInfo.ImportedSymbolOriginMetadata.TryGetValue(originMetadataLookupKey, out var originMetadata))
+                        {
+                            emitter.EmitObjectProperty(LanguageConstants.MetadataImportedFromPropertyName, () =>
+                            {
+                                emitter.EmitProperty(LanguageConstants.ImportMetadataSourceTemplatePropertyName, originMetadata.SourceTemplateIdentifier);
+
+                                if (!function.Name.Equals(originMetadata.OriginalName))
+                                {
+                                    emitter.EmitProperty(LanguageConstants.ImportMetadataOriginalIdentifierPropertyName, originMetadata.OriginalName);
+                                }
+                            });
+                        }
+                    });
+                }
+            }, function.SourceSyntax);
         }
 
         private void EmitProperties(ExpressionEmitter emitter, ObjectExpression objectExpression)
@@ -231,243 +358,627 @@ namespace Bicep.Core.Emit
             }
         }
 
-        private void EmitTypeDeclaration(JsonTextWriter jsonWriter, TypeAliasSymbol declaredTypeSymbol, ExpressionEmitter emitter)
+        private void EmitTypeDeclaration(ExpressionEmitter emitter, DeclaredTypeExpression declaredType)
         {
-            jsonWriter.WriteStartObject();
-
-            EmitProperties(emitter, AddDecoratorsToBody(declaredTypeSymbol.DeclaringType,
-                TypePropertiesForTypeExpression(declaredTypeSymbol.DeclaringType.Value),
-                declaredTypeSymbol.Type));
-
-            jsonWriter.WriteEndObject();
+            emitter.EmitObjectProperty(declaredType.Name,
+                () =>
+                {
+                    var declaredTypeObject = ApplyTypeModifiers(declaredType, TypePropertiesForTypeExpression(declaredType.Value));
+                    if (Context.SemanticModel.ImportClosureInfo.ImportedSymbolOriginMetadata.TryGetValue(declaredType.Name, out var originMetadata))
+                    {
+                        var importedFromProperties = ExpressionFactory.CreateObjectProperty(LanguageConstants.ImportMetadataSourceTemplatePropertyName,
+                            ExpressionFactory.CreateStringLiteral(originMetadata.SourceTemplateIdentifier)).AsEnumerable();
+                        if (!declaredType.Name.EndsWith(originMetadata.OriginalName))
+                        {
+                            importedFromProperties = importedFromProperties.Append(ExpressionFactory.CreateObjectProperty(LanguageConstants.ImportMetadataOriginalIdentifierPropertyName,
+                                ExpressionFactory.CreateStringLiteral(originMetadata.OriginalName)));
+                        }
+                        declaredTypeObject = ApplyMetadataProperty(declaredTypeObject, LanguageConstants.MetadataImportedFromPropertyName, ExpressionFactory.CreateObject(importedFromProperties));
+                    }
+                    EmitProperties(emitter, declaredTypeObject);
+                },
+                declaredType.SourceSyntax);
         }
 
-        private ObjectExpression TypePropertiesForTypeExpression(SyntaxBase typeExpressionSyntax) => typeExpressionSyntax switch
+        private ObjectExpression TypePropertiesForTypeExpression(TypeExpression typeExpression) => typeExpression switch
         {
-            VariableAccessSyntax variableAccess => TypePropertiesForUnqualifedReference(variableAccess),
-            PropertyAccessSyntax propertyAccess => TypePropertiesForQualifiedReference(propertyAccess),
-            ResourceTypeSyntax resourceType => GetTypePropertiesForResourceType(resourceType),
-            ArrayTypeSyntax arrayType => GetTypePropertiesForArrayType(arrayType),
-            ObjectTypeSyntax objectType => GetTypePropertiesForObjectType(objectType),
-            TupleTypeSyntax tupleType => GetTypePropertiesForTupleType(tupleType),
-            StringSyntax @string => GetTypePropertiesForStringSyntax(@string),
-            IntegerLiteralSyntax integerLiteral => GetTypePropertiesForIntegerLiteralSyntax(integerLiteral),
-            BooleanLiteralSyntax booleanLiteral => GetTypePropertiesForBooleanLiteralSyntax(booleanLiteral),
-            UnaryOperationSyntax unaryOperation => GetTypePropertiesForUnaryOperationSyntax(unaryOperation),
-            UnionTypeSyntax unionType => GetTypePropertiesForUnionTypeSyntax(unionType),
-            ParenthesizedExpressionSyntax parenthesizedExpression => TypePropertiesForTypeExpression(parenthesizedExpression.Expression),
-            NullableTypeSyntax nullableType => GetTypePropertiesForNullableTypeSyntax(nullableType),
-            NonNullAssertionSyntax nonNullableType => GetTypePropertiesForNonNullableTypeSyntax(nonNullableType),
+            // ARM primitive types
+            AmbientTypeReferenceExpression ambientTypeReference when ambientTypeReference.Name == LanguageConstants.TypeNameAny
+                => ExpressionFactory.CreateObject([], ambientTypeReference.SourceSyntax),
+            AmbientTypeReferenceExpression ambientTypeReference
+                => ExpressionFactory.CreateObject(TypeProperty(ambientTypeReference.Name, ambientTypeReference.SourceSyntax).AsEnumerable(),
+                    ambientTypeReference.SourceSyntax),
+            FullyQualifiedAmbientTypeReferenceExpression fullyQualifiedAmbientTypeReference
+                => TypePropertiesForQualifiedReference(fullyQualifiedAmbientTypeReference),
+
+            // references
+            TypeAliasReferenceExpression or
+            SynthesizedTypeAliasReferenceExpression or
+            ImportedTypeReferenceExpression or
+            WildcardImportTypePropertyReferenceExpression or
+            ResourceDerivedTypeExpression or
+            ITypeReferenceAccessExpression => GetTypePropertiesForReferenceExpression(typeExpression),
+
+            // literals
+            StringLiteralTypeExpression @string => ExpressionFactory.CreateObject(
+                new[]
+                {
+                    TypeProperty(LanguageConstants.TypeNameString, @string.SourceSyntax),
+                    AllowedValuesProperty(SingleElementArray(ExpressionFactory.CreateStringLiteral(@string.Value, @string.SourceSyntax)),
+                        @string.SourceSyntax),
+                },
+                @string.SourceSyntax),
+            IntegerLiteralTypeExpression @int => ExpressionFactory.CreateObject(
+                new[]
+                {
+                    TypeProperty(LanguageConstants.TypeNameInt, @int.SourceSyntax),
+                    AllowedValuesProperty(SingleElementArray(ExpressionFactory.CreateIntegerLiteral(@int.Value, @int.SourceSyntax)),
+                        @int.SourceSyntax),
+                },
+                @int.SourceSyntax),
+            BooleanLiteralTypeExpression @bool => ExpressionFactory.CreateObject(
+                new[]
+                {
+                    TypeProperty(LanguageConstants.TypeNameBool, @bool.SourceSyntax),
+                    AllowedValuesProperty(SingleElementArray(ExpressionFactory.CreateBooleanLiteral(@bool.Value, @bool.SourceSyntax)),
+                        @bool.SourceSyntax),
+                },
+                @bool.SourceSyntax),
+            UnionTypeExpression unionType => GetTypePropertiesForUnionTypeExpression(unionType),
+
+            // resource types
+            ResourceTypeExpression resourceType => GetTypePropertiesForResourceType(resourceType),
+
+            // aggregate types
+            ArrayTypeExpression arrayType => GetTypePropertiesForArrayType(arrayType),
+            ObjectTypeExpression objectType => GetTypePropertiesForObjectType(objectType),
+            TupleTypeExpression tupleType => GetTypePropertiesForTupleType(tupleType),
+            NullableTypeExpression nullableType => TypePropertiesForTypeExpression(nullableType.BaseExpression)
+                .MergeProperty("nullable", ExpressionFactory.CreateBooleanLiteral(true, nullableType.SourceSyntax)),
+            NonNullableTypeExpression nonNullableType => TypePropertiesForTypeExpression(nonNullableType.BaseExpression)
+                .MergeProperty("nullable", ExpressionFactory.CreateBooleanLiteral(false, nonNullableType.SourceSyntax)),
+            DiscriminatedObjectTypeExpression discriminatedObject => GetTypePropertiesForDiscriminatedObjectExpression(discriminatedObject),
             // this should have been caught by the parser
-            _ => throw new ArgumentException("Invalid type syntax encountered."),
+            _ => throw new ArgumentException("Invalid type expression encountered."),
         };
 
-        private ObjectExpression TypePropertiesForUnqualifedReference(VariableAccessSyntax variableAccess) => Context.SemanticModel.GetSymbolInfo(variableAccess) switch
-        {
-            AmbientTypeSymbol ambientType => ExpressionFactory.CreateObject(TypeProperty(ambientType.Name).AsEnumerable()),
-            TypeAliasSymbol typeAlias => ExpressionFactory.CreateObject(ExpressionFactory.CreateObjectProperty("$ref", ExpressionFactory.CreateStringLiteral($"#/definitions/{typeAlias.Name}")).AsEnumerable()),
-            // should have been caught long ago by the type manager
-            _ => throw new ArgumentException($"The symbolic name \"{variableAccess.Name.IdentifierName}\" does not refer to a type"),
-        };
+        private ObjectExpression GetTypePropertiesForReferenceExpression(TypeExpression typeExpression)
+            => ResolveTypeReferenceExpression(typeExpression)
+                .GetTypePropertiesForResolvedReferenceExpression(typeExpression.SourceSyntax);
 
-        private ObjectExpression TypePropertiesForQualifiedReference(PropertyAccessSyntax propertyAccess)
+        private interface ITypeReferenceExpressionResolution
         {
-            // The only property access scenario supported at the moment is dereferencing types from a namespace
-            if (Context.SemanticModel.GetSymbolInfo(propertyAccess.BaseExpression) is not BuiltInNamespaceSymbol builtInNamespace || builtInNamespace.Type.ProviderName != SystemNamespaceType.BuiltInName)
+            ImmutableArray<string> PointerSegments { get; }
+
+            ObjectExpression GetTypePropertiesForResolvedReferenceExpression(SyntaxBase? sourceSyntax);
+
+            ImmutableArray<string> SegmentsForProperty(string propertyName)
+                => PointerSegments.AddRange("properties", propertyName);
+
+            ImmutableArray<string> SegmentsForAdditionalProperties()
+                => PointerSegments.Add("additionalProperties");
+
+            ImmutableArray<string> SegmentsForIndex(long index)
+                => PointerSegments.AddRange("prefixItems", index.ToString(CultureInfo.InvariantCulture));
+
+            ImmutableArray<string> SegmentsForItems()
+                => PointerSegments.Add("items");
+
+            ImmutableArray<string> SegmentsForVariant(string discriminatorValue)
+                => PointerSegments.AddRange("discriminator", "mapping", discriminatorValue);
+        }
+
+        private record ResourceDerivedTypeResolution(
+            ResourceTypeReference RootResourceTypeReference,
+            ImmutableArray<string> PointerSegments,
+            TypeSymbol DerivedType,
+            ResourceDerivedTypeVariant Variant) : ITypeReferenceExpressionResolution
+        {
+            internal ResourceDerivedTypeResolution(ResourceDerivedTypeExpression expression)
+                : this(expression.RootResourceType.TypeReference, [], expression.ExpressedType, expression.Variant) { }
+
+            public ObjectExpression GetTypePropertiesForResolvedReferenceExpression(SyntaxBase? sourceSyntax)
+            {
+                var typePointerProperty = ExpressionFactory.CreateObjectProperty(
+                    LanguageConstants.MetadataResourceDerivedTypePointerPropertyName,
+                    ExpressionFactory.CreateStringLiteral(string.Concat(
+                        RootResourceTypeReference.FormatName(),
+                        PointerSegments.IsEmpty ? string.Empty : '#',
+                        string.Join('/', PointerSegments.Select(StringExtensions.Rfc6901Encode)))));
+                var metadataValue = Variant switch
+                {
+                    ResourceDerivedTypeVariant.Input => ExpressionFactory.CreateObject(typePointerProperty.AsEnumerable()),
+                    ResourceDerivedTypeVariant.Output => ExpressionFactory.CreateObject(new[]
+                    {
+                        typePointerProperty,
+                        ExpressionFactory.CreateObjectProperty(
+                            LanguageConstants.MetadataResourceDerivedTypeOutputFlagName,
+                            ExpressionFactory.CreateBooleanLiteral(true))
+                    }),
+                    // The legacy representation uses a string (the type pointer), not an object
+                    _ => typePointerProperty.Value,
+                };
+
+                List<ObjectPropertyExpression> properties = new();
+                if (TryGetNonLiteralTypeName(DerivedType) is string typeConstraintValue)
+                {
+                    properties.Add(TypeProperty(typeConstraintValue, sourceSyntax));
+                }
+
+                properties.Add(ExpressionFactory.CreateObjectProperty(
+                    LanguageConstants.ParameterMetadataPropertyName,
+                    ExpressionFactory.CreateObject(
+                        ExpressionFactory.CreateObjectProperty(
+                            LanguageConstants.MetadataResourceDerivedTypePropertyName,
+                            metadataValue,
+                            sourceSyntax).AsEnumerable(),
+                        sourceSyntax),
+                    sourceSyntax));
+
+                return ExpressionFactory.CreateObject(properties, sourceSyntax);
+            }
+        }
+
+        private record ResolvedInternalReference(ImmutableArray<string> PointerSegments, TypeExpression Declaration) : ITypeReferenceExpressionResolution
+        {
+            public ObjectExpression GetTypePropertiesForResolvedReferenceExpression(SyntaxBase? sourceSyntax)
+                => ExpressionFactory.CreateObject(
+                    ExpressionFactory.CreateObjectProperty("$ref",
+                        ExpressionFactory.CreateStringLiteral(
+                            string.Join('/', InternalTypeRefStart.AsEnumerable().Concat(PointerSegments.Select(StringExtensions.Rfc6901Encode))),
+                            sourceSyntax),
+                        sourceSyntax).AsEnumerable(),
+                    sourceSyntax);
+        }
+
+        private ResolvedInternalReference ForNamedRoot(string rootName)
+            => new([TypeDefinitionsProperty, rootName], declaredTypesByName[rootName].Value);
+
+        private ITypeReferenceExpressionResolution ResolveTypeReferenceExpression(TypeExpression expression)
+        {
+            Stack<ITypeReferenceAccessExpression> typeReferencesStack = new();
+            TypeExpression root = expression;
+
+            while (root is ITypeReferenceAccessExpression accessExpression)
+            {
+                typeReferencesStack.Push(accessExpression);
+                root = accessExpression.BaseExpression;
+            }
+
+            ITypeReferenceExpressionResolution currentResolution = root switch
+            {
+                TypeAliasReferenceExpression typeAliasReference => ForNamedRoot(typeAliasReference.Symbol.Name),
+                SynthesizedTypeAliasReferenceExpression typeAliasReference => ForNamedRoot(typeAliasReference.Name),
+                ImportedTypeReferenceExpression importedTypeReference => ForNamedRoot(
+                    Context.SemanticModel.ImportClosureInfo.ImportedSymbolNames[importedTypeReference.Symbol]),
+                WildcardImportTypePropertyReferenceExpression importedTypeReference => ForNamedRoot(
+                    Context.SemanticModel.ImportClosureInfo.WildcardImportPropertyNames[new(importedTypeReference.ImportSymbol, importedTypeReference.PropertyName)]),
+                ResourceDerivedTypeExpression resourceDerived => new ResourceDerivedTypeResolution(resourceDerived),
+                _ => throw new ArgumentException($"Cannot resolve type reference access expression with a root of type '{root.GetType().Name}'."),
+            };
+
+            while (typeReferencesStack.TryPop(out var currentAccessExpression))
+            {
+                currentResolution = currentAccessExpression switch
+                {
+                    TypeReferencePropertyAccessExpression propertyAccess
+                        => ResolveTypeReferenceExpressionProperty(currentResolution, propertyAccess),
+                    TypeReferenceAdditionalPropertiesAccessExpression additionalPropertiesAccess
+                        => ResolveTypeReferenceExpressionAdditionalProperties(currentResolution, additionalPropertiesAccess),
+                    TypeReferenceIndexAccessExpression indexAccess
+                        => ResolveTypeReferenceExpressionIndex(currentResolution, indexAccess),
+                    TypeReferenceItemsAccessExpression itemsAccess
+                        => ResolveTypeReferenceExpressionItems(currentResolution, itemsAccess),
+                    _ => throw new UnreachableException(
+                        $"This switch expression should be exhaustive, but received an unexpected reference access expression of type {currentAccessExpression.GetType().Name}."),
+                };
+            }
+
+            return currentResolution;
+        }
+
+        private ITypeReferenceExpressionResolution ResolveTypeReferenceExpressionProperty(
+            ITypeReferenceExpressionResolution containerResolution,
+            TypeReferencePropertyAccessExpression propertyAccess)
+        {
+            var (resolution, declaration) = TraceToObjectDeclaration(containerResolution);
+
+            if (declaration is not null)
+            {
+                return new ResolvedInternalReference(
+                    resolution.SegmentsForProperty(propertyAccess.PropertyName),
+                    declaration.PropertyExpressions
+                        .Single(p => StringComparer.OrdinalIgnoreCase.Equals(p.PropertyName, propertyAccess.PropertyName))
+                        .Value);
+            }
+
+            if (resolution is ResourceDerivedTypeResolution resourceDerived)
+            {
+                return new ResourceDerivedTypeResolution(
+                    resourceDerived.RootResourceTypeReference,
+                    resolution.SegmentsForProperty(propertyAccess.PropertyName),
+                    propertyAccess.ExpressedType,
+                    resourceDerived.Variant);
+            }
+
+            throw new ArgumentException($"Unable to handle resolution of type {resolution.GetType().Name}.");
+        }
+
+        private ITypeReferenceExpressionResolution ResolveTypeReferenceExpressionAdditionalProperties(
+            ITypeReferenceExpressionResolution containerResolution,
+            TypeReferenceAdditionalPropertiesAccessExpression additionalPropertiesAccess)
+        {
+            var (resolution, declaration) = TraceToObjectDeclaration(containerResolution);
+
+            if (declaration is not null)
+            {
+                if (declaration.AdditionalPropertiesExpression is null)
+                {
+                    throw new ArgumentException("This should have been caught by the type checker.");
+                }
+
+                return new ResolvedInternalReference(
+                    resolution.SegmentsForAdditionalProperties(),
+                    declaration.AdditionalPropertiesExpression.Value);
+            }
+
+            if (resolution is ResourceDerivedTypeResolution resourceDerived)
+            {
+                return new ResourceDerivedTypeResolution(
+                    resourceDerived.RootResourceTypeReference,
+                    resolution.SegmentsForAdditionalProperties(),
+                    additionalPropertiesAccess.ExpressedType,
+                    resourceDerived.Variant);
+            }
+
+            throw new ArgumentException($"Unable to handle resolution of type {resolution.GetType().Name}.");
+        }
+
+        private (ITypeReferenceExpressionResolution resolution, ObjectTypeExpression? declaration) TraceToObjectDeclaration(ITypeReferenceExpressionResolution original)
+        {
+            var currentResolution = original;
+            while (currentResolution is ResolvedInternalReference @ref)
+            {
+                if (@ref.Declaration is ObjectTypeExpression @object)
+                {
+                    return (currentResolution, @object);
+                }
+
+                currentResolution = ResolveTypeReferenceExpression(@ref.Declaration);
+            }
+
+            return (currentResolution, null);
+        }
+
+        private ITypeReferenceExpressionResolution ResolveTypeReferenceExpressionIndex(
+            ITypeReferenceExpressionResolution containerResolution,
+            TypeReferenceIndexAccessExpression indexAccess)
+        {
+            var currentResolution = containerResolution;
+            while (currentResolution is ResolvedInternalReference @ref)
+            {
+                if (@ref.Declaration is TupleTypeExpression tuple)
+                {
+                    return new ResolvedInternalReference(
+                        currentResolution.SegmentsForIndex(indexAccess.Index),
+                        tuple.ItemExpressions[(int)indexAccess.Index].Value);
+                }
+
+                currentResolution = ResolveTypeReferenceExpression(@ref.Declaration);
+            }
+
+            if (currentResolution is ResourceDerivedTypeResolution resourceDerived)
+            {
+                return new ResourceDerivedTypeResolution(
+                    resourceDerived.RootResourceTypeReference,
+                    currentResolution.SegmentsForIndex(indexAccess.Index),
+                    indexAccess.ExpressedType,
+                    resourceDerived.Variant);
+            }
+
+            throw new ArgumentException($"Unable to handle resolution of type {currentResolution.GetType().Name}.");
+        }
+
+        private ITypeReferenceExpressionResolution ResolveTypeReferenceExpressionItems(
+            ITypeReferenceExpressionResolution containerResolution,
+            TypeReferenceItemsAccessExpression itemsAccess)
+        {
+            var currentResolution = containerResolution;
+            while (currentResolution is ResolvedInternalReference @ref)
+            {
+                if (@ref.Declaration is ArrayTypeExpression @array)
+                {
+                    return new ResolvedInternalReference(
+                        currentResolution.SegmentsForItems(),
+                        @array.BaseExpression);
+                }
+
+                currentResolution = ResolveTypeReferenceExpression(@ref.Declaration);
+            }
+
+            if (currentResolution is ResourceDerivedTypeResolution resourceDerived)
+            {
+                return new ResourceDerivedTypeResolution(
+                    resourceDerived.RootResourceTypeReference,
+                    currentResolution.SegmentsForItems(),
+                    itemsAccess.ExpressedType,
+                    resourceDerived.Variant);
+            }
+
+            throw new ArgumentException($"Unable to handle resolution of type {currentResolution.GetType().Name}.");
+        }
+
+        private static ObjectExpression TypePropertiesForQualifiedReference(FullyQualifiedAmbientTypeReferenceExpression qualifiedAmbientType)
+        {
+            if (qualifiedAmbientType.ProviderName != SystemNamespaceType.BuiltInName)
             {
                 throw new ArgumentException("Property access base expression did not resolve to the 'sys' namespace.");
             }
 
-            return ExpressionFactory.CreateObject(TypeProperty(propertyAccess.PropertyName.IdentifierName).AsEnumerable());
+            if (qualifiedAmbientType.Name == LanguageConstants.TypeNameAny)
+            {
+                return ExpressionFactory.CreateObject([], qualifiedAmbientType.SourceSyntax);
+            }
+
+            return ExpressionFactory.CreateObject(TypeProperty(qualifiedAmbientType.Name, qualifiedAmbientType.SourceSyntax).AsEnumerable(),
+                qualifiedAmbientType.SourceSyntax);
         }
 
-        private ObjectPropertyExpression TypeProperty(string typeName)
-            => ExpressionFactory.CreateObjectProperty("type", new StringLiteralExpression(null, typeName));
+        private static ObjectPropertyExpression TypeProperty(string typeName, SyntaxBase? sourceSyntax)
+            => Property(TypePropertyName, new StringLiteralExpression(sourceSyntax, typeName), sourceSyntax);
 
-        private ObjectExpression GetTypePropertiesForResourceType(ResourceTypeSyntax syntax)
+        private static ObjectPropertyExpression AllowedValuesProperty(ArrayExpression allowedValues, SyntaxBase? sourceSyntax)
+            => Property("allowedValues", allowedValues, sourceSyntax);
+
+        private static ObjectPropertyExpression Property(string name, Expression value, SyntaxBase? sourceSyntax)
+            => ExpressionFactory.CreateObjectProperty(name, value, sourceSyntax);
+
+        private static ObjectExpression GetTypePropertiesForResourceType(ResourceTypeExpression expression)
         {
-            var typeString = syntax.TypeString?.TryGetLiteralValue() ?? GetResourceTypeString(syntax);
+            var typeString = expression.ExpressedResourceType.TypeReference.FormatName();
 
             return ExpressionFactory.CreateObject(new[]
             {
-                TypeProperty(LanguageConstants.TypeNameString),
+                TypeProperty(LanguageConstants.TypeNameString, expression.SourceSyntax),
                 ExpressionFactory.CreateObjectProperty(LanguageConstants.ParameterMetadataPropertyName,
                     ExpressionFactory.CreateObject(
                         ExpressionFactory.CreateObjectProperty(LanguageConstants.MetadataResourceTypePropertyName,
-                            ExpressionFactory.CreateStringLiteral(typeString)).AsEnumerable())),
+                            ExpressionFactory.CreateStringLiteral(typeString, expression.SourceSyntax),
+                            expression.SourceSyntax).AsEnumerable(),
+                        expression.SourceSyntax),
+                    expression.SourceSyntax),
             });
         }
 
-        private string GetResourceTypeString(ResourceTypeSyntax syntax)
+        private ObjectExpression GetTypePropertiesForArrayType(ArrayTypeExpression expression)
         {
-            if (Context.SemanticModel.GetTypeInfo(syntax) is not ResourceType resourceType)
+            var properties = new List<ObjectPropertyExpression> { TypeProperty(LanguageConstants.ArrayType, expression.SourceSyntax) };
+
+            if (TryGetAllowedValues(expression.BaseExpression) is { } allowedValues)
             {
-                // This should have been caught during type checking
-                throw new ArgumentException($"Unable to locate resource type.");
-            }
-
-            return resourceType.TypeReference.FormatName();
-        }
-
-        private ObjectExpression GetTypePropertiesForArrayType(ArrayTypeSyntax syntax)
-        {
-            var properties = new List<ObjectPropertyExpression> { TypeProperty(LanguageConstants.ArrayType) };
-
-            if (TryGetAllowedValues(syntax.Item.Value) is {} allowedValues)
-            {
-                properties.Add(ExpressionFactory.CreateObjectProperty("allowedValues", allowedValues));
+                properties.Add(AllowedValuesProperty(allowedValues, expression.BaseExpression.SourceSyntax));
             }
             else
             {
-                properties.Add(ExpressionFactory.CreateObjectProperty("items", TypePropertiesForTypeExpression(syntax.Item.Value)));
+                properties.Add(ExpressionFactory.CreateObjectProperty("items", TypePropertiesForTypeExpression(expression.BaseExpression)));
             }
 
-            return ExpressionFactory.CreateObject(properties);
+            return ExpressionFactory.CreateObject(properties, expression.SourceSyntax);
         }
 
-        private ArrayExpression? TryGetAllowedValues(SyntaxBase syntax) => syntax switch
+        private static ArrayExpression? TryGetAllowedValues(TypeExpression expression) => expression switch
         {
-            StringSyntax or
-            IntegerLiteralSyntax or
-            BooleanLiteralSyntax or
-            UnaryOperationSyntax or
-            NullLiteralSyntax => SingleElementArray(ExpressionBuilder.Convert(syntax)),
-            ObjectTypeSyntax objectType when Context.SemanticModel.GetDeclaredType(objectType) is {} type && TypeHelper.IsLiteralType(type) => SingleElementArray(ToLiteralValue(type)),
-            TupleTypeSyntax tupleType when Context.SemanticModel.GetDeclaredType(tupleType) is {} type && TypeHelper.IsLiteralType(type) => SingleElementArray(ToLiteralValue(type)),
-            UnionTypeSyntax unionType => GetAllowedValuesForUnionType(unionType),
-            ParenthesizedExpressionSyntax parenthesized => TryGetAllowedValues(parenthesized.Expression),
+            StringLiteralTypeExpression @string => SingleElementArray(ExpressionFactory.CreateStringLiteral(@string.Value, @string.SourceSyntax)),
+            IntegerLiteralTypeExpression @int => SingleElementArray(ExpressionFactory.CreateIntegerLiteral(@int.Value, @int.SourceSyntax)),
+            BooleanLiteralTypeExpression @bool => SingleElementArray(ExpressionFactory.CreateBooleanLiteral(@bool.Value, @bool.SourceSyntax)),
+            NullLiteralTypeExpression @null => SingleElementArray(new NullLiteralExpression(@null.SourceSyntax)),
+            ObjectTypeExpression @object when TypeHelper.IsLiteralType(@object.ExpressedType) => SingleElementArray(ToLiteralValue(@object.ExpressedType)),
+            TupleTypeExpression tuple when TypeHelper.IsLiteralType(tuple.ExpressedType) => SingleElementArray(ToLiteralValue(tuple.ExpressedType)),
+            UnionTypeExpression union => GetAllowedValuesForUnionType(union.ExpressedUnionType, union.SourceSyntax),
             _ => null,
         };
 
-        private ArrayExpression SingleElementArray(Expression expression) => ExpressionFactory.CreateArray(expression.AsEnumerable());
+        private static ArrayExpression SingleElementArray(Expression expression) => ExpressionFactory.CreateArray(expression.AsEnumerable());
 
-        private ArrayExpression GetAllowedValuesForUnionType(UnionTypeSyntax syntax)
+        private static ArrayExpression GetAllowedValuesForUnionType(UnionType unionType, SyntaxBase? sourceSyntax)
+            => ExpressionFactory.CreateArray(unionType.Members.Select(ToLiteralValue), sourceSyntax);
+
+        private ObjectExpression GetTypePropertiesForObjectType(ObjectTypeExpression expression)
         {
-            if (Context.SemanticModel.GetDeclaredType(syntax) is not UnionType unionType)
-            {
-                // This should have been caught during type checking
-                throw new ArgumentException("Invalid union encountered during template serialization");
-            }
-
-            return GetAllowedValuesForUnionType(unionType);
-        }
-
-        private ArrayExpression GetAllowedValuesForUnionType(UnionType unionType)
-            => ExpressionFactory.CreateArray(unionType.Members.Select(ToLiteralValue));
-
-        private ObjectExpression GetTypePropertiesForObjectType(ObjectTypeSyntax syntax)
-        {
-            var properties = new List<ObjectPropertyExpression> { TypeProperty(LanguageConstants.ObjectType) };
+            var properties = new List<ObjectPropertyExpression> { TypeProperty(LanguageConstants.ObjectType, expression.SourceSyntax) };
             List<ObjectPropertyExpression> propertySchemata = new();
 
-            foreach (var property in syntax.Properties)
+            foreach (var property in expression.PropertyExpressions)
             {
-                if (property.TryGetKeyText() is not string keyText)
-                {
-                    // This should have been caught during type checking
-                    throw new ArgumentException("Invalid object type key encountered during serialization.");
-                }
-
-                var propertySchema = TypePropertiesForTypeExpression(property.Value);
-                propertySchema = AddDecoratorsToBody(property, propertySchema, Context.SemanticModel.GetDeclaredType(property) ?? ErrorType.Empty());
-
-                propertySchemata.Add(ExpressionFactory.CreateObjectProperty(keyText, propertySchema));
+                var propertySchema = ApplyTypeModifiers(property, TypePropertiesForTypeExpression(property.Value));
+                propertySchemata.Add(ExpressionFactory.CreateObjectProperty(property.PropertyName, propertySchema, property.SourceSyntax));
             }
 
-            if (propertySchemata.Any())
+            properties.Add(ExpressionFactory.CreateObjectProperty("properties", ExpressionFactory.CreateObject(propertySchemata, expression.SourceSyntax)));
+
+            if (expression.AdditionalPropertiesExpression is { } addlPropsType)
             {
-                properties.Add(ExpressionFactory.CreateObjectProperty("properties", ExpressionFactory.CreateObject(propertySchemata)));
+                var addlPropertiesSchema = ApplyTypeModifiers(addlPropsType, TypePropertiesForTypeExpression(addlPropsType.Value));
+
+                properties.Add(ExpressionFactory.CreateObjectProperty("additionalProperties", addlPropertiesSchema, addlPropsType.SourceSyntax));
             }
 
-            if (syntax.Children.OfType<ObjectTypeAdditionalPropertiesSyntax>().SingleOrDefault() is { } addlPropsType)
-            {
-                var addlPropertiesSchema = TypePropertiesForTypeExpression(addlPropsType.Value);
-                addlPropertiesSchema = AddDecoratorsToBody(addlPropsType, addlPropertiesSchema, Context.SemanticModel.GetDeclaredType(addlPropsType) ?? ErrorType.Empty());
-
-                properties.Add(ExpressionFactory.CreateObjectProperty("additionalProperties", addlPropertiesSchema));
-            }
-
-            return ExpressionFactory.CreateObject(properties);
+            return ExpressionFactory.CreateObject(properties, expression.SourceSyntax);
         }
 
-        private ObjectExpression GetTypePropertiesForTupleType(TupleTypeSyntax syntax) => ExpressionFactory.CreateObject(new[]
+        private ObjectExpression GetTypePropertiesForTupleType(TupleTypeExpression expression) => ExpressionFactory.CreateObject(new[]
         {
-            TypeProperty(LanguageConstants.ArrayType),
+            TypeProperty(LanguageConstants.ArrayType, expression.SourceSyntax),
             ExpressionFactory.CreateObjectProperty("prefixItems",
-                ExpressionFactory.CreateArray(syntax.Items.Select(item => AddDecoratorsToBody(
-                    item,
-                    TypePropertiesForTypeExpression(item.Value),
-                    Context.SemanticModel.GetDeclaredType(item) ?? ErrorType.Empty())))),
-            ExpressionFactory.CreateObjectProperty("items", ExpressionFactory.CreateBooleanLiteral(false)),
+                ExpressionFactory.CreateArray(
+                    expression.ItemExpressions.Select(item => ApplyTypeModifiers(item, TypePropertiesForTypeExpression(item.Value))),
+                    expression.SourceSyntax),
+                expression.SourceSyntax),
+            ExpressionFactory.CreateObjectProperty("items", ExpressionFactory.CreateBooleanLiteral(false), expression.SourceSyntax),
         });
 
-        private ObjectExpression GetTypePropertiesForStringSyntax(StringSyntax syntax) => ExpressionFactory.CreateObject(new[]
+        private ObjectExpression GetTypePropertiesForUnionTypeExpression(UnionTypeExpression expression)
         {
-            TypeProperty(LanguageConstants.TypeNameString),
-            AllowedValuesForTypeExpression(syntax),
-        });
-
-        private ObjectExpression GetTypePropertiesForIntegerLiteralSyntax(IntegerLiteralSyntax syntax) => ExpressionFactory.CreateObject(new[]
-        {
-            TypeProperty(LanguageConstants.TypeNameInt),
-            AllowedValuesForTypeExpression(syntax),
-        });
-
-        private ObjectExpression GetTypePropertiesForBooleanLiteralSyntax(BooleanLiteralSyntax syntax) => ExpressionFactory.CreateObject(new[]
-        {
-            TypeProperty(LanguageConstants.TypeNameBool),
-            AllowedValuesForTypeExpression(syntax),
-        });
-
-        private ObjectExpression GetTypePropertiesForUnaryOperationSyntax(UnaryOperationSyntax syntax)
-        {
-            // Within type syntax, unary operations are only permitted if they are resolvable to a literal type at compile-time
-            if (Context.SemanticModel.GetDeclaredType(syntax) is not {} type || !TypeHelper.IsLiteralType(type))
+            var (nullable, nonLiteralTypeName, allowedValues) = TypeHelper.TryRemoveNullability(expression.ExpressedUnionType) switch
             {
-                throw new ArgumentException("Unary operator applied to unresolvable type symbol.");
-            }
-
-            return ExpressionFactory.CreateObject(new[]
-            {
-                TypeProperty(GetNonLiteralTypeName(type)),
-                AllowedValuesForTypeExpression(syntax),
-            });
-        }
-
-        private ObjectExpression GetTypePropertiesForUnionTypeSyntax(UnionTypeSyntax syntax)
-        {
-            // Union types permit symbolic references, unary operations, and literals, so long as the whole expression embodied in the UnionTypeSyntax can be
-            // reduced to a flat union of literal types. If this didn't happen during type checking, the syntax will resolve to an ErrorType instead of a UnionType
-            if (Context.SemanticModel.GetDeclaredType(syntax) is not UnionType unionType)
-            {
-                throw new ArgumentException("Invalid union encountered during template serialization");
-            }
-
-            (var nullable, var nonLiteralTypeName) = TypeHelper.TryRemoveNullability(unionType) switch
-            {
-                UnionType nonNullableUnion => (true, GetNonLiteralTypeName(nonNullableUnion.Members.First().Type)),
-                TypeSymbol nonNullable => (true, GetNonLiteralTypeName(nonNullable)),
-                _ => (false, GetNonLiteralTypeName(unionType.Members.First().Type)),
+                UnionType nonNullableUnion => (true, TryGetNonLiteralTypeName(nonNullableUnion.Members.First().Type), GetAllowedValuesForUnionType(nonNullableUnion, expression.SourceSyntax)),
+                TypeSymbol nonNullable => (true, TryGetNonLiteralTypeName(nonNullable), SingleElementArray(ToLiteralValue(nonNullable))),
+                _ => (false, TryGetNonLiteralTypeName(expression.ExpressedUnionType.Members.First().Type), GetAllowedValuesForUnionType(expression.ExpressedUnionType, expression.SourceSyntax)),
             };
 
-            var properties = new List<ObjectPropertyExpression>
+            List<ObjectPropertyExpression> properties = new();
+            if (nonLiteralTypeName is not null)
             {
-                TypeProperty(nonLiteralTypeName),
-                ExpressionFactory.CreateObjectProperty("allowedValues", GetAllowedValuesForUnionType(unionType)),
-            };
+                properties.Add(TypeProperty(nonLiteralTypeName, expression.SourceSyntax));
+            }
+            properties.Add(AllowedValuesProperty(allowedValues, expression.SourceSyntax));
 
             if (nullable)
             {
-                properties.Add(ExpressionFactory.CreateObjectProperty("nullable", ExpressionFactory.CreateBooleanLiteral(true)));
+                properties.Add(ExpressionFactory.CreateObjectProperty("nullable", ExpressionFactory.CreateBooleanLiteral(true), expression.SourceSyntax));
             }
 
-            return ExpressionFactory.CreateObject(properties);
+            return ExpressionFactory.CreateObject(properties, expression.SourceSyntax);
         }
 
-        private ObjectPropertyExpression AllowedValuesForTypeExpression(SyntaxBase syntax) => ExpressionFactory.CreateObjectProperty("allowedValues",
-            TryGetAllowedValues(syntax) ?? throw new ArgumentException("Unable to resolve allowed values during template serialization."));
+        private ObjectExpression GetTypePropertiesForDiscriminatedObjectExpression(DiscriminatedObjectTypeExpression expression)
+        {
+            var properties = new List<ObjectPropertyExpression>
+            {
+                TypeProperty("object", expression.SourceSyntax),
+                ExpressionFactory.CreateObjectProperty(
+                    "discriminator",
+                    GetTypePropertiesForDiscriminator(expression),
+                    expression.SourceSyntax),
+            };
 
-        private Expression ToLiteralValue(ITypeReference literalType) => literalType.Type switch
+            return ExpressionFactory.CreateObject(properties, expression.SourceSyntax);
+        }
+
+        private ObjectExpression GetTypePropertiesForDiscriminator(
+            DiscriminatedObjectTypeExpression discriminatedObjectTypeExpr)
+        {
+            var objectProperties = new List<ObjectPropertyExpression>();
+
+            var discriminatorPropertyName = discriminatedObjectTypeExpr.ExpressedDiscriminatedObjectType.DiscriminatorProperty.Name;
+            objectProperties.Add(ExpressionFactory.CreateObjectProperty("propertyName", ExpressionFactory.CreateStringLiteral(discriminatorPropertyName)));
+            objectProperties.Add(
+                ExpressionFactory.CreateObjectProperty(
+                    "mapping",
+                    ExpressionFactory.CreateObject(
+                        GetDiscriminatedUnionMappingEntries(discriminatedObjectTypeExpr))));
+
+            return ExpressionFactory.CreateObject(properties: objectProperties);
+        }
+
+        private IEnumerable<ObjectPropertyExpression> GetDiscriminatedUnionMappingEntries(DiscriminatedObjectTypeExpression discriminatedObjectTypeExpr)
+        {
+            var discriminatorPropertyName = discriminatedObjectTypeExpr.ExpressedDiscriminatedObjectType.DiscriminatorProperty.Name;
+
+            foreach (var memberExpression in discriminatedObjectTypeExpr.MemberExpressions)
+            {
+                var mappingsEnumerable = memberExpression switch
+                {
+                    TypeAliasReferenceExpression or
+                    SynthesizedTypeAliasReferenceExpression or
+                    ImportedTypeReferenceExpression or
+                    WildcardImportTypePropertyReferenceExpression or
+                    ITypeReferenceAccessExpression => ResolveTypeReferenceExpression(memberExpression) switch
+                    {
+                        ResolvedInternalReference udtRef => GetDiscriminatedUnionMappingEntries(discriminatorPropertyName, udtRef.Declaration, udtRef),
+                        ResourceDerivedTypeResolution rdtRef => GetDiscriminatedUnionMappingEntries(discriminatorPropertyName, rdtRef),
+                        _ => throw new UnreachableException(),
+                    },
+                    _ => GetDiscriminatedUnionMappingEntries(discriminatorPropertyName, memberExpression, null),
+                };
+
+                foreach (var mapping in mappingsEnumerable)
+                {
+                    yield return mapping;
+                }
+            }
+        }
+
+        private IEnumerable<ObjectPropertyExpression> GetDiscriminatedUnionMappingEntries(
+            string discriminatorPropertyName,
+            TypeExpression memberDeclaration,
+            ITypeReferenceExpressionResolution? memberResolution)
+        {
+            if (memberDeclaration is ObjectTypeExpression objectUnionMemberExpr)
+            {
+                yield return ExpressionFactory.CreateObjectProperty(
+                    DiscriminatorValue(discriminatorPropertyName, objectUnionMemberExpr.ExpressedObjectType),
+                    memberResolution?.GetTypePropertiesForResolvedReferenceExpression(sourceSyntax: null)
+                        ?? GetTypePropertiesForObjectType(objectUnionMemberExpr));
+            }
+            else if (memberDeclaration is DiscriminatedObjectTypeExpression nestedDiscriminatedMemberExpr)
+            {
+                var nestedDiscriminatorPropertyName = nestedDiscriminatedMemberExpr.ExpressedDiscriminatedObjectType.DiscriminatorProperty.Name;
+
+                if (nestedDiscriminatorPropertyName != discriminatorPropertyName)
+                {
+                    // This should have been caught during type checking
+                    throw new ArgumentException("Invalid discriminated union type encountered during serialization.");
+                }
+
+                foreach (var nestedPropertyExpr in GetDiscriminatedUnionMappingEntries(nestedDiscriminatedMemberExpr))
+                {
+                    yield return nestedPropertyExpr;
+                }
+            }
+            else
+            {
+                // This should have been caught during type checking
+                throw new ArgumentException("Invalid discriminated union type encountered during serialization.");
+            }
+        }
+
+        private static IEnumerable<ObjectPropertyExpression> GetDiscriminatedUnionMappingEntries(
+            string discriminatorPropertyName,
+            ResourceDerivedTypeResolution resolution)
+        {
+            if (resolution.DerivedType is ObjectType @object)
+            {
+                yield return ExpressionFactory.CreateObjectProperty(
+                    DiscriminatorValue(discriminatorPropertyName, @object),
+                    resolution.GetTypePropertiesForResolvedReferenceExpression(sourceSyntax: null));
+            }
+            else if (resolution.DerivedType is DiscriminatedObjectType discriminatedObject)
+            {
+                foreach (var variant in discriminatedObject.UnionMembersByKey.Values)
+                {
+                    var discriminatorValue = DiscriminatorValue(discriminatorPropertyName, variant);
+                    var variantResolution = new ResourceDerivedTypeResolution(
+                        resolution.RootResourceTypeReference,
+                        (resolution as ITypeReferenceExpressionResolution).SegmentsForVariant(discriminatorValue),
+                        variant,
+                        resolution.Variant);
+
+                    yield return ExpressionFactory.CreateObjectProperty(
+                        discriminatorValue,
+                        variantResolution.GetTypePropertiesForResolvedReferenceExpression(sourceSyntax: null));
+                }
+            }
+            else
+            {
+                // This should have been caught during type checking
+                throw new ArgumentException("Invalid discriminated union type encountered during serialization.");
+            }
+        }
+
+        private static string DiscriminatorValue(string discriminatorPropertyName, ObjectType @object)
+        {
+            if (!@object.Properties.TryGetValue(discriminatorPropertyName, out var discriminatorTypeProperty)
+                || discriminatorTypeProperty.TypeReference.Type is not StringLiteralType discriminatorStringLiteral)
+            {
+                // This should have been caught during type checking
+                throw new ArgumentException("Invalid discriminated union type encountered during serialization.");
+            }
+
+            return discriminatorStringLiteral.RawStringValue;
+        }
+
+        private static Expression ToLiteralValue(ITypeReference literalType) => literalType.Type switch
         {
             StringLiteralType @string => ExpressionFactory.CreateStringLiteral(@string.RawStringValue),
             IntegerLiteralType @int => new IntegerLiteralExpression(null, @int.Value),
@@ -479,38 +990,36 @@ namespace Bicep.Core.Emit
             _ => throw new ArgumentException("Union types used in ARM type checks must be composed entirely of literal types"),
         };
 
-        private string GetNonLiteralTypeName(TypeSymbol? type) => type switch
+        private static string? TryGetNonLiteralTypeName(TypeSymbol? type) => type switch
         {
             StringLiteralType or StringType => "string",
             IntegerLiteralType or IntegerType => "int",
             BooleanLiteralType or BooleanType => "bool",
-            ObjectType => "object",
+            ObjectType or DiscriminatedObjectType => "object",
             ArrayType => "array",
-            // This would have been caught by the DeclaredTypeManager during initial type assignment
-            _ => throw new ArgumentException("Unresolvable type name"),
+            UnionType @union when
+                @union.Members.Select(m => TryGetNonLiteralTypeName(m.Type)).ToHashSet() is { } memberLiteralNames &&
+                memberLiteralNames.Count == 1 => memberLiteralNames.Single(),
+            _ => null,
         };
 
-        private ObjectExpression GetTypePropertiesForNullableTypeSyntax(NullableTypeSyntax syntax)
-            => TypePropertiesForTypeExpression(syntax.Base).MergeProperty("nullable", ExpressionFactory.CreateBooleanLiteral(true));
-
-        private ObjectExpression GetTypePropertiesForNonNullableTypeSyntax(NonNullAssertionSyntax syntax)
-            => TypePropertiesForTypeExpression(syntax.BaseExpression).MergeProperty("nullable", ExpressionFactory.CreateBooleanLiteral(false));
-
-        private void EmitVariablesIfPresent(ExpressionEmitter emitter, ImmutableArray<DeclaredVariableExpression> variables)
+        private void EmitVariablesIfPresent(ExpressionEmitter emitter, IEnumerable<DeclaredVariableExpression> variables)
         {
             if (!variables.Any())
             {
                 return;
             }
 
-            emitter.EmitObjectProperty("variables", () => {
+            emitter.EmitObjectProperty("variables", () =>
+            {
                 var loopVariables = variables.Where(x => x is { Value: ForLoopExpression });
                 var nonLoopVariables = variables.Where(x => x is { Value: not ForLoopExpression });
 
                 if (loopVariables.Any())
                 {
                     // we have variables whose values are loops
-                    emitter.EmitArrayProperty("copy", () => {
+                    emitter.EmitArrayProperty("copy", () =>
+                    {
                         foreach (var loopVariable in loopVariables)
                         {
                             var forLoopVariable = (ForLoopExpression)loopVariable.Value;
@@ -527,48 +1036,128 @@ namespace Bicep.Core.Emit
             });
         }
 
-        private void EmitImports(ExpressionEmitter emitter, ImmutableArray<DeclaredImportExpression> imports)
+        private void EmitExtensionsIfPresent(ExpressionEmitter emitter, ImmutableArray<ExtensionExpression> extensions)
         {
-            if (!imports.Any())
+            if (Context.SemanticModel.TargetScope == ResourceScope.Local)
+            {
+                extensions = extensions.Add(GetExtensionForLocalDeploy());
+            }
+
+            if (!extensions.Any())
             {
                 return;
             }
 
-            emitter.EmitObjectProperty("imports", () => {
-                foreach (var import in imports)
-                {
-                    var settings = import.NamespaceType.Settings;
+            // TODO: Remove the EmitExtensions if conditions once ARM w37 is deployed to all regions.
+            if (Context.SemanticModel.Features.ModuleExtensionConfigsEnabled)
+            {
+                EmitExtensions(emitter, extensions);
+            }
+            else
+            {
+                // TODO(extensibility): Consider removing this
+                EmitImports(emitter, extensions);
+            }
+        }
 
-                    emitter.EmitObjectProperty(import.Name, () =>
+        private static void EmitImports(ExpressionEmitter emitter, ImmutableArray<ExtensionExpression> extensions)
+        {
+            emitter.EmitObjectProperty("imports", () =>
+            {
+                foreach (var extension in extensions)
+                {
+                    var settings = extension.Settings;
+
+                    emitter.EmitObjectProperty(extension.Name, () =>
                     {
-                        emitter.EmitProperty("provider", settings.ArmTemplateProviderName);
-                        emitter.EmitProperty("version", settings.ArmTemplateProviderVersion);
-                        if (import.Config is not null)
+                        emitter.EmitProperty("provider", settings.TemplateExtensionName);
+                        emitter.EmitProperty("version", settings.TemplateExtensionVersion);
+                        if (extension.Config is not null)
                         {
-                            emitter.EmitProperty("config", import.Config);
+                            emitter.EmitProperty("config", extension.Config);
                         }
-                    }, import.SourceSyntax);
+                    }, extension.SourceSyntax);
                 }
             });
+        }
+
+        private static void EmitExtensions(ExpressionEmitter emitter, ImmutableArray<ExtensionExpression> extensions)
+        {
+            emitter.EmitObjectProperty("extensions", () =>
+            {
+                foreach (var extension in extensions)
+                {
+                    var settings = extension.Settings;
+
+                    emitter.EmitObjectProperty(extension.Name, () =>
+                    {
+                        emitter.EmitProperty("name", settings.TemplateExtensionName);
+                        emitter.EmitProperty("version", settings.TemplateExtensionVersion);
+
+                        EmitExtensionConfig(extension, emitter);
+                    },
+                    extension.SourceSyntax);
+                }
+            });
+        }
+
+        private static void EmitExtensionConfig(ExtensionExpression extension, ExpressionEmitter emitter)
+        {
+            if (extension.Config is null)
+            {
+                return;
+            }
+
+            if (extension.Config is not ObjectExpression config)
+            {
+                throw new UnreachableException($"Extension config type expected to be of type: '{nameof(ObjectExpression)}' but received: '{extension.Config.GetType()}'");
+            }
+
+            emitter.EmitObjectProperty("config", () =>
+            {
+                foreach (var configProperty in config.Properties)
+                {
+                    // Type checking should have validated that the config name is not an expression (e.g. string interpolation), if we get a null value it means something
+                    // was wrong with type checking validation.
+                    var extensionConfigName = configProperty.TryGetKeyText() ?? throw new UnreachableException("Expressions are not allowed as config names.");
+
+                    emitter.EmitObjectProperty(extensionConfigName, () =>
+                    {
+                        emitter.EmitProperty("defaultValue", configProperty.Value);
+                    });
+                }
+            });
+        }
+
+        private ExtensionExpression GetExtensionForLocalDeploy()
+        {
+            return new(
+                null,
+                "az0synthesized",
+                new(false, "__az", null, "LocalNested", "0.0.0"),
+                null,
+                null);
         }
 
         private void EmitResources(
             PositionTrackingJsonTextWriter jsonWriter,
             ExpressionEmitter emitter,
+            ImmutableArray<ExtensionExpression> extensions,
             ImmutableArray<DeclaredResourceExpression> resources,
             ImmutableArray<DeclaredModuleExpression> modules)
         {
             if (!Context.Settings.EnableSymbolicNames)
             {
-                emitter.EmitArrayProperty("resources", () => {
+                emitter.EmitArrayProperty("resources", () =>
+                {
                     foreach (var resource in resources)
                     {
-                        if (resource.Metadata.IsExistingResource)
+                        if (resource.ResourceMetadata.IsExistingResource)
                         {
                             continue;
                         }
 
-                        this.EmitResource(emitter, resource);
+                        this.EmitResource(emitter, extensions, resource);
                     }
 
                     foreach (var module in modules)
@@ -579,12 +1168,13 @@ namespace Bicep.Core.Emit
             }
             else
             {
-                emitter.EmitObjectProperty("resources", () => {
+                emitter.EmitObjectProperty("resources", () =>
+                {
                     foreach (var resource in resources)
                     {
                         emitter.EmitProperty(
-                            emitter.GetSymbolicName(resource.Metadata),
-                            () => EmitResource(emitter, resource),
+                            emitter.GetSymbolicName(resource.ResourceMetadata),
+                            () => EmitResource(emitter, extensions, resource),
                             resource.SourceSyntax);
                     }
 
@@ -599,11 +1189,24 @@ namespace Bicep.Core.Emit
             }
         }
 
-        private void EmitResource(ExpressionEmitter emitter, DeclaredResourceExpression resource)
+        private void EmitResourceExtensionReference(ExpressionEmitter emitter, string extensionAlias)
         {
-            var metadata = resource.Metadata;
+            if (this.Context.SemanticModel.Features.ModuleExtensionConfigsEnabled)
+            {
+                emitter.EmitProperty("extension", extensionAlias);
+            }
+            else
+            {
+                emitter.EmitProperty("import", extensionAlias);
+            }
+        }
 
-            emitter.EmitObject(() => {
+        private void EmitResource(ExpressionEmitter emitter, ImmutableArray<ExtensionExpression> extensions, DeclaredResourceExpression resource)
+        {
+            var metadata = resource.ResourceMetadata;
+
+            emitter.EmitObject(() =>
+            {
                 var body = resource.Body;
                 if (body is ForLoopExpression forLoop)
                 {
@@ -621,13 +1224,32 @@ namespace Bicep.Core.Emit
                     emitter.EmitProperty("existing", new BooleanLiteralExpression(null, true));
                 }
 
-                var importSymbol = Context.SemanticModel.Root.ImportDeclarations.FirstOrDefault(i => metadata.Type.DeclaringNamespace.AliasNameEquals(i.Name));
-                if (importSymbol is not null)
+                var extensionSymbol = extensions.FirstOrDefault(i => metadata.Type.DeclaringNamespace.AliasNameEquals(i.Name));
+                if (extensionSymbol is not null)
                 {
-                    emitter.EmitProperty("import", importSymbol.Name);
+                    EmitResourceExtensionReference(emitter, extensionSymbol.Name);
                 }
 
-                if (metadata.IsAzResource)
+                // Emit the options property if there are entries in the DecoratorConfig dictionary
+                if (resource.DecoratorConfig.Count > 0)
+                {
+                    emitter.EmitObjectProperty("@options", () =>
+                    {
+                        foreach (var (name, items) in resource.DecoratorConfig)
+                        {
+                            emitter.EmitArrayProperty(name, () =>
+                            {
+                                foreach (var item in items.Items)
+                                {
+                                    emitter.EmitExpression(item);
+                                }
+                            });
+                        }
+                    });
+                }
+
+                if (metadata.IsAzResource ||
+                    this.Context.SemanticModel.Features.ModuleExtensionConfigsEnabled)
                 {
                     emitter.EmitProperty("type", metadata.TypeReference.FormatType());
                     if (metadata.TypeReference.ApiVersion is not null)
@@ -649,7 +1271,8 @@ namespace Bicep.Core.Emit
                 }
                 else
                 {
-                    emitter.EmitObjectProperty("properties", () => {
+                    emitter.EmitObjectProperty("properties", () =>
+                    {
                         emitter.EmitObjectProperties((ObjectExpression)body);
                     });
                 }
@@ -658,14 +1281,34 @@ namespace Bicep.Core.Emit
 
                 // Since we don't want to be mutating the body of the original ObjectSyntax, we create an placeholder body in place
                 // and emit its properties to merge decorator properties.
-                foreach (var property in AddDecoratorsToBody(
-                    metadata.Symbol.DeclaringResource,
-                    ExpressionFactory.CreateObject(ImmutableArray<ObjectPropertyExpression>.Empty),
-                    metadata.Symbol.Type).Properties)
+                foreach (var property in ApplyDescription(resource, ExpressionFactory.CreateObject(ImmutableArray<ObjectPropertyExpression>.Empty)).Properties)
                 {
                     emitter.EmitProperty(property);
                 }
             }, resource.SourceSyntax);
+        }
+
+        public void EmitTestParameters(ExpressionEmitter emitter, Expression parameters)
+        {
+            if (parameters is not ObjectExpression paramsObject)
+            {
+                // 'params' is optional if the module has no required params
+                return;
+            }
+
+            emitter.EmitObject(() =>
+            {
+                foreach (var property in paramsObject.Properties)
+                {
+                    if (property.TryGetKeyText() is not { } keyName)
+                    {
+                        // should have been caught by earlier validation
+                        throw new ArgumentException("Disallowed interpolation in test parameter");
+                    }
+
+                    emitter.EmitProperty(keyName, property.Value);
+                }
+            }, paramsObject.SourceSyntax);
         }
 
         private void EmitModuleParameters(ExpressionEmitter emitter, DeclaredModuleExpression module)
@@ -676,10 +1319,11 @@ namespace Bicep.Core.Emit
                 return;
             }
 
-            emitter.EmitObjectProperty("parameters", () => {
+            emitter.EmitObjectProperty("parameters", () =>
+            {
                 foreach (var property in paramsObject.Properties)
                 {
-                    if (property.TryGetKeyText() is not {} keyName)
+                    if (property.TryGetKeyText() is not { } keyName)
                     {
                         // should have been caught by earlier validation
                         throw new ArgumentException("Disallowed interpolation in module parameter");
@@ -691,10 +1335,12 @@ namespace Bicep.Core.Emit
                     {
                         // the value is a for-expression
                         // write a single property copy loop
-                        emitter.EmitObjectProperty(keyName, () => {
+                        emitter.EmitObjectProperty(keyName, () =>
+                        {
                             emitter.EmitCopyProperty(() =>
                             {
-                                emitter.EmitArray(() => {
+                                emitter.EmitArray(() =>
+                                {
                                     emitter.EmitCopyObject("value", @for.Expression, @for.Body, "value");
                                 }, @for.SourceSyntax);
                             });
@@ -718,8 +1364,139 @@ namespace Bicep.Core.Emit
             }, paramsObject.SourceSyntax);
         }
 
+        private void EmitModuleExtensionConfigs(ExpressionEmitter emitter, DeclaredModuleExpression module)
+        {
+            if (module.ExtensionConfigs is not ObjectExpression extConfigsObjExpr)
+            {
+                // 'extensionConfigs' is optional if the module has no required extension configurations
+                return;
+            }
+
+            emitter.EmitObjectProperty(
+                "extensionConfigs", () =>
+                {
+                    foreach (var extAliasPropertyExpr in extConfigsObjExpr.Properties)
+                    {
+                        if (extAliasPropertyExpr.TryGetKeyText() is not { } extAlias)
+                        {
+                            // should have been caught by earlier validation
+                            throw new ArgumentException("Disallowed interpolation in module extension config alias key");
+                        }
+
+                        emitter.EmitProperty(
+                            extAlias, () =>
+                            {
+                                if (extAliasPropertyExpr.Value is ObjectExpression extConfigObjExpr)
+                                {
+                                    emitter.EmitObject(
+                                        () =>
+                                        {
+                                            foreach (var extConfigPropertyExpr in extConfigObjExpr.Properties)
+                                            {
+                                                if (extConfigPropertyExpr.TryGetKeyText() is not { } extConfigPropertyName)
+                                                {
+                                                    // should have been caught by earlier validation
+                                                    throw new ArgumentException("Disallowed interpolation in module extension config property key");
+                                                }
+
+                                                // we can't just call EmitObjectProperties here because the ObjectSyntax is flatter than the structure we're generating
+                                                // because nested deployment extension configs are objects with a single value property
+                                                if (extConfigPropertyExpr.Value is ForLoopExpression @for)
+                                                {
+                                                    // the value is a for-expression
+                                                    // write a single property copy loop
+                                                    emitter.EmitObjectProperty(extConfigPropertyName, () => { emitter.EmitCopyProperty(() => { emitter.EmitArray(() => { emitter.EmitCopyObject("value", @for.Expression, @for.Body, "value"); }, @for.SourceSyntax); }); });
+                                                }
+                                                else
+                                                {
+                                                    // the value is not a for-expression - can emit normally
+                                                    emitter.EmitProperty(extConfigPropertyName, ExpressionEmitter.ConvertModuleExtensionConfig(extConfigPropertyExpr.Value));
+                                                }
+                                            }
+                                        }, extConfigObjExpr.SourceSyntax);
+                                }
+                                else if (extAliasPropertyExpr.Value is PropertyAccessExpression or TernaryExpression) // covers extension inheritance cases
+                                {
+                                    emitter.EmitLanguageExpression(extAliasPropertyExpr.Value);
+                                }
+                                else
+                                {
+                                    // There needs to be custom emission for the object within extension configs to handle the layer of value vs key vault reference, so diagnostics need to prevent this from happening.
+                                    throw new NotImplementedException($"Expression emit is not handled for {extAliasPropertyExpr.Value.GetType().Name}");
+                                }
+                            }, extAliasPropertyExpr.SourceSyntax);
+                    }
+                }, extConfigsObjExpr.SourceSyntax);
+        }
+
+        private void EmitModuleForLocalDeploy(PositionTrackingJsonTextWriter jsonWriter, DeclaredModuleExpression module, ExpressionEmitter emitter)
+        {
+            emitter.EmitObject(() =>
+            {
+                EmitResourceExtensionReference(emitter, "az0synthesized");
+
+                var body = module.Body;
+                if (body is ForLoopExpression forLoop)
+                {
+                    body = forLoop.Body;
+                    emitter.EmitCopyProperty(() => emitter.EmitCopyObject(forLoop.Name, forLoop.Expression, input: null, batchSize: forLoop.BatchSize));
+                }
+                if (body is ConditionExpression condition)
+                {
+                    body = condition.Body;
+                    emitter.EmitProperty("condition", condition.Expression);
+                }
+
+                emitter.EmitProperty("type", NestedDeploymentResourceType);
+
+                emitter.EmitObjectProperty("properties", () =>
+                {
+                    ExpressionBuilder.EmitModuleScopeProperties(emitter, module);
+                    emitter.EmitObjectProperties((ObjectExpression)body);
+
+                    EmitModuleParameters(emitter, module);
+
+                    if (this.Context.SemanticModel.Features.ModuleExtensionConfigsEnabled)
+                    {
+                        EmitModuleExtensionConfigs(emitter, module);
+                    }
+
+                    var moduleSemanticModel = GetModuleSemanticModel(module.Symbol);
+
+                    var moduleWriter = TemplateWriterFactory.CreateTemplateWriter(moduleSemanticModel);
+                    var moduleBicepFile = (moduleSemanticModel as SemanticModel)?.SourceFile;
+                    var moduleTextWriter = new StringWriter();
+                    var moduleJsonWriter = new SourceAwareJsonTextWriter(moduleTextWriter, moduleBicepFile);
+
+                    moduleWriter.Write(moduleJsonWriter);
+                    jsonWriter.AddNestedSourceMap(moduleJsonWriter.TrackingJsonWriter);
+                    emitter.EmitProperty("template", moduleTextWriter.ToString());
+
+                    if (moduleBicepFile?.FileHandle.Uri is { } sourceUri)
+                    {
+                        emitter.EmitProperty("sourceUri", sourceUri.ToUriString());
+                    }
+                });
+
+                this.EmitDependsOn(emitter, module.DependsOn);
+
+                // Since we don't want to be mutating the body of the original ObjectSyntax, we create a placeholder body in place
+                // and emit its properties to merge decorator properties.
+                foreach (var property in ApplyDescription(module, ExpressionFactory.CreateObject(ImmutableArray<ObjectPropertyExpression>.Empty)).Properties)
+                {
+                    emitter.EmitProperty(property);
+                }
+            }, module.SourceSyntax);
+        }
+
         private void EmitModule(PositionTrackingJsonTextWriter jsonWriter, DeclaredModuleExpression module, ExpressionEmitter emitter)
         {
+            if (Context.SemanticModel.TargetScope == ResourceScope.Local)
+            {
+                EmitModuleForLocalDeploy(jsonWriter, module, emitter);
+                return;
+            }
+
             var moduleSymbol = module.Symbol;
             emitter.EmitObject(() =>
             {
@@ -736,9 +1513,9 @@ namespace Bicep.Core.Emit
                 }
 
                 emitter.EmitProperty("type", NestedDeploymentResourceType);
-                emitter.EmitProperty("apiVersion", NestedDeploymentResourceApiVersion);
+                emitter.EmitProperty("apiVersion", EmitConstants.NestedDeploymentResourceApiVersion);
 
-                // emit all properties apart from 'params'. In practice, this currrently only allows 'name', but we may choose to allow other top-level resource properties in future.
+                // emit all properties apart from 'params'. In practice, this currently only allows 'name', but we may choose to allow other top-level resource properties in future.
                 // params requires special handling (see below).
                 emitter.EmitObjectProperties((ObjectExpression)body);
 
@@ -752,7 +1529,7 @@ namespace Bicep.Core.Emit
                         // the deployment() object at resource group scope does not contain a property named 'location', so we have to use resourceGroup().location
                         emitter.EmitProperty("location", new PropertyAccessExpression(
                             null,
-                            new FunctionCallExpression(null, "resourceGroup", ImmutableArray<Expression>.Empty),
+                            new FunctionCallExpression(null, "resourceGroup", []),
                             "location",
                             AccessExpressionFlags.None));
                     }
@@ -761,7 +1538,7 @@ namespace Bicep.Core.Emit
                         // at all other scopes we can just use deployment().location
                         emitter.EmitProperty("location", new PropertyAccessExpression(
                             null,
-                            new FunctionCallExpression(null, "deployment", ImmutableArray<Expression>.Empty),
+                            new FunctionCallExpression(null, "deployment", []),
                             "location",
                             AccessExpressionFlags.None));
                     }
@@ -778,6 +1555,11 @@ namespace Bicep.Core.Emit
 
                     EmitModuleParameters(emitter, module);
 
+                    if (Context.SemanticModel.Features.ModuleExtensionConfigsEnabled)
+                    {
+                        EmitModuleExtensionConfigs(emitter, module);
+                    }
+
                     var moduleSemanticModel = GetModuleSemanticModel(moduleSymbol);
 
                     // If it is a template spec module, emit templateLink instead of template contents.
@@ -786,7 +1568,7 @@ namespace Bicep.Core.Emit
                         var moduleWriter = TemplateWriterFactory.CreateTemplateWriter(moduleSemanticModel);
                         var moduleBicepFile = (moduleSemanticModel as SemanticModel)?.SourceFile;
                         var moduleTextWriter = new StringWriter();
-                        var moduleJsonWriter = new SourceAwareJsonTextWriter(this.Context.SemanticModel.FileResolver, moduleTextWriter, moduleBicepFile);
+                        var moduleJsonWriter = new SourceAwareJsonTextWriter(moduleTextWriter, moduleBicepFile);
 
                         moduleWriter.Write(moduleJsonWriter);
                         jsonWriter.AddNestedSourceMap(moduleJsonWriter.TrackingJsonWriter);
@@ -800,17 +1582,14 @@ namespace Bicep.Core.Emit
 
                 // Since we don't want to be mutating the body of the original ObjectSyntax, we create an placeholder body in place
                 // and emit its properties to merge decorator properties.
-                foreach (var property in AddDecoratorsToBody(
-                    moduleSymbol.DeclaringModule,
-                    ExpressionFactory.CreateObject(ImmutableArray<ObjectPropertyExpression>.Empty),
-                    moduleSymbol.Type).Properties)
+                foreach (var property in ApplyDescription(module, ExpressionFactory.CreateObject(ImmutableArray<ObjectPropertyExpression>.Empty)).Properties)
                 {
                     emitter.EmitProperty(property);
                 }
             }, module.SourceSyntax);
         }
 
-        private void EmitSymbolicNameDependsOnEntry(ExpressionEmitter emitter, ResourceDependencyExpression dependency)
+        private static void EmitSymbolicNameDependsOnEntry(ExpressionEmitter emitter, ResourceDependencyExpression dependency)
         {
             switch (dependency.Reference)
             {
@@ -853,7 +1632,7 @@ namespace Bicep.Core.Emit
             }
         }
 
-        private void EmitClassicDependsOnEntry(ExpressionEmitter emitter, ResourceDependencyExpression dependency)
+        private static void EmitClassicDependsOnEntry(ExpressionEmitter emitter, ResourceDependencyExpression dependency)
         {
             switch (dependency.Reference)
             {
@@ -861,13 +1640,13 @@ namespace Bicep.Core.Emit
                     if (resource.Symbol.IsCollection && reference.IndexContext?.Index is null)
                     {
                         // dependency is on the entire resource collection
-                        // write the name of the resource collection as the dependency
-                        emitter.EmitExpression(new StringLiteralExpression(null, resource.Symbol.DeclaringResource.Name.IdentifierName));
+                        // write the fully qualified name of the resource collection (this is the name of the copy loop) as the dependency
+                        emitter.EmitSymbolReference(resource);
 
                         break;
                     }
 
-                    emitter.EmitResourceIdReference(resource, reference.IndexContext);
+                    emitter.EmitFullyQualifiedResourceId(resource, reference.IndexContext);
                     break;
                 case ModuleReferenceExpression { Module: ModuleSymbol module } reference:
                     if (module.IsCollection && reference.IndexContext?.Index is null)
@@ -879,7 +1658,7 @@ namespace Bicep.Core.Emit
                         break;
                     }
 
-                    emitter.EmitResourceIdReference(module, reference.IndexContext);
+                    emitter.EmitFullyQualifiedResourceId(module, reference.IndexContext);
 
                     break;
                 default:
@@ -894,7 +1673,8 @@ namespace Bicep.Core.Emit
                 return;
             }
 
-            emitter.EmitArrayProperty("dependsOn", () => {
+            emitter.EmitArrayProperty("dependsOn", () =>
+            {
                 foreach (var dependency in dependencies)
                 {
                     if (Context.Settings.EnableSymbolicNames)
@@ -916,7 +1696,8 @@ namespace Bicep.Core.Emit
                 return;
             }
 
-            emitter.EmitObjectProperty("outputs", () => {
+            emitter.EmitObjectProperty("outputs", () =>
+            {
                 foreach (var output in outputs)
                 {
                     EmitOutput(emitter, output);
@@ -928,16 +1709,13 @@ namespace Bicep.Core.Emit
         {
             emitter.EmitObjectProperty(output.Name, () =>
             {
-                var declaringOutput = output.Symbol.DeclaringOutput;
-                EmitProperties(emitter, AddDecoratorsToBody(declaringOutput,
-                    TypePropertiesForTypeExpression(declaringOutput.Type),
-                    output.Symbol.Type));
+                EmitProperties(emitter, ApplyTypeModifiers(output, TypePropertiesForTypeExpression(output.Type)));
 
                 if (output.Value is ForLoopExpression @for)
                 {
                     emitter.EmitCopyProperty(() => emitter.EmitCopyObject(name: null, @for.Expression, @for.Body));
                 }
-                else if (output.Symbol.Type is ResourceType)
+                else if (output.Type.ExpressedType is ResourceType)
                 {
                     // Resource-typed outputs are serialized using the resource id.
                     var value = new PropertyAccessExpression(output.SourceSyntax, output.Value, "id", AccessExpressionFlags.None);
@@ -951,18 +1729,69 @@ namespace Bicep.Core.Emit
             }, output.SourceSyntax);
         }
 
-        public void EmitMetadata(ExpressionEmitter emitter, ImmutableArray<DeclaredMetadataExpression> metadata)
+        private void EmitAssertsIfPresent(ExpressionEmitter emitter, ImmutableArray<DeclaredAssertExpression> asserts)
         {
-            emitter.EmitObjectProperty("metadata", () => {
-                if (Context.Settings.EnableSymbolicNames)
+            if (!asserts.Any())
+            {
+                return;
+            }
+
+            emitter.EmitObjectProperty("asserts", () =>
+            {
+                foreach (var assert in asserts)
                 {
-                    emitter.EmitProperty("_EXPERIMENTAL_WARNING", "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!");
+                    emitter.EmitProperty(assert.Name, assert.Value);
+                }
+            });
+        }
+
+        private void EmitMetadata(ExpressionEmitter emitter, ImmutableArray<DeclaredMetadataExpression> metadata, IEnumerable<DeclaredVariableExpression> variables)
+        {
+            var variablesByName = variables.ToDictionary(v => v.Name, v => v, LanguageConstants.IdentifierComparer);
+            emitter.EmitObjectProperty("metadata", () =>
+            {
+                if (Context.Settings.UseExperimentalTemplateLanguageVersion)
+                {
+                    emitter.EmitProperty("_EXPERIMENTAL_WARNING", "This template uses ARM features that are experimental. Experimental features should be enabled for testing purposes only, as there are no guarantees about the quality or stability of these features. Do not enable these settings for any production usage, or your production environment may be subject to breaking.");
+                    emitter.EmitArrayProperty("_EXPERIMENTAL_FEATURES_ENABLED", () =>
+                    {
+                        foreach (var (featureName, _, _) in this.Context.SemanticModel.Features.EnabledFeatureMetadata.Where(f => f.usesExperimentalArmEngineFeature))
+                        {
+                            emitter.EmitExpression(ExpressionFactory.CreateStringLiteral(featureName));
+                        }
+                    });
                 }
 
-                emitter.EmitObjectProperty("_generator", () => {
+                emitter.EmitObjectProperty("_generator", () =>
+                {
                     emitter.EmitProperty("name", LanguageConstants.LanguageId);
                     emitter.EmitProperty("version", this.Context.SemanticModel.Features.AssemblyVersion);
                 });
+
+                var exportedVariables = Context.SemanticModel.Exports.Values.OfType<ExportedVariableMetadata>().ToImmutableArray();
+
+                if (exportedVariables.Length > 0)
+                {
+                    emitter.EmitArrayProperty(LanguageConstants.TemplateMetadataExportedVariablesName, () =>
+                    {
+                        foreach (var exportedVariable in exportedVariables)
+                        {
+                            emitter.EmitObject(() =>
+                            {
+                                emitter.EmitProperty("name", exportedVariable.Name);
+                                if (exportedVariable.Description is string description)
+                                {
+                                    emitter.EmitProperty(LanguageConstants.MetadataDescriptionPropertyName, description);
+                                }
+                                if (variablesByName.TryGetValue(exportedVariable.Name) is { } variable &&
+                                    variable.Type is { } variableType)
+                                {
+                                    emitter.EmitProperty(TypePropertyName, TypePropertiesForTypeExpression(variableType));
+                                }
+                            });
+                        }
+                    });
+                }
 
                 foreach (var item in metadata)
                 {

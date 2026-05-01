@@ -1,65 +1,926 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Newtonsoft.Json.Linq;
-using System.Collections.Immutable;
-using Bicep.Core.Semantics;
-using Azure.Deployments.Templates.Expressions;
-using Azure.Deployments.Expression.Expressions;
-using Bicep.Core.Diagnostics;
 using System.Collections.Concurrent;
-using System;
-using System.Linq;
+using System.Collections.Immutable;
+using System.Diagnostics;
+using Azure.Deployments.Core.Definitions.Schema;
+using Azure.Deployments.Core.ErrorResponses;
+using Azure.Deployments.Core.Exceptions;
+using Azure.Deployments.Expression.Expressions;
+using Azure.Deployments.Templates.Expressions;
+using Azure.Deployments.Templates.Extensions;
+using Bicep.Core.ArmHelpers;
+using Bicep.Core.Diagnostics;
+using Bicep.Core.Emit.CompileTimeImports;
+using Bicep.Core.Intermediate;
+using Bicep.Core.Semantics;
+using Bicep.Core.Semantics.Metadata;
+using Bicep.Core.SourceGraph;
+using Bicep.Core.Syntax;
+using Microsoft.WindowsAzure.ResourceStack.Common.Extensions;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
-namespace Bicep.Core.Emit
+namespace Bicep.Core.Emit;
+
+public class ParameterAssignmentEvaluator
 {
-    public class ParameterAssignmentEvaluator
+    private sealed class ForLoopIndexRewriter : ExpressionRewriteVisitor
     {
-        public record Result(
-            JToken? Value,
-            IDiagnostic? Diagnostic);
+        private readonly long index;
 
-        private ConcurrentDictionary<ParameterAssignmentSymbol, Result> Results = new();
-        private readonly SemanticModel model;
-        private readonly ImmutableDictionary<string, ParameterAssignmentSymbol> paramsByName;
-
-        public ParameterAssignmentEvaluator(SemanticModel model)
+        private ForLoopIndexRewriter(long index)
         {
-            this.model = model;
-            this.paramsByName = model.Root.ParameterAssignments
-                .GroupBy(x => x.Name, LanguageConstants.IdentifierComparer)
-                .ToImmutableDictionary(x => x.Key, x => x.First(), LanguageConstants.IdentifierComparer);
+            this.index = index;
         }
 
-        public Result EvaluateParameter(ParameterAssignmentSymbol parameter)
-            => Results.GetOrAdd(
-                parameter,
-                parameter => {
+        public static Expression Rewrite(Expression expression, long index)
+        {
+            return new ForLoopIndexRewriter(index).Replace(expression);
+        }
+
+        public override Expression ReplaceCopyIndexExpression(CopyIndexExpression expression) => new IntegerLiteralExpression(expression.SourceSyntax, index);
+
+        public override Expression ReplaceForLoopExpression(ForLoopExpression expression) => expression;
+    }
+    private class ParameterAssignmentEvaluationContext : IEvaluationContext
+    {
+        private readonly TemplateExpressionEvaluationHelper evaluationHelper;
+        private readonly ParameterAssignmentEvaluator evaluator;
+
+        public ParameterAssignmentEvaluationContext(TemplateExpressionEvaluationHelper evaluationHelper, ParameterAssignmentEvaluator evaluator)
+            : this(evaluationHelper, evaluator, evaluationHelper.EvaluationContext.Scope)
+        {
+        }
+
+        private ParameterAssignmentEvaluationContext(TemplateExpressionEvaluationHelper evaluationHelper, ParameterAssignmentEvaluator evaluator, ExpressionScope scope)
+        {
+            this.evaluationHelper = evaluationHelper;
+            this.evaluator = evaluator;
+            this.Scope = scope;
+        }
+
+        public bool IsShortCircuitAllowed => evaluationHelper.EvaluationContext.IsShortCircuitAllowed;
+
+        public ExpressionScope Scope { get; }
+
+        public bool AllowInvalidProperty(Exception exception, FunctionExpression functionExpression, FunctionArgument[] functionParametersValues, JToken[] selectedProperties) =>
+            evaluationHelper.EvaluationContext.AllowInvalidProperty(exception, functionExpression, functionParametersValues, selectedProperties);
+
+        public JToken EvaluateFunction(FunctionExpression functionExpression, FunctionArgument[] parameters, IEvaluationContext context, TemplateErrorAdditionalInfo? additionalnfo)
+        {
+            // IsTemplateFunction checks if the function is a user defined function.
+            if (TemplateFunction.IsTemplateFunction(functionExpression.Function))
+            {
+                return this.EvaluateUserDefinedFunction(functionExpression, parameters, additionalnfo);
+            }
+
+            return evaluationHelper.EvaluationContext.EvaluateFunction(functionExpression, parameters, this, additionalnfo);
+        }
+
+        public bool ShouldIgnoreExceptionDuringEvaluation(Exception exception) =>
+            this.evaluationHelper.EvaluationContext.ShouldIgnoreExceptionDuringEvaluation(exception);
+
+        public IEvaluationContext WithNewScope(ExpressionScope scope) => new ParameterAssignmentEvaluationContext(this.evaluationHelper, this.evaluator, scope);
+
+        private JToken EvaluateUserDefinedFunction(FunctionExpression expression, FunctionArgument[] parameters, TemplateErrorAdditionalInfo? additionalProperties)
+        {
+            JToken evaluateFunction(Template template, string originalFunctionName)
+            {
+                var functionsLookup = template.GetFunctionDefinitions().ToOrdinalInsensitiveDictionary(x => x.Key, x => x.Function);
+                TemplateVariablesEvaluator variablesEvaluator = new(template);
+
+                var rewrittenExpression = new FunctionExpression(
+                    $"{EmitConstants.UserDefinedFunctionsNamespace}.{originalFunctionName}",
+                    expression.Parameters,
+                    expression.Properties);
+
+                // we must explicitly ensure the evaluation takes place in the context of the referenced template,
+                // so that accessing scoped functions works as expected
+                var helper = new TemplateExpressionEvaluationHelper
+                {
+                    OnGetFunction = (name, _) => functionsLookup[name],
+                    OnGetVariable = (name, _) => variablesEvaluator.GetEvaluatedVariableValue(name),
+                    ValidationContext = SchemaValidationContext.ForTemplate(template),
+                };
+
+                return helper.EvaluationContext.EvaluateFunction(rewrittenExpression, parameters, this, additionalProperties);
+            }
+
+            if (expression.Function.StartsWith($"{EmitConstants.UserDefinedFunctionsNamespace}.") &&
+                expression.Function[$"{EmitConstants.UserDefinedFunctionsNamespace}.".Length..] is { } functionName)
+            {
+                if (this.evaluator.importsByName.TryGetValue(functionName, out var imported) &&
+                    imported.OriginalSymbolName is { } originalSymbolName)
+                {
+                    var template = this.evaluator.GetTemplateWithCaching(imported.SourceModel).Unwrap();
+                    var evaluator = this.evaluator.armEvaluators.GetOrAdd(template, importedFrom => new(importedFrom));
+
+                    return evaluateFunction(template, originalSymbolName);
+                }
+
+                if (this.evaluator.functionsByName.TryGetValue(functionName, out var functionSymbol))
+                {
+                    var template = this.evaluator.GetTemplateWithCaching(functionSymbol.GetSemanticModel()).Unwrap();
+
+                    return evaluateFunction(template, functionName);
+                }
+            }
+
+            if (this.evaluator.wildcardImportPropertiesByName.TryGetValue(expression.Function, out var wildcardImportProperty))
+            {
+                var template = this.evaluator.GetTemplateWithCaching(wildcardImportProperty.WildcardImport.SourceModel).Unwrap();
+
+                return evaluateFunction(template, wildcardImportProperty.PropertyName);
+            }
+
+            throw new InvalidOperationException($"Function {expression.Function} not found");
+        }
+    }
+
+    public class Result
+    {
+        private Result(JToken? value, Expression? expression, ParameterKeyVaultReferenceExpression? keyVaultReference, IDiagnostic? diagnostic)
+        {
+            Value = value;
+            KeyVaultReference = keyVaultReference;
+            Expression = expression;
+            Diagnostic = diagnostic;
+        }
+
+        public JToken? Value { get; }
+        public Expression? Expression { get; }
+        public ParameterKeyVaultReferenceExpression? KeyVaultReference { get; }
+        public IDiagnostic? Diagnostic { get; }
+
+        public static Result For(JToken value) => new(value, null, null, null);
+        public static Result For(Expression expression) => new(null, expression, null, null);
+        public static Result For(ParameterKeyVaultReferenceExpression expression) => new(null, null, expression, null);
+
+        public static Result For(IDiagnostic diagnostic) => new(null, null, null, diagnostic);
+    }
+
+    private readonly ConcurrentDictionary<ParameterAssignmentSymbol, Result> results = new();
+    private readonly ConcurrentDictionary<ExtensionConfigAssignmentSymbol, ImmutableDictionary<string, Result>> extensionConfigAssignmentResults = new();
+    private readonly ConcurrentDictionary<VariableSymbol, Result> varResults = new();
+    private readonly ConcurrentDictionary<ImportedVariableSymbol, Result> importResults = new();
+    private readonly ConcurrentDictionary<WildcardImportPropertyReference, Result> wildcardImportVariableResults = new();
+    private readonly ConcurrentDictionary<Expression, Result> synthesizedVariableResults = new();
+    private readonly ConcurrentDictionary<SemanticModel, ResultWithDiagnosticBuilder<Template>> templateResults = new();
+    private readonly ConcurrentDictionary<Template, TemplateVariablesEvaluator> armEvaluators = new();
+    private readonly ConcurrentDictionary<SemanticModel, ExpressionConverter> converterCache = new();
+    private readonly ConcurrentDictionary<SemanticModel, ImmutableDictionary<string, VariableSymbol>> variablesByModelAndName = new();
+    private readonly ConcurrentDictionary<SemanticModel, ImmutableDictionary<string, ParameterAssignmentSymbol>> paramsByModelAndName = new();
+    private readonly ConcurrentDictionary<SemanticModel, ImmutableDictionary<string, Expression>> synthesizedVariablesByModelAndName = new();
+    private readonly ConcurrentDictionary<SemanticModel, ParameterAssignmentEvaluationContext> evaluationContextCache = new();
+    private readonly ImmutableDictionary<string, ParameterAssignmentSymbol> paramsByName;
+    private readonly SemanticModel semanticModel;
+    private readonly ImmutableDictionary<string, VariableSymbol> variablesByName;
+    private readonly ImmutableDictionary<string, DeclaredFunctionSymbol> functionsByName;
+    private readonly ImmutableDictionary<string, ImportedSymbol> importsByName;
+    private readonly ImmutableDictionary<string, WildcardImportPropertyReference> wildcardImportPropertiesByName;
+    private readonly ImmutableDictionary<string, Expression> synthesizedVariableValuesByName;
+    private readonly ExpressionConverter converter;
+
+    private static ImmutableDictionary<string, VariableSymbol> GetVariablesForModel(SemanticModel model)
+    {
+        return model.Root.VariableDeclarations
+            .GroupBy(x => x.Name, LanguageConstants.IdentifierComparer)
+            .ToImmutableDictionary(x => x.Key, x => x.First(), LanguageConstants.IdentifierComparer);
+    }
+
+    private static ImmutableDictionary<string, ParameterAssignmentSymbol> GetParametersForModel(SemanticModel model)
+    {
+        return model.Root.ParameterAssignments
+            .GroupBy(x => x.Name, LanguageConstants.IdentifierComparer)
+            .ToImmutableDictionary(x => x.Key, x => x.First(), LanguageConstants.IdentifierComparer);
+    }
+
+    private static ImmutableDictionary<string, Expression> GetSynthesizedVariablesForModel(SemanticModel model)
+    {
+        var context = new EmitterContext(model);
+        return context.FunctionVariables.Values
+            .GroupBy(result => result.Name)
+            .ToImmutableDictionary(x => x.Key, x => x.First().Value);
+    }
+
+    private static IEnumerable<VariableSymbol> GetVariableDeclarationsIncludingExtends(SemanticModel model)
+    {
+        foreach (var variable in model.Root.VariableDeclarations)
+        {
+            yield return variable;
+        }
+
+        if (model.SourceFile is not BicepParamFile)
+        {
+            yield break;
+        }
+
+        var visitedModels = new HashSet<ISemanticModel>();
+
+        IEnumerable<VariableSymbol> WalkExtends(SemanticModel current)
+        {
+            foreach (var extends in current.SourceFile.ProgramSyntax.Declarations.OfType<ExtendsDeclarationSyntax>())
+            {
+                if (!current.TryGetReferencedModel(extends).IsSuccess(out var referenced) || !visitedModels.Add(referenced) || referenced is not SemanticModel referencedSemantic)
+                {
+                    continue;
+                }
+
+                foreach (var inherited in referencedSemantic.Root.VariableDeclarations)
+                {
+                    yield return inherited;
+                }
+
+                if (referencedSemantic.SourceFile is BicepParamFile)
+                {
+                    foreach (var nested in WalkExtends(referencedSemantic))
+                    {
+                        yield return nested;
+                    }
+                }
+            }
+        }
+
+        foreach (var variable in WalkExtends(model))
+        {
+            yield return variable;
+        }
+    }
+
+    private static IEnumerable<FunctionVariable> CollectFunctionVariablesIncludingExtends(SemanticModel model, EmitterContext context)
+    {
+        foreach (var functionVariable in context.FunctionVariables.Values)
+        {
+            yield return functionVariable;
+        }
+
+        if (model.SourceFile is not BicepParamFile)
+        {
+            yield break;
+        }
+
+        var visitedModels = new HashSet<ISemanticModel>();
+
+        foreach (var extendsDeclaration in model.SourceFile.ProgramSyntax.Declarations.OfType<ExtendsDeclarationSyntax>())
+        {
+            foreach (var functionVariable in CollectFunctionVariablesFromExtendedModel(model, extendsDeclaration, visitedModels))
+            {
+                yield return functionVariable;
+            }
+        }
+    }
+
+    private static IEnumerable<FunctionVariable> CollectFunctionVariablesFromExtendedModel(SemanticModel currentModel, ExtendsDeclarationSyntax extendsDeclaration, HashSet<ISemanticModel> visitedModels)
+    {
+        if (!currentModel.TryGetReferencedModel(extendsDeclaration).IsSuccess(out var extendedModel))
+        {
+            yield break;
+        }
+
+        if (!visitedModels.Add(extendedModel))
+        {
+            yield break;
+        }
+
+        if (extendedModel is not SemanticModel extendedSemanticModel)
+        {
+            yield break;
+        }
+
+        var extendedContext = new EmitterContext(extendedSemanticModel);
+
+        foreach (var functionVariable in extendedContext.FunctionVariables.Values)
+        {
+            yield return functionVariable;
+        }
+
+        if (extendedSemanticModel.SourceFile is BicepParamFile)
+        {
+            var nestedExtendsDeclarations = extendedSemanticModel.SourceFile.ProgramSyntax.Declarations.OfType<ExtendsDeclarationSyntax>();
+
+            foreach (var nestedExtendsDeclaration in nestedExtendsDeclarations)
+            {
+                foreach (var functionVariable in CollectFunctionVariablesFromExtendedModel(extendedSemanticModel, nestedExtendsDeclaration, visitedModels))
+                {
+                    yield return functionVariable;
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<ParameterAssignmentSymbol> GetParameterAssignmentsIncludingExtends(SemanticModel model)
+    {
+        foreach (var param in model.Root.ParameterAssignments)
+        {
+            yield return param;
+        }
+
+        if (model.SourceFile is not BicepParamFile)
+        {
+            yield break;
+        }
+
+        var visitedModels = new HashSet<ISemanticModel>();
+
+        IEnumerable<ParameterAssignmentSymbol> WalkExtends(SemanticModel current)
+        {
+            foreach (var extends in current.SourceFile.ProgramSyntax.Declarations.OfType<ExtendsDeclarationSyntax>())
+            {
+                if (!current.TryGetReferencedModel(extends).IsSuccess(out var referenced) || !visitedModels.Add(referenced) || referenced is not SemanticModel referencedSemantic)
+                {
+                    continue;
+                }
+
+                foreach (var inherited in referencedSemantic.Root.ParameterAssignments)
+                {
+                    yield return inherited;
+                }
+
+                if (referencedSemantic.SourceFile is BicepParamFile)
+                {
+                    foreach (var nested in WalkExtends(referencedSemantic))
+                    {
+                        yield return nested;
+                    }
+                }
+            }
+        }
+
+        foreach (var param in WalkExtends(model))
+        {
+            yield return param;
+        }
+    }
+
+    public ParameterAssignmentEvaluator(SemanticModel model)
+    {
+        this.semanticModel = model;
+        this.paramsByName = GetParameterAssignmentsIncludingExtends(model)
+            .GroupBy(x => x.Name, LanguageConstants.IdentifierComparer)
+            .ToImmutableDictionary(x => x.Key, x => x.First(), LanguageConstants.IdentifierComparer);
+        this.variablesByName = GetVariableDeclarationsIncludingExtends(model)
+            .GroupBy(x => x.Name, LanguageConstants.IdentifierComparer)
+            .ToImmutableDictionary(x => x.Key, x => x.First(), LanguageConstants.IdentifierComparer);
+        this.functionsByName = model.Root.FunctionDeclarations
+            .GroupBy(x => x.Name, LanguageConstants.IdentifierComparer)
+            .ToImmutableDictionary(x => x.Key, x => x.First(), LanguageConstants.IdentifierComparer);
+
+        EmitterContext context = new(model);
+        this.converter = new(context);
+        this.converterCache[model] = this.converter;
+        this.importsByName = context.SemanticModel.ImportClosureInfo.ImportedSymbolNames.Keys
+            .Select(importedVariable => (context.SemanticModel.ImportClosureInfo.ImportedSymbolNames[importedVariable], importedVariable))
+            .GroupBy(x => x.Item1, LanguageConstants.IdentifierComparer)
+            .ToImmutableDictionary(x => x.Key, x => x.First().importedVariable, LanguageConstants.IdentifierComparer);
+        this.wildcardImportPropertiesByName = context.SemanticModel.ImportClosureInfo.WildcardImportPropertyNames
+            .GroupBy(x => x.Value, LanguageConstants.IdentifierComparer)
+            .ToImmutableDictionary(x => x.Key, x => x.First().Key, LanguageConstants.IdentifierComparer);
+        this.synthesizedVariableValuesByName = CollectFunctionVariablesIncludingExtends(model, context)
+            .GroupBy(result => result.Name)
+            .ToImmutableDictionary(x => x.Key, x => x.First().Value);
+    }
+
+    private ExpressionConverter GetConverterForParameter(ParameterAssignmentSymbol parameter)
+    {
+        if (ReferenceEquals(parameter.Context.SourceFile, semanticModel.SourceFile))
+        {
+            return converter;
+        }
+
+        if (parameter.Context.ModelLookup.GetSemanticModel(parameter.Context.SourceFile) is SemanticModel parameterModel)
+        {
+            return converterCache.GetOrAdd(parameterModel, model => new ExpressionConverter(new EmitterContext(model)));
+        }
+
+        return converter;
+    }
+
+    private ExpressionConverter GetConverterForVariable(VariableSymbol variable)
+    {
+        if (ReferenceEquals(variable.Context.SourceFile, semanticModel.SourceFile))
+        {
+            return converter;
+        }
+
+        if (variable.Context.ModelLookup.GetSemanticModel(variable.Context.SourceFile) is SemanticModel variableModel)
+        {
+            return converterCache.GetOrAdd(variableModel, model => new ExpressionConverter(new EmitterContext(model)));
+        }
+
+        return converter;
+    }
+
+    public Result EvaluateParameter(ParameterAssignmentSymbol parameter)
+        => results.GetOrAdd(
+            parameter,
+            parameter =>
+            {
+                var parameterModel = GetModelForSymbol(parameter);
+                var context = GetExpressionEvaluationContextForModel(parameterModel);
+
+                var declaringParam = parameter.DeclaringParameterAssignment;
+
+                var parameterConverter = GetConverterForParameter(parameter);
+                var intermediate = parameterConverter.ConvertToIntermediateExpression(declaringParam.Value);
+
+                // handle KV reference before paramstoinline check since KV references may contain externalInput references
+                // and we don't want to inline getSecret calls as expressions in the parameters JSON file
+                if (intermediate is ParameterKeyVaultReferenceExpression keyVaultReferenceExpression)
+                {
+                    return Result.For(keyVaultReferenceExpression);
+                }
+
+                if (semanticModel.SymbolsToInline.ParameterAssignmentsToInline.Contains(parameter))
+                {
                     try
                     {
-                        var context = GetExpressionEvaluationContext();
-                        var converter = new ExpressionConverter(new(model));
-                        var expression = converter.ConvertExpression(parameter.DeclaringParameterAssignment.Value);
-
-                        return new(expression.EvaluateExpression(context), null);
+                        // we need to inline fully-evaluable variables, parameters or UDFs
+                        // since we can't have 'variables' or 'parameters' or UDF function invocations in JSON parameter files
+                        // TODO: Look into whether we can use ITemplateLanguageExpression for ParameterAssignmentEvaluator to simplify partial evaluation
+                        // cases like this.
+                        var rewriter = new InlinedParameterRewriter(parameterModel, this, parameterConverter);
+                        return Result.For(rewriter.Rewrite(intermediate));
                     }
                     catch (Exception ex)
                     {
-                        var diagnostic = DiagnosticBuilder.ForPosition(parameter.DeclaringParameterAssignment.Value)
-                            .FailedToEvaluateParameter(parameter.Name, ex.Message);
-
-                        return new(null, diagnostic);
+                        return Result.For(DiagnosticBuilder.ForPosition(declaringParam.Value)
+                            .FailedToEvaluateSubject("parameter", parameter.Name, ex.Message));
                     }
-                });
+                }
 
-        private ExpressionEvaluationContext GetExpressionEvaluationContext()
+                if (semanticModel.SymbolsToInline.ParameterAssignmentsToInline.Contains(parameter))
+                {
+                    return Result.For(intermediate);
+                }
+
+                try
+                {
+                    return Result.For(EvaluateExpression(parameterConverter, intermediate, context));
+                }
+                catch (Exception ex)
+                {
+                    return Result.For(DiagnosticBuilder.ForPosition(declaringParam.Value)
+                        .FailedToEvaluateSubject("parameter", parameter.Name, ex.Message));
+                }
+            });
+
+    public Result? EvaluateUsingConfig(FileSymbol file)
+    {
+        if (file.UsingDeclarationSyntax?.Config is not { } config)
         {
-            var helper = new TemplateExpressionEvaluationHelper();
-            helper.OnGetParameter = (name, _) => {
-                return EvaluateParameter(paramsByName[name]).Value ?? throw new InvalidOperationException($"Parameter {name} has an invalid value");
-            };
+            return null;
+        }
 
-            return helper.EvaluationContext;
+        var intermediate = converter.ConvertToIntermediateExpression(config);
+        return Result.For(intermediate);
+    }
+
+    public ImmutableDictionary<string, Result> EvaluateExtensionConfigAssignment(ExtensionConfigAssignmentSymbol inputExtConfigAssignment)
+        => extensionConfigAssignmentResults.GetOrAdd(
+            inputExtConfigAssignment,
+            extConfigAssignment =>
+            {
+                if (extConfigAssignment.DeclaringExtensionConfigAssignment.Config is null)
+                {
+                    return [];
+                }
+
+                var context = GetExpressionEvaluationContext();
+                var configAssignmentProperties = extConfigAssignment.DeclaringExtensionConfigAssignment.Config.Properties;
+
+                var resultBuilder = ImmutableDictionary.CreateBuilder<string, Result>();
+
+                foreach (var property in configAssignmentProperties)
+                {
+                    var propertyName = property.TryGetKeyText();
+
+                    if (propertyName is null)
+                    {
+                        continue;
+                    }
+
+                    var intermediate = converter.ConvertToIntermediateExpression(property.Value);
+
+                    Result propertyResult;
+
+                    if (intermediate is ParameterKeyVaultReferenceExpression keyVaultReferenceExpr)
+                    {
+                        propertyResult = Result.For(keyVaultReferenceExpr);
+                    }
+                    else
+                    {
+                        try
+                        {
+                            propertyResult = Result.For(EvaluateExpression(converter, intermediate, context));
+                        }
+                        catch (Exception ex)
+                        {
+                            propertyResult = Result.For(
+                                DiagnosticBuilder.ForPosition(property.Value)
+                                    .FailedToEvaluateSubject("extension config", extConfigAssignment.Name, ex.Message));
+                        }
+                    }
+
+                    resultBuilder.Add(propertyName, propertyResult);
+                }
+
+                return resultBuilder.ToImmutableDictionary();
+            });
+
+    public ImmutableArray<ExternalInputDefinition>? TryGetExternalInputDefinitions()
+    {
+        try
+        {
+            var externalInputInfo = semanticModel.ExternalInputReferences.InfoBySerializedExpression;
+            if (externalInputInfo.Count == 0)
+            {
+                return null;
+            }
+
+            var context = GetExpressionEvaluationContext();
+            var resultBuilder = ImmutableArray.CreateBuilder<ExternalInputDefinition>();
+
+            // Sort by definition key for deterministic ordering
+            foreach (var info in externalInputInfo.Select(x => x.Value).OrderBy(x => x.DefinitionKey))
+            {
+                var kind = info.Kind.EvaluateExpression(context).ToString();
+                var config = info.Config?.EvaluateExpression(context);
+
+                resultBuilder.Add(new ExternalInputDefinition(info.DefinitionKey, kind, config));
+            }
+
+            return resultBuilder.ToImmutable();
+        }
+        catch (Exception)
+        {
+            // we may fail to evaluate expressions e.g. due to invalid syntax, which will be reported elsewhere
+            return null;
         }
     }
+
+    private Result EvaluateVariable(VariableSymbol variable)
+        => varResults.GetOrAdd(
+            variable,
+            variable =>
+            {
+                try
+                {
+                    var variableModel = GetModelForSymbol(variable);
+                    var context = GetExpressionEvaluationContextForModel(variableModel);
+                    var variableConverter = GetConverterForVariable(variable);
+                    var intermediate = variableConverter.ConvertToIntermediateExpression(variable.DeclaringVariable.Value);
+
+                    return Result.For(EvaluateExpression(variableConverter, intermediate, context));
+                }
+                catch (Exception ex)
+                {
+                    return Result.For(DiagnosticBuilder.ForPosition(variable.DeclaringVariable.Value)
+                        .FailedToEvaluateVariable(variable.Name, ex.Message));
+                }
+            });
+
+    private Result EvaluateSynthesizeVariableExpression(string name, Expression expression, SemanticModel model)
+        => synthesizedVariableResults.GetOrAdd(
+            expression,
+            expression =>
+            {
+                try
+                {
+                    var evalContext = GetExpressionEvaluationContextForModel(model);
+                    var exprConverter = converterCache.GetOrAdd(model, m => new ExpressionConverter(new EmitterContext(m)));
+                    return Result.For(EvaluateExpression(exprConverter, expression, evalContext));
+                }
+                catch (Exception e)
+                {
+                    return Result.For(DiagnosticBuilder.ForDocumentStart().FailedToEvaluateVariable(name, e.Message));
+                }
+            });
+
+    private SemanticModel GetModelForSymbol(DeclaredSymbol symbol)
+    {
+        if (ReferenceEquals(symbol.Context.SourceFile, semanticModel.SourceFile))
+        {
+            return semanticModel;
+        }
+
+        return symbol.Context.ModelLookup.GetSemanticModel(symbol.Context.SourceFile) as SemanticModel ?? semanticModel;
+    }
+
+    private ResultWithDiagnosticBuilder<Template> GetTemplateWithCaching(ISemanticModel model)
+        => model switch
+        {
+            SemanticModel bicepModel => templateResults.GetOrAdd(bicepModel, GetTemplate),
+            ArmTemplateSemanticModel armModel when armModel.SourceFile.Template is Template template => new(template),
+            TemplateSpecSemanticModel tsModel when tsModel.SourceFile.MainTemplateFile.Template is Template template => new(template),
+            ArmTemplateSemanticModel or TemplateSpecSemanticModel => new(x => x.ReferencedArmTemplateHasErrors()),
+            _ => throw new UnreachableException(),
+        };
+
+    private Result EvaluateImport(ImportedVariableSymbol import) => importResults.GetOrAdd(import, import =>
+    {
+        if (import.Kind == SymbolKind.Variable)
+        {
+            return import.SourceModel switch
+            {
+                SemanticModel bicepModel
+                    => EvaluateImportedVariable(bicepModel, import),
+                ArmTemplateSemanticModel armModel when armModel.SourceFile.Template is Template template
+                    => EvaluateImportedVariable(template, import),
+                TemplateSpecSemanticModel tsModel when tsModel.SourceFile.MainTemplateFile.Template is Template template
+                    => EvaluateImportedVariable(template, import),
+                ArmTemplateSemanticModel or TemplateSpecSemanticModel
+                    => Result.For(DiagnosticBuilder.ForPosition(import.EnclosingDeclaration.FromClause).ReferencedArmTemplateHasErrors()),
+                _ => throw new UnreachableException(),
+            };
+        }
+
+        return Result.For(DiagnosticBuilder.ForPosition(import.DeclaringImportedSymbolsListItem.OriginalSymbolName).TypeSymbolUsedAsValue(import.Name));
+    });
+
+    private Result EvaluateImportedVariable(SemanticModel importedFrom, ImportedSymbol symbol)
+    {
+        if (templateResults.GetOrAdd(importedFrom, GetTemplate).IsSuccess(out var template, out var diagnosticBuilder))
+        {
+            return EvaluateImportedVariable(template, symbol);
+        }
+
+        return Result.For(diagnosticBuilder(DiagnosticBuilder.ForPosition(symbol.DeclaringImportedSymbolsListItem.OriginalSymbolName)));
+    }
+
+    private Result EvaluateImportedVariable(Template importedFrom, ImportedSymbol symbol)
+    {
+        if (symbol.OriginalSymbolName is not string originalSymbolName)
+        {
+            return Result.For(DiagnosticBuilder.ForPosition(symbol.DeclaringImportedSymbolsListItem.OriginalSymbolName).ExpectedVariableIdentifier());
+        }
+
+        try
+        {
+            return Result.For(armEvaluators.GetOrAdd(importedFrom, t => new(t)).GetEvaluatedVariableValue(originalSymbolName));
+        }
+        catch (Exception e)
+        {
+            return Result.For(DiagnosticBuilder.ForPosition(symbol.DeclaringImportedSymbolsListItem.OriginalSymbolName)
+                .FailedToEvaluateVariable(originalSymbolName, e.Message));
+        }
+    }
+
+    private Result EvaluateWildcardImportPropertyAsVariable(WildcardImportPropertyReference propertyReference) => wildcardImportVariableResults.GetOrAdd(propertyReference, r => r.WildcardImport.SourceModel switch
+    {
+        SemanticModel bicepModel
+            => EvaluateWildcardImportPropertyAsVariable(bicepModel, r),
+        ArmTemplateSemanticModel armModel when armModel.SourceFile.Template is Template template
+            => EvaluateWildcardImportPropertyAsVariable(armModel, template, r),
+        TemplateSpecSemanticModel tsModel when tsModel.SourceFile.MainTemplateFile.Template is Template template
+            => EvaluateWildcardImportPropertyAsVariable(tsModel, template, r),
+        ArmTemplateSemanticModel or TemplateSpecSemanticModel
+            => Result.For(DiagnosticBuilder.ForPosition(r.WildcardImport.EnclosingDeclaration.FromClause).ReferencedArmTemplateHasErrors()),
+        _ => throw new UnreachableException(),
+    });
+
+    private Result EvaluateWildcardImportPropertyAsVariable(SemanticModel importedFrom, WildcardImportPropertyReference propertyReference)
+    {
+        if (templateResults.GetOrAdd(importedFrom, GetTemplate).IsSuccess(out var template, out var diagnosticBuilder))
+        {
+            return EvaluateWildcardImportPropertyAsVariable(importedFrom, template, propertyReference);
+        }
+
+        return Result.For(diagnosticBuilder(DiagnosticBuilder.ForPosition(propertyReference.WildcardImport.DeclaringSyntax)));
+    }
+
+    private Result EvaluateWildcardImportPropertyAsVariable(ISemanticModel model, Template importedFrom, WildcardImportPropertyReference propertyReference)
+    {
+        if (InvalidPropertyRefDiagnostic(model, propertyReference) is IDiagnostic diagnostic)
+        {
+            return Result.For(diagnostic);
+        }
+
+        try
+        {
+            return Result.For(armEvaluators.GetOrAdd(importedFrom, t => new(t)).GetEvaluatedVariableValue(propertyReference.PropertyName));
+        }
+        catch (Exception e)
+        {
+            return Result.For(DiagnosticBuilder.ForPosition(propertyReference.WildcardImport.DeclaringSyntax).FailedToEvaluateVariable(propertyReference.PropertyName, e.Message));
+        }
+    }
+
+    private static IDiagnostic? InvalidPropertyRefDiagnostic(ISemanticModel importedFrom, WildcardImportPropertyReference propertyReference)
+    {
+        if (!importedFrom.Exports.TryGetValue(propertyReference.PropertyName, out var exportMetadata))
+        {
+            return DiagnosticBuilder.ForPosition(propertyReference.WildcardImport.DeclaringSyntax).ImportedSymbolNotFound(propertyReference.PropertyName);
+        }
+
+        if (exportMetadata.Kind != ExportMetadataKind.Variable)
+        {
+            return DiagnosticBuilder.ForPosition(propertyReference.WildcardImport.DeclaringSyntax).TypeSymbolUsedAsValue($"{propertyReference.WildcardImport.Name}.{propertyReference.PropertyName}");
+        }
+
+        return null;
+
+    }
+
+    private ParameterAssignmentEvaluationContext GetExpressionEvaluationContext()
+    {
+        return GetExpressionEvaluationContextForModel(semanticModel);
+    }
+
+    private ParameterAssignmentEvaluationContext GetExpressionEvaluationContextForModel(SemanticModel model)
+    {
+        return evaluationContextCache.GetOrAdd(model, m =>
+        {
+            var modelVariables = variablesByModelAndName.GetOrAdd(m, GetVariablesForModel);
+            var modelParams = paramsByModelAndName.GetOrAdd(m, GetParametersForModel);
+            var modelSynthesizedVars = synthesizedVariablesByModelAndName.GetOrAdd(m, GetSynthesizedVariablesForModel);
+
+            var modelContext = new EmitterContext(m);
+            var modelImportsByName = modelContext.SemanticModel.ImportClosureInfo.ImportedSymbolNames.Keys
+                .Select(importedVariable => (modelContext.SemanticModel.ImportClosureInfo.ImportedSymbolNames[importedVariable], importedVariable))
+                .GroupBy(x => x.Item1, LanguageConstants.IdentifierComparer)
+                .ToImmutableDictionary(x => x.Key, x => x.First().importedVariable, LanguageConstants.IdentifierComparer);
+            var modelWildcardImportsByName = modelContext.SemanticModel.ImportClosureInfo.WildcardImportPropertyNames
+                .GroupBy(x => x.Value, LanguageConstants.IdentifierComparer)
+                .ToImmutableDictionary(x => x.Key, x => x.First().Key, LanguageConstants.IdentifierComparer);
+
+            var helper = new TemplateExpressionEvaluationHelper
+            {
+                OnGetVariable = (name, _) =>
+                {
+                    if (modelVariables.TryGetValue(name, out var variable))
+                    {
+                        return EvaluateVariable(variable).Value ?? throw new InvalidOperationException($"Variable {name} has an invalid value");
+                    }
+
+                    if (modelImportsByName.TryGetValue(name, out var imported) && imported is ImportedVariableSymbol importedVariable)
+                    {
+                        return EvaluateImport(importedVariable).Value ?? throw new InvalidOperationException($"Imported variable {name} has an invalid value");
+                    }
+
+                    if (modelWildcardImportsByName.TryGetValue(name, out var wildcardImportProperty))
+                    {
+                        return EvaluateWildcardImportPropertyAsVariable(wildcardImportProperty).Value
+                            ?? throw new InvalidOperationException($"Imported variable {wildcardImportProperty.WildcardImport.Name}.{wildcardImportProperty.PropertyName} has an invalid value");
+                    }
+
+                    if (modelSynthesizedVars.TryGetValue(name, out var value))
+                    {
+                        return EvaluateSynthesizeVariableExpression(name, value, m).Value
+                            ?? throw new InvalidOperationException($"Synthesized variable {name} has an invalid value");
+                    }
+
+                    throw new InvalidOperationException($"Variable {name} not found");
+                },
+                OnGetParameter = (name, _) =>
+                {
+                    if (modelParams.TryGetValue(name, out var param))
+                    {
+                        return EvaluateParameter(param).Value ?? throw new InvalidOperationException($"Parameter {name} has an invalid value");
+                    }
+                    throw new InvalidOperationException($"Parameter {name} not found");
+                },
+            };
+
+            return new(helper, this);
+        });
+    }
+
+    private static ResultWithDiagnosticBuilder<Template> GetTemplate(SemanticModel model)
+    {
+        if (model.HasErrors())
+        {
+            return new(x => x.ReferencedModuleHasErrors());
+        }
+
+        try
+        {
+            var textWriter = new StringWriter();
+            using var writer = new SourceAwareJsonTextWriter(textWriter)
+            {
+                // don't close the textWriter when writer is disposed
+                CloseOutput = false,
+                Formatting = Formatting.Indented
+            };
+            var (template, _) = new TemplateWriter(model).GetTemplate(writer);
+
+            return new(template);
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"Failed to generate template for {model.SourceFile.FileHandle.Uri}: {ex}");
+            return new(x => x.ReferencedModuleHasErrors());
+        }
+    }
+
+    public ExpressionEvaluationResult EvaluateExpression(SyntaxBase expressionSyntax)
+    {
+        try
+        {
+            var context = GetExpressionEvaluationContext();
+            var intermediate = converter.ConvertToIntermediateExpression(expressionSyntax);
+            var result = EvaluateExpression(converter, intermediate, context);
+            return ExpressionEvaluationResult.For(result);
+        }
+        catch (Exception ex)
+        {
+            return ExpressionEvaluationResult.For([DiagnosticBuilder.ForPosition(expressionSyntax)
+                .FailedToEvaluateSubject("expression", expressionSyntax.ToString(), ex.Message)]);
+        }
+    }
+
+    // TODO: Should look into using ITemplateLanguageExpression for ParameterAssignmentEvaluator
+    // which would probably simplify a lot of this logic.
+
+    private JToken EvaluateExpression(ExpressionConverter expressionConverter, Expression expression, ParameterAssignmentEvaluationContext context)
+    {
+        if (expression is ForLoopExpression forLoop)
+        {
+            return EvaluateForLoopExpression(expressionConverter, forLoop, context);
+        }
+
+        return expressionConverter.ConvertExpression(expression).EvaluateExpression(context);
+    }
+
+    private JToken EvaluateForLoopExpression(ExpressionConverter expressionConverter, ForLoopExpression forLoop, ParameterAssignmentEvaluationContext context)
+    {
+        var source = EvaluateExpression(expressionConverter, forLoop.Expression, context);
+        if (source is not JArray sourceArray)
+        {
+            throw new InvalidOperationException("For-expression source must be an array.");
+        }
+
+        var results = new JArray();
+        for (var i = 0; i < sourceArray.Count; i++)
+        {
+            results.Add(EvaluateExpression(expressionConverter, ForLoopIndexRewriter.Rewrite(forLoop.Body, i), context));
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Rewrites intermediate expressions by replacing variable references, parameter assignment references,
+    /// and user-defined function calls with their evaluated literal values. This is used for parameter
+    /// assignments that must be inlined (e.g., those containing <c>externalInput</c> calls), where the
+    /// emitted JSON parameter file cannot reference ARM template variables, parameters, or user-defined
+    /// functions.
+    /// </summary>
+    public class InlinedParameterRewriter(
+        SemanticModel model,
+        ParameterAssignmentEvaluator evaluator,
+        ExpressionConverter converter) : ExpressionRewriteVisitor
+    {
+        public Expression Rewrite(Expression expression) => Replace(expression);
+
+        public override Expression ReplaceVariableReferenceExpression(VariableReferenceExpression expression)
+            => ResultToExpression(evaluator.EvaluateVariable(expression.Variable), expression);
+
+        public override Expression ReplaceParametersAssignmentReferenceExpression(ParametersAssignmentReferenceExpression expression)
+            => ResultToExpression(evaluator.EvaluateParameter(expression.Parameter), expression);
+
+        public override Expression ReplaceImportedVariableReferenceExpression(ImportedVariableReferenceExpression expression)
+            => ResultToExpression(evaluator.EvaluateImport(expression.Variable), expression);
+
+        public override Expression ReplaceWildcardImportVariablePropertyReferenceExpression(WildcardImportVariablePropertyReferenceExpression expression)
+            => ResultToExpression(evaluator.EvaluateWildcardImportPropertyAsVariable(new WildcardImportPropertyReference(expression.ImportSymbol, expression.PropertyName)), expression);
+
+        public override Expression ReplaceUserDefinedFunctionCallExpression(UserDefinedFunctionCallExpression expression)
+            => EvaluateToJToken(base.ReplaceUserDefinedFunctionCallExpression(expression));
+
+        public override Expression ReplaceImportedUserDefinedFunctionCallExpression(ImportedUserDefinedFunctionCallExpression expression)
+            => EvaluateToJToken(base.ReplaceImportedUserDefinedFunctionCallExpression(expression));
+
+        public override Expression ReplaceWildcardImportInstanceFunctionCallExpression(WildcardImportInstanceFunctionCallExpression expression)
+            => EvaluateToJToken(base.ReplaceWildcardImportInstanceFunctionCallExpression(expression));
+
+        private static Expression ResultToExpression(Result result, Expression expression)
+            => result.Value is { } value
+                ? JTokenToExpression(value, expression.SourceSyntax)
+                : throw new ExpressionException(result.Diagnostic?.Message ?? "Failed to evaluate expression.");
+
+        private Expression EvaluateToJToken(Expression expression)
+        {
+            var context = evaluator.GetExpressionEvaluationContextForModel(model);
+            return JTokenToExpression(converter.ConvertExpression(expression).EvaluateExpression(context), expression.SourceSyntax);
+        }
+
+        private static Expression JTokenToExpression(JToken token, SyntaxBase? syntax) => token switch
+        {
+            JObject obj => ExpressionFactory.CreateObject(obj.Properties().Select(p => ExpressionFactory.CreateObjectProperty(p.Name, JTokenToExpression(p.Value, syntax), syntax)), syntax),
+            JArray arr => ExpressionFactory.CreateArray(arr.Select(item => JTokenToExpression(item, syntax)), syntax),
+            JValue jValue => jValue.Value switch
+            {
+                string @string => ExpressionFactory.CreateStringLiteral(@string, syntax),
+                int @int => ExpressionFactory.CreateIntegerLiteral(@int, syntax),
+                long @long => ExpressionFactory.CreateIntegerLiteral(@long, syntax),
+                bool @bool => ExpressionFactory.CreateBooleanLiteral(@bool, syntax),
+                null => new NullLiteralExpression(syntax),
+                _ => throw new ExpressionException($"Unrecognized JValue value of type {jValue.Value?.GetType().Name}"),
+            },
+            _ => throw new ExpressionException($"Unsupported JToken type: {token.Type}"),
+        };
+    }
+
 }

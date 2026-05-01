@@ -11,17 +11,11 @@ param peeringLocation string
 param bandwidthInMbps int
 
 @description('Chosen SKU Tier of ExpressRoute circuit. Choose from Premium or Standard SKU tiers.')
-@allowed([
-  'Standard'
-  'Premium'
-])
+@allowed(['Standard', 'Premium'])
 param skuTier string = 'Standard'
 
 @description('Chosen SKU family of ExpressRoute circuit. Choose from MeteredData or UnlimitedData SKU families.')
-@allowed([
-  'MeteredData'
-  'UnlimitedData'
-])
+@allowed(['MeteredData', 'UnlimitedData'])
 param skuFamily string = 'MeteredData'
 
 @description('Location for all resources.')

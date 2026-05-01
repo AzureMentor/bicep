@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Linq;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Utils;
 using Bicep.LanguageServer.Completions;
@@ -14,14 +12,14 @@ namespace Bicep.LangServer.UnitTests.Completions
     [TestClass]
     public class BicepCompletionContextTests
     {
-        private static ServiceBuilder Services => new ServiceBuilder();
+        private static ServiceBuilder Services => new();
 
         private static BicepCompletionContext CreateContextFromTextWithCursor(string text)
         {
             var (file, cursor) = ParserHelper.GetFileWithSingleCursor(text, "|");
             var compilation = Services.BuildCompilation(file);
 
-            return BicepCompletionContext.Create(BicepTestConstants.Features, compilation, cursor);
+            return BicepCompletionContext.Create(compilation, cursor);
         }
 
         [TestMethod]
@@ -30,7 +28,7 @@ namespace Bicep.LangServer.UnitTests.Completions
             const string text = "var foo = 42";
             var compilation = Services.BuildCompilation(text);
 
-            Action fail = () => BicepCompletionContext.Create(BicepTestConstants.Features, compilation, text.Length + 2);
+            Action fail = () => BicepCompletionContext.Create(compilation, text.Length + 2);
             fail.Should().Throw<ArgumentException>().WithMessage("The specified offset 14 is outside the span of the specified ProgramSyntax node.");
         }
 
@@ -50,9 +48,7 @@ resource foo 'Microsoft.Foo/bar@2020-01-01' = {
     a == '1' ? a == '2' ? |
     a == '1' ? a == '2' ? : |
     a == '1' ? a == '2' ? | : aResource : aResource
-    a == '1' ? (a == '2' ? |
     a == '1' ? (a == '2' ? |)
-    (a == '1' ? aResource : |
     (a == '1' ? aResource : |)
     (a == '1' ? (|))
     (a == '1' ? (|) :)
@@ -65,8 +61,8 @@ resource foo 'Microsoft.Foo/bar@2020-01-01' = {
             var (file, cursors) = ParserHelper.GetFileWithCursors(text, '|');
             var compilation = Services.BuildCompilation(file);
 
-            cursors.Should().HaveCount(17);
-            var cursorTuples = cursors.Select((cursor, cursorIndex) => (BicepCompletionContext.Create(BicepTestConstants.Features, compilation, cursor), cursor, cursorIndex));
+            cursors.Should().HaveCount(15);
+            var cursorTuples = cursors.Select((cursor, cursorIndex) => (BicepCompletionContext.Create(compilation, cursor), cursor, cursorIndex));
             foreach (var (context, cursor, cursorIndex) in cursorTuples)
             {
                 context.Kind.Should().HaveFlag(BicepCompletionContextKind.ArrayItem, "cursor index {0} with text offset {1} expects an array item", cursorIndex, cursor);
@@ -109,7 +105,7 @@ resource foo 'Microsoft.Foo/bar@2020-01-01' = {
             var compilation = Services.BuildCompilation(file);
 
             cursors.Should().HaveCount(17);
-            var cursorTuples = cursors.Select((cursor, cursorIndex) => (BicepCompletionContext.Create(BicepTestConstants.Features, compilation, cursor), cursor, cursorIndex));
+            var cursorTuples = cursors.Select((cursor, cursorIndex) => (BicepCompletionContext.Create(compilation, cursor), cursor, cursorIndex));
             foreach (var (context, cursor, cursorIndex) in cursorTuples)
             {
                 context.Kind.Should().NotHaveFlag(BicepCompletionContextKind.ArrayItem, "cursor index {0} with text offset {1} will not evaluate to the array item in current array context", cursorIndex, cursor);

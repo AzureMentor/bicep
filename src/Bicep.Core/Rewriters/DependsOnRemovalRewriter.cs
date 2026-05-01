@@ -5,8 +5,6 @@ using Bicep.Core.Parsing;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
 using Bicep.Core.Visitors;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Bicep.Core.Rewriters
 {
@@ -61,14 +59,14 @@ namespace Bicep.Core.Rewriters
             }
 
             var builtInDependencies = new HashSet<Symbol>();
-            foreach (var property in @object.Properties)
+            foreach (var child in @object.Children)
             {
-                if (property == dependsOnProperty)
+                if (child == dependsOnProperty)
                 {
                     continue;
                 }
 
-                var dependencies = ResourceDependencyFinderVisitor.GetResourceDependencies(semanticModel, property);
+                var dependencies = ResourceDependencyFinderVisitor.GetResourceDependencies(semanticModel, child);
                 builtInDependencies.UnionWith(dependencies);
             }
 
@@ -155,6 +153,7 @@ namespace Bicep.Core.Rewriters
                 syntax.Type,
                 syntax.ExistingKeyword,
                 syntax.Assignment,
+                syntax.Newlines,
                 replacementValue);
         }
 
@@ -172,6 +171,7 @@ namespace Bicep.Core.Rewriters
                 syntax.Name,
                 syntax.Path,
                 syntax.Assignment,
+                syntax.Newlines,
                 replacementValue);
         }
     }

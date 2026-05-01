@@ -1,19 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Bicep.Core.FileSystem;
+using System.IO.Abstractions.TestingHelpers;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.UnitTests.FileSystem;
 using Bicep.Core.UnitTests.Utils;
 using Bicep.LangServer.IntegrationTests.Helpers;
-using Bicep.LanguageServer;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using OmniSharp.Extensions.LanguageServer.Protocol;
@@ -27,13 +21,15 @@ namespace Bicep.LangServer.IntegrationTests
     [TestClass]
     public class BicepConfigTests
     {
+        private readonly MockFileSystem fileSystem = new();
+
         [NotNull]
         public TestContext? TestContext { get; set; }
 
         [TestMethod]
         public async Task BicepConfigFileModification_ShouldNotRefreshCompilation()
         {
-            var (diagsListener, testOutputPath) = GetTestConfig();
+            var diagsListener = GetDiagnosticListener();
             using var helper = await StartServerWithClientConnectionAsync(diagsListener);
             var client = helper.Client;
 
@@ -52,8 +48,8 @@ namespace Bicep.LangServer.IntegrationTests
 }";
             var bicepFileContents = @"param storageAccountName string = 'test'";
 
-            var mainUri = SaveFile("main.bicep", bicepFileContents, testOutputPath);
-            var bicepConfigUri = SaveFile("bicepconfig.json", bicepConfigFileContents, testOutputPath);
+            var mainUri = SaveFile("main.bicep", bicepFileContents);
+            var bicepConfigUri = SaveFile("bicepconfig.json", bicepConfigFileContents);
 
             // open the main document and verify diagnostics
             {
@@ -63,7 +59,7 @@ namespace Bicep.LangServer.IntegrationTests
                     DiagnosticSeverity.Information,
                     new Position(0, 6),
                     new Position(0, 24),
-                    "https://aka.ms/bicep/linter/no-unused-params"));
+                    "no-unused-params"));
             }
 
             // update bicepconfig.json and verify diagnostics message is not sent
@@ -89,7 +85,7 @@ namespace Bicep.LangServer.IntegrationTests
         [TestMethod]
         public async Task BicepConfigFileDeletion_ShouldRefreshCompilation()
         {
-            var (diagsListener, testOutputPath) = GetTestConfig();
+            var diagsListener = GetDiagnosticListener();
             using var helper = await StartServerWithClientConnectionAsync(diagsListener);
             var client = helper.Client;
 
@@ -109,8 +105,8 @@ namespace Bicep.LangServer.IntegrationTests
 
             var bicepFileContents = @"param storageAccountName string = 'test'";
 
-            var mainUri = SaveFile("main.bicep", bicepFileContents, testOutputPath);
-            var bicepConfigUri = SaveFile("bicepconfig.json", bicepConfigFileContents, testOutputPath);
+            var mainUri = SaveFile("main.bicep", bicepFileContents);
+            var bicepConfigUri = SaveFile("bicepconfig.json", bicepConfigFileContents);
 
             // open the main document and verify diagnostics
             {
@@ -120,12 +116,12 @@ namespace Bicep.LangServer.IntegrationTests
                     DiagnosticSeverity.Information,
                     new Position(0, 6),
                     new Position(0, 24),
-                    "https://aka.ms/bicep/linter/no-unused-params"));
+                    "no-unused-params"));
             }
 
             // Delete bicepconfig.json and verify diagnostics are based off of default bicepconfig.json
             {
-                File.Delete(bicepConfigUri.GetFileSystemPath());
+                this.fileSystem.RemoveFile("bicepconfig.json");
 
                 client.Workspace.DidChangeWatchedFiles(new DidChangeWatchedFilesParams
                 {
@@ -140,19 +136,19 @@ namespace Bicep.LangServer.IntegrationTests
                     DiagnosticSeverity.Warning,
                     new Position(0, 6),
                     new Position(0, 24),
-                    "https://aka.ms/bicep/linter/no-unused-params"));
+                    "no-unused-params"));
             }
         }
 
         [TestMethod]
         public async Task BicepConfigFileCreation_ShouldRefreshCompilation()
         {
-            var (diagsListener, testOutputPath) = GetTestConfig();
+            var diagsListener = GetDiagnosticListener();
             using var helper = await StartServerWithClientConnectionAsync(diagsListener);
             var client = helper.Client;
 
             var bicepFileContents = @"param storageAccountName string = 'test'";
-            var mainUri = SaveFile("main.bicep", bicepFileContents, testOutputPath);
+            var mainUri = SaveFile("main.bicep", bicepFileContents);
 
             // open the main document and verify diagnostics
             {
@@ -162,7 +158,7 @@ namespace Bicep.LangServer.IntegrationTests
                     DiagnosticSeverity.Warning,
                     new Position(0, 6),
                     new Position(0, 24),
-                    "https://aka.ms/bicep/linter/no-unused-params"));
+                    "no-unused-params"));
             }
 
             // Create bicepconfig.json and verify diagnostics
@@ -180,7 +176,7 @@ namespace Bicep.LangServer.IntegrationTests
     }
   }
 }";
-                var bicepConfigUri = SaveFile("bicepconfig.json", bicepConfigFileContents, testOutputPath);
+                var bicepConfigUri = SaveFile("bicepconfig.json", bicepConfigFileContents);
 
                 client.Workspace.DidChangeWatchedFiles(new DidChangeWatchedFilesParams
                 {
@@ -195,19 +191,19 @@ namespace Bicep.LangServer.IntegrationTests
                     DiagnosticSeverity.Information,
                     new Position(0, 6),
                     new Position(0, 24),
-                    "https://aka.ms/bicep/linter/no-unused-params"));
+                    "no-unused-params"));
             }
         }
 
         [TestMethod]
         public async Task SavingBicepConfigFile_ShouldRefreshCompilation()
         {
-            var (diagsListener, testOutputPath) = GetTestConfig();
+            var diagsListener = GetDiagnosticListener();
             using var helper = await StartServerWithClientConnectionAsync(diagsListener);
             var client = helper.Client;
 
             var bicepFileContents = @"param storageAccountName string = 'test'";
-            var mainUri = SaveFile("main.bicep", bicepFileContents, testOutputPath);
+            var mainUri = SaveFile("main.bicep", bicepFileContents);
 
             // open the main document and verify diagnostics
             {
@@ -217,7 +213,7 @@ namespace Bicep.LangServer.IntegrationTests
                     DiagnosticSeverity.Warning,
                     new Position(0, 6),
                     new Position(0, 24),
-                    "https://aka.ms/bicep/linter/no-unused-params"));
+                    "no-unused-params"));
             }
 
             // Create bicepconfig.json and verify diagnostics
@@ -236,7 +232,7 @@ namespace Bicep.LangServer.IntegrationTests
   }
 }";
 
-                var bicepConfigUri = SaveFile("bicepconfig.json", bicepConfigFileContents, testOutputPath);
+                var bicepConfigUri = SaveFile("bicepconfig.json", bicepConfigFileContents);
 
                 client.Workspace.DidChangeWatchedFiles(new DidChangeWatchedFilesParams
                 {
@@ -251,14 +247,14 @@ namespace Bicep.LangServer.IntegrationTests
                     DiagnosticSeverity.Information,
                     new Position(0, 6),
                     new Position(0, 24),
-                    "https://aka.ms/bicep/linter/no-unused-params"));
+                    "no-unused-params"));
             }
         }
 
         [TestMethod]
         public async Task WithBicepConfigInParentDirectory_WhenNewBicepConfigFileIsAddedToCurrentDirectory_ShouldUseNewlyAddedConfigSettings()
         {
-            var (diagsListener, parentDirectoryPath) = GetTestConfig();
+            var diagsListener = GetDiagnosticListener();
             using var helper = await StartServerWithClientConnectionAsync(diagsListener);
             var client = helper.Client;
 
@@ -276,11 +272,10 @@ namespace Bicep.LangServer.IntegrationTests
   }
 }";
 
-            SaveFile("bicepconfig.json", bicepConfigFileContents, parentDirectoryPath);
+            SaveFile("bicepconfig.json", bicepConfigFileContents);
 
-            var childDirectoryPath = Path.Combine(parentDirectoryPath, "child");
             var bicepFileContents = @"param storageAccountName string = 'test'";
-            var mainUri = SaveFile("main.bicep", bicepFileContents, childDirectoryPath);
+            var mainUri = SaveFile("parent/main.bicep", bicepFileContents);
 
             // open the main document and verify diagnostics
             {
@@ -290,7 +285,7 @@ namespace Bicep.LangServer.IntegrationTests
                     DiagnosticSeverity.Information,
                     new Position(0, 6),
                     new Position(0, 24),
-                    "https://aka.ms/bicep/linter/no-unused-params"));
+                    "no-unused-params"));
             }
 
             // create new bicepconfig.json and verify diagnostics
@@ -309,7 +304,7 @@ namespace Bicep.LangServer.IntegrationTests
   }
 }";
 
-                var newBicepConfigUri = SaveFile("bicepconfig.json", bicepConfigFileContents, childDirectoryPath);
+                var newBicepConfigUri = SaveFile("parent/bicepconfig.json", bicepConfigFileContents);
 
                 client.Workspace.DidChangeWatchedFiles(new DidChangeWatchedFilesParams
                 {
@@ -324,20 +319,19 @@ namespace Bicep.LangServer.IntegrationTests
                     DiagnosticSeverity.Warning,
                     new Position(0, 6),
                     new Position(0, 24),
-                    "https://aka.ms/bicep/linter/no-unused-params"));
+                    "no-unused-params"));
             }
         }
 
         [TestMethod]
         public async Task WithBicepConfigInCurrentDirectory_WhenNewBicepConfigFileIsAddedToParentDirectory_ShouldUseOldConfigSettings()
         {
-            var (diagsListener, parentDirectoryPath) = GetTestConfig();
+            var diagsListener = GetDiagnosticListener();
             using var helper = await StartServerWithClientConnectionAsync(diagsListener);
             var client = helper.Client;
 
-            var childDirectoryPath = Path.Combine(parentDirectoryPath, "child");
             var bicepFileContents = @"param storageAccountName string = 'test'";
-            var mainUri = SaveFile("main.bicep", bicepFileContents, childDirectoryPath);
+            var mainUri = SaveFile("parent/main.bicep", bicepFileContents);
 
             var bicepConfigFileContents = @"{
   ""analyzers"": {
@@ -352,7 +346,7 @@ namespace Bicep.LangServer.IntegrationTests
     }
   }
 }";
-            SaveFile("bicepconfig.json", bicepConfigFileContents, childDirectoryPath);
+            SaveFile("parent/bicepconfig.json", bicepConfigFileContents);
 
             // open the main document and verify diagnostics
             {
@@ -362,7 +356,7 @@ namespace Bicep.LangServer.IntegrationTests
                     DiagnosticSeverity.Information,
                     new Position(0, 6),
                     new Position(0, 24),
-                    "https://aka.ms/bicep/linter/no-unused-params"));
+                    "no-unused-params"));
             }
 
             // add bicepconfig.json to parent directory and verify diagnostics
@@ -380,7 +374,7 @@ namespace Bicep.LangServer.IntegrationTests
     }
   }
 }";
-                var newBicepConfigUri = SaveFile("bicepconfig.json", bicepConfigFileContents, parentDirectoryPath);
+                var newBicepConfigUri = SaveFile("bicepconfig.json", bicepConfigFileContents);
 
                 client.Workspace.DidChangeWatchedFiles(new DidChangeWatchedFilesParams
                 {
@@ -395,14 +389,14 @@ namespace Bicep.LangServer.IntegrationTests
                     DiagnosticSeverity.Information,
                     new Position(0, 6),
                     new Position(0, 24),
-                    "https://aka.ms/bicep/linter/no-unused-params"));
+                    "no-unused-params"));
             }
         }
 
         [TestMethod]
         public async Task FixingErrorsInInvalidBicepConfigFileAndSaving_ShouldRefreshCompilation()
         {
-            var (diagsListener, testOutputPath) = GetTestConfig();
+            var diagsListener = GetDiagnosticListener();
             using var helper = await StartServerWithClientConnectionAsync(diagsListener);
             var client = helper.Client;
 
@@ -416,8 +410,8 @@ namespace Bicep.LangServer.IntegrationTests
 ";
             var bicepFileContents = @"param storageAccountName string = 'test'";
 
-            var bicepConfigUri = SaveFile("bicepconfig.json", bicepConfigFileContents, testOutputPath);
-            var mainUri = SaveFile("main.bicep", bicepFileContents, testOutputPath);
+            var bicepConfigUri = SaveFile("bicepconfig.json", bicepConfigFileContents);
+            var mainUri = SaveFile("main.bicep", bicepFileContents);
 
             // open the main document and verify diagnostics
             {
@@ -434,12 +428,12 @@ namespace Bicep.LangServer.IntegrationTests
                         DiagnosticSeverity.Warning,
                         new Position(0, 6),
                         new Position(0, 24),
-                        "https://aka.ms/bicep/linter/no-unused-params"));
+                        "no-unused-params"));
             }
 
             // update bicepconfig.json and verify diagnostics
             {
-                File.WriteAllText(bicepConfigUri.GetFileSystemPath(), @"{
+                this.fileSystem.File.WriteAllText("bicepconfig.json", @"{
   ""analyzers"": {
     ""core"": {
       ""verbose"": false,
@@ -465,18 +459,16 @@ namespace Bicep.LangServer.IntegrationTests
                     DiagnosticSeverity.Warning,
                     new Position(0, 6),
                     new Position(0, 24),
-                    "https://aka.ms/bicep/linter/no-unused-params"));
+                    "no-unused-params"));
             }
         }
 
         [TestMethod]
         public async Task WithMultipleConfigFiles_ShouldUseConfigSettingsFromRelevantDirectory()
         {
-            var (diagsListener, parentDirectoryPath) = GetTestConfig();
+            var diagsListener = GetDiagnosticListener();
             using var helper = await StartServerWithClientConnectionAsync(diagsListener);
             var client = helper.Client;
-
-            var childDirectoryPath = Path.Combine(parentDirectoryPath, "child");
 
             string bicepConfigFileContents = @"{
   ""analyzers"": {
@@ -491,11 +483,11 @@ namespace Bicep.LangServer.IntegrationTests
     }
   }
 }";
-            SaveFile("bicepconfig.json", bicepConfigFileContents, childDirectoryPath);
+            SaveFile("parent/bicepconfig.json", bicepConfigFileContents);
 
             string bicepFileContents = @"param storageAccountName string = 'test'";
-            var documentUriOfFileInChildDirectory = SaveFile("main.bicep", bicepFileContents, childDirectoryPath);
-            var uriOfFileInChildDirectory = documentUriOfFileInChildDirectory.ToUri();
+            var documentUriOfFileInChildDirectory = SaveFile("parent/main.bicep", bicepFileContents);
+            var uriOfFileInChildDirectory = documentUriOfFileInChildDirectory.ToUriEncoded();
 
             // open the main document and verify diagnostics
             {
@@ -505,13 +497,13 @@ namespace Bicep.LangServer.IntegrationTests
                     DiagnosticSeverity.Information,
                     new Position(0, 6),
                     new Position(0, 24),
-                    "https://aka.ms/bicep/linter/no-unused-params"));
+                    "no-unused-params"));
             }
 
             // add bicepconfig.json to parent directory and verify diagnostics
             {
-                var documentUriOfFileInParentDirectory = SaveFile("main.bicep", bicepFileContents, parentDirectoryPath);
-                var uriOfFileInParentDirectory = documentUriOfFileInParentDirectory.ToUri();
+                var documentUriOfFileInParentDirectory = SaveFile("main.bicep", bicepFileContents);
+                var uriOfFileInParentDirectory = documentUriOfFileInParentDirectory.ToUriEncoded();
 
                 bicepConfigFileContents = @"{
   ""analyzers"": {
@@ -526,7 +518,7 @@ namespace Bicep.LangServer.IntegrationTests
     }
   }
 }";
-                var newBicepConfigUri = SaveFile("bicepconfig.json", bicepConfigFileContents, parentDirectoryPath);
+                var newBicepConfigUri = SaveFile("bicepconfig.json", bicepConfigFileContents);
 
                 client.TextDocument.DidOpenTextDocument(TextDocumentParamHelper.CreateDidOpenDocumentParams(uriOfFileInParentDirectory, bicepFileContents, 1));
 
@@ -543,7 +535,7 @@ namespace Bicep.LangServer.IntegrationTests
                     DiagnosticSeverity.Warning,
                     new Position(0, 6),
                     new Position(0, 24),
-                    "https://aka.ms/bicep/linter/no-unused-params"));
+                    "no-unused-params"));
             }
         }
 
@@ -615,12 +607,12 @@ param storageAccountName string = 'test'";
 
         private async Task VerifyLinterDiagnosticsCanBeSuppressedWithDisableNextLineDiagnosticsDirective(string bicepConfigContents, string bicepFileContents)
         {
-            var (diagsListener, testOutputPath) = GetTestConfig();
+            var diagsListener = GetDiagnosticListener();
             using var helper = await StartServerWithClientConnectionAsync(diagsListener);
             var client = helper.Client;
 
-            var mainUri = SaveFile("main.bicep", bicepFileContents, testOutputPath);
-            var bicepConfigUri = SaveFile("bicepconfig.json", bicepConfigContents, testOutputPath);
+            var mainUri = SaveFile("main.bicep", bicepFileContents);
+            var bicepConfigUri = SaveFile("bicepconfig.json", bicepConfigContents);
 
             // open the main document and verify diagnostics
             {
@@ -657,13 +649,7 @@ param storageAccountName string = 'test'";
                 }));
         }
 
-        private (MultipleMessageListener<PublishDiagnosticsParams> diagsListener, string testOutputPath) GetTestConfig()
-        {
-            var diagsListener = new MultipleMessageListener<PublishDiagnosticsParams>();
-            var testOutputPath = FileHelper.GetUniqueTestOutputPath(TestContext);
-
-            return (diagsListener, testOutputPath);
-        }
+        private static MultipleMessageListener<PublishDiagnosticsParams> GetDiagnosticListener() => new();
 
         private async Task<LanguageServerHelper> StartServerWithClientConnectionAsync(MultipleMessageListener<PublishDiagnosticsParams> diagsListener)
         {
@@ -671,15 +657,14 @@ param storageAccountName string = 'test'";
             return await LanguageServerHelper.StartServer(
                 TestContext,
                 options => options.OnPublishDiagnostics(diagsListener.AddMessage),
-                services => services.WithFileResolver(new InMemoryFileResolver(fileSystemDict)));
+                services => services.WithFileSystem(this.fileSystem));
         }
 
-        private DocumentUri SaveFile(string fileName, string fileContents, string testOutputPath)
+        private DocumentUri SaveFile(string fileName, string fileContents)
         {
-            string path = FileHelper.SaveResultFile(TestContext, fileName, fileContents, testOutputPath);
-            var documentUri = DocumentUri.FromFileSystemPath(path);
+            this.fileSystem.AddFile(fileName, fileContents);
 
-            return documentUri;
+            return DocumentUri.FromFileSystemPath(fileSystem.Path.GetFullPath(fileName));
         }
     }
 }

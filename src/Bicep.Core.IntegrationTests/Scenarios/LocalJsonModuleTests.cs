@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using System.Collections.Immutable;
-using System.IO;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Semantics;
 using Bicep.Core.UnitTests.Assertions;
@@ -124,7 +123,8 @@ module mod 'module.json' = {
             }
         }
 
+        // TODO(file-io-abstraction): Need migration.
         private static ImmutableDictionary<string, ImmutableArray<IDiagnostic>> GetDiagnosticsByFileName(Compilation compilation) =>
-            compilation.GetAllDiagnosticsByBicepFile().ToImmutableDictionary(kvp => Path.GetFileName(kvp.Key.FileUri.LocalPath), kvp => kvp.Value);
+            compilation.GetAllDiagnosticsByBicepFile().ToImmutableDictionary(kvp => Path.GetFileName(kvp.Key.Uri.LocalPath), kvp => kvp.Value);
     }
 }

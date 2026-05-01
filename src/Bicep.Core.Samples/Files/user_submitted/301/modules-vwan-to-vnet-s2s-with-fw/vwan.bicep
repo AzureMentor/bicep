@@ -1,10 +1,7 @@
 param location string = resourceGroup().location
 param wanname string
 
-@allowed([
-  'Standard'
-  'Basic'
-])
+@allowed(['Standard', 'Basic'])
 @description('Specifies the type of Virtual WAN.')
 param wantype string = 'Standard'
 

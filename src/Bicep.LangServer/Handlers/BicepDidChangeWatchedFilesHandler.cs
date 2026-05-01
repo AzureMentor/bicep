@@ -1,11 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Bicep.Core;
 using Bicep.LanguageServer.CompilationManager;
 using Bicep.LanguageServer.Configuration;
@@ -35,10 +29,9 @@ namespace Bicep.LanguageServer.Handlers
                                                                                        LanguageConstants.BicepConfigurationFileName,
                                                                                        StringComparison.OrdinalIgnoreCase));
 
-            // Refresh compilation of source files in workspace when local bicepconfig.json file is created, deleted or changed 
+            // Refresh compilation of source files in workspace when local bicepconfig.json file is created, deleted or changed
             if (bicepConfigFileChangeEvents.Any())
             {
-                Uri uri = bicepConfigFileChangeEvents.First().Uri.ToUri();
                 bicepConfigChangeHandler.RefreshCompilationOfSourceFilesInWorkspace();
             }
 
@@ -49,22 +42,13 @@ namespace Bicep.LanguageServer.Handlers
 
         protected override DidChangeWatchedFilesRegistrationOptions CreateRegistrationOptions(DidChangeWatchedFilesCapability capability, ClientCapabilities clientCapabilities) => new()
         {
-            // These file watcher globs should be kept in-sync with those defined in client.ts
             Watchers = new Container<FileSystemWatcher>(
                     new FileSystemWatcher()
                     {
                         Kind = WatchKind.Create | WatchKind.Change | WatchKind.Delete,
-                        GlobPattern = "**/"
-                    },
-                    new FileSystemWatcher()
-                    {
-                        Kind = WatchKind.Create | WatchKind.Change | WatchKind.Delete,
-                        GlobPattern = "**/*.bicep"
-                    },
-                    new FileSystemWatcher()
-                    {
-                        Kind = WatchKind.Create | WatchKind.Change | WatchKind.Delete,
-                        GlobPattern = "**/*.{json,jsonc,arm}"
+                        // Register to watch all files and folders, regardless of extension, because they could be referenced by load* functions.
+                        // We will do the filtering in the language server. This glob pattern should be kept in-sync with client.ts.
+                        GlobPattern = new("**/*")
                     }
                 )
         };

@@ -1,12 +1,14 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Bicep.Core.FileSystem;
-using System.IO;
+using Bicep.Cli.Helpers;
+using Bicep.Core;
+using Bicep.Core.Emit.Options;
+using Bicep.IO.Abstraction;
 
 namespace Bicep.Cli.Arguments
 {
-    public class GenerateParametersFileArguments : ArgumentsBase
+    public class GenerateParametersFileArguments : ArgumentsBase, IInputOutputArguments<GenerateParametersFileArguments>
     {
         public GenerateParametersFileArguments(string[] args) : base(Constants.Command.GenerateParamsFile)
         {
@@ -22,29 +24,41 @@ namespace Bicep.Cli.Arguments
                         NoRestore = true;
                         break;
 
-                    case "--outdir":
-                        if (args.Length == i + 1)
-                        {
-                            throw new CommandLineException($"The --outdir parameter expects an argument");
-                        }
-                        if (OutputDir is not null)
-                        {
-                            throw new CommandLineException($"The --outdir parameter cannot be specified twice");
-                        }
-                        OutputDir = args[i + 1];
+                    case ArgumentConstants.OutDir:
+                        ArgumentHelper.ValidateNotAlreadySet(ArgumentConstants.OutDir, OutputDir);
+                        OutputDir = ArgumentHelper.GetValueWithValidation(ArgumentConstants.OutDir, args, i);
                         i++;
                         break;
 
-                    case "--outfile":
+                    case ArgumentConstants.OutFile:
+                        ArgumentHelper.ValidateNotAlreadySet(ArgumentConstants.OutFile, OutputFile);
+                        OutputFile = ArgumentHelper.GetValueWithValidation(ArgumentConstants.OutFile, args, i);
+                        i++;
+                        break;
+
+                    case "--output-format":
                         if (args.Length == i + 1)
                         {
-                            throw new CommandLineException($"The --outfile parameter expects an argument");
+                            throw new CommandLineException($"The --output-format parameter expects an argument");
                         }
-                        if (OutputFile is not null)
+                        if (!Enum.TryParse<OutputFormatOption>(args[i + 1], true, out var outputFormat) || !Enum.IsDefined<OutputFormatOption>(outputFormat))
                         {
-                            throw new CommandLineException($"The --outfile parameter cannot be specified twice");
+                            throw new CommandLineException($"The --output-format parameter only accepts values: {string.Join(" | ", Enum.GetNames(typeof(OutputFormatOption)))}");
                         }
-                        OutputFile = args[i + 1];
+                        OutputFormat = outputFormat;
+                        i++;
+                        break;
+
+                    case "--include-params":
+                        if (args.Length == i + 1)
+                        {
+                            throw new CommandLineException($"The --include-params parameter expects an argument");
+                        }
+                        if (!Enum.TryParse<IncludeParamsOption>(args[i + 1], true, out var includeParams) || !Enum.IsDefined<IncludeParamsOption>(includeParams))
+                        {
+                            throw new CommandLineException($"The --include-params parameter only accepts values: {string.Join(" | ", Enum.GetNames(typeof(IncludeParamsOption)))}");
+                        }
+                        IncludeParams = includeParams;
                         i++;
                         break;
 
@@ -81,17 +95,14 @@ namespace Bicep.Cli.Arguments
             {
                 throw new CommandLineException($"The --outdir and --outfile parameters cannot both be used");
             }
-
-            if (OutputDir is not null)
-            {
-                var outputDir = PathHelper.ResolvePath(OutputDir);
-
-                if (!Directory.Exists(outputDir))
-                {
-                    throw new CommandLineException(string.Format(CliResources.DirectoryDoesNotExistFormat, outputDir));
-                }
-            }
         }
+
+        public static Func<GenerateParametersFileArguments, IOUri, string> OutputFileExtensionResolver { get; } = (args, _) => args.OutputFormat switch
+        {
+            OutputFormatOption.Json => $".parameters{LanguageConstants.JsonFileExtension}",
+            OutputFormatOption.BicepParam => LanguageConstants.ParamsFileExtension,
+            _ => throw new ArgumentOutOfRangeException(nameof(args.OutputFormat), $"Unsupported output format: {args.OutputFormat}")
+        };
 
         public bool OutputToStdOut { get; }
 
@@ -100,6 +111,10 @@ namespace Bicep.Cli.Arguments
         public string? OutputDir { get; }
 
         public string? OutputFile { get; }
+
+        public OutputFormatOption OutputFormat { get; } = OutputFormatOption.Json;
+
+        public IncludeParamsOption IncludeParams { get; } = IncludeParamsOption.RequiredOnly;
 
         public bool NoRestore { get; }
     }

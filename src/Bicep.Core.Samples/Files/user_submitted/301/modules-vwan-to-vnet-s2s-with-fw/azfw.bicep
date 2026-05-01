@@ -1,14 +1,11 @@
 param location string = resourceGroup().location
 param fwname string
 
-@allowed([
-  'VNet'
-  'vWAN'
-])
+@allowed(['VNet', 'vWAN'])
 @description('Specify if the Azure Firewall should be deployed to VNet or Virtual WAN Hub')
 param fwtype string
 
-@description('Resoruce ID to the Firewall Policy to associate with the Azure Firewall')
+@description('Resource ID to the Firewall Policy to associate with the Azure Firewall')
 param fwpolicyid string
 
 @description('Virtual Hub Resource ID, used when deploying Azure Firewall to Virtual WAN')

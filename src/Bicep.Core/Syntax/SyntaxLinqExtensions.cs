@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using Bicep.Core.Syntax.Visitors;
-using System;
 
 namespace Bicep.Core.Syntax
 {

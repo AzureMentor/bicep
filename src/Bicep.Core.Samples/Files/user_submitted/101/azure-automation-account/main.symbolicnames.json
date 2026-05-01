@@ -1,13 +1,12 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "languageVersion": "1.10-experimental",
+  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
     "_generator": {
       "name": "bicep",
       "version": "dev",
-      "templateHash": "2385613125708189168"
+      "templateHash": "14060902819474990171"
     }
   },
   "parameters": {
@@ -25,7 +24,8 @@
     },
     "appName": {
       "type": "string",
-      "defaultValue": "[uniqueString(resourceGroup().id)]"
+      "defaultValue": "[uniqueString(resourceGroup().id)]",
+      "minLength": 1
     }
   },
   "variables": {
@@ -58,9 +58,9 @@
       }
     },
     "automation_account_diagnostic": {
-      "type": "Microsoft.Insights/diagnosticSettings",
+      "type": "microsoft.insights/diagnosticSettings",
       "apiVersion": "2017-05-01-preview",
-      "scope": "[format('Microsoft.Automation/automationAccounts/{0}', variables('automationaccountName'))]",
+      "scope": "[resourceId('Microsoft.Automation/automationAccounts', variables('automationaccountName'))]",
       "name": "[variables('automationaccountDiagName')]",
       "properties": {
         "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]",

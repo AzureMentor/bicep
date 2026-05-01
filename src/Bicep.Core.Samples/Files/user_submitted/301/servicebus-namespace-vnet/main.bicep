@@ -18,9 +18,7 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2017-09-01' = {
   location: location
   properties: {
     addressSpace: {
-      addressPrefixes: [
-        '10.0.0.0/23'
-      ]
+      addressPrefixes: ['10.0.0.0/23']
     }
     subnets: [
       {

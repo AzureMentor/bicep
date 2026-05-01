@@ -1,13 +1,12 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "languageVersion": "1.10-experimental",
+  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
     "_generator": {
       "name": "bicep",
       "version": "dev",
-      "templateHash": "17113698757488559431"
+      "templateHash": "13773349477514106252"
     }
   },
   "parameters": {
@@ -19,8 +18,8 @@
     },
     "clusterLoginUserName": {
       "type": "string",
-      "maxLength": 20,
       "minLength": 2,
+      "maxLength": 20,
       "metadata": {
         "description": "These credentials can be used to submit jobs to the cluster and to log into cluster dashboards. The username must consist of digits, upper or lowercase letters, and/or the following special characters: (!#$%&'()-^_`{}~)."
       }
@@ -36,13 +35,13 @@
       "type": "string",
       "minLength": 2,
       "metadata": {
-        "description": "These credentials can be used to remotely access the cluster. The sshUserName can only consit of digits, upper or lowercase letters, and/or the following special characters (%&'^_`{}~). Also, it cannot be the same as the cluster login username or a reserved word"
+        "description": "These credentials can be used to remotely access the cluster. The sshUserName can only consist of digits, upper or lowercase letters, and/or the following special characters (%&'^_`{}~). Also, it cannot be the same as the cluster login username or a reserved word"
       }
     },
     "sshPassword": {
       "type": "securestring",
-      "maxLength": 72,
       "minLength": 6,
+      "maxLength": 72,
       "metadata": {
         "description": "SSH password must be 6-72 characters long and must contain at least one digit, one upper case letter, and one lower case letter.  It must not contain any 3 consecutive characters from the cluster login name"
       }
@@ -127,7 +126,7 @@
               "name": "[replace(replace(reference('defaultStorageAccount').primaryEndpoints.blob, 'https://', ''), '/', '')]",
               "isDefault": true,
               "container": "[parameters('clusterName')]",
-              "key": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', format('storage{0}', uniqueString(resourceGroup().id))), '2021-04-01').keys[0].value]"
+              "key": "[listKeys('defaultStorageAccount', '2021-04-01').keys[0].value]"
             }
           ]
         },

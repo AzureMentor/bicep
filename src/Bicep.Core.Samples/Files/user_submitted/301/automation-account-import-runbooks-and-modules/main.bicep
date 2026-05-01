@@ -5,10 +5,7 @@ param location string = resourceGroup().location
 param name string
 
 @description('Automation account sku')
-@allowed([
-  'Free'
-  'Basic'
-])
+@allowed(['Free', 'Basic'])
 param sku string = 'Basic'
 
 @description('Modules to import into automation account')
@@ -66,30 +63,36 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2020-01-13-p
   }
 }
 
-resource automationAccountModules 'Microsoft.Automation/automationAccounts/modules@2020-01-13-preview' = [for module in modules: {
-  parent: automationAccount
-  name: module.name
-  properties: {
-    contentLink: {
-      uri: module.version == 'latest' ? '${module.uri}/${module.name}' : '${module.uri}/${module.name}/${module.version}'
-      version: module.version == 'latest' ? null : module.version
+resource automationAccountModules 'Microsoft.Automation/automationAccounts/modules@2020-01-13-preview' = [
+  for module in modules: {
+    parent: automationAccount
+    name: module.name
+    properties: {
+      contentLink: {
+        uri: module.version == 'latest'
+          ? '${module.uri}/${module.name}'
+          : '${module.uri}/${module.name}/${module.version}'
+        version: module.version == 'latest' ? null : module.version
+      }
     }
   }
-}]
+]
 
-resource runbook 'Microsoft.Automation/automationAccounts/runbooks@2019-06-01' = [for runbook in runbooks: {
-  parent: automationAccount
-  name: runbook.runbookName
-  location: location
-  properties: {
-    runbookType: runbook.runbookType
-    logProgress: runbook.logProgress
-    logVerbose: runbook.logVerbose
-    publishContentLink: {
-      uri: runbook.runbookUri
+resource runbook 'Microsoft.Automation/automationAccounts/runbooks@2019-06-01' = [
+  for runbook in runbooks: {
+    parent: automationAccount
+    name: runbook.runbookName
+    location: location
+    properties: {
+      runbookType: runbook.runbookType
+      logProgress: runbook.logProgress
+      logVerbose: runbook.logVerbose
+      publishContentLink: {
+        uri: runbook.runbookUri
+      }
     }
   }
-}]
+]
 
 resource lock 'Microsoft.Authorization/locks@2016-09-01' = if (enableDeleteLock) {
   scope: automationAccount
@@ -105,8 +108,17 @@ resource diagnostics 'microsoft.insights/diagnosticSettings@2017-05-01-preview' 
 
   name: diagnosticsName
   properties: {
-    workspaceId: resourceId(logAnalyticsSubscriptionId, logAnalyticsResourceGroup, 'Microsoft.OperationalInsights/workspaces', logAnalyticsWorkspaceName)
-    storageAccountId: resourceId(diagnosticStorageAccountResourceGroup, 'Microsoft.Storage/storageAccounts', diagnosticStorageAccountName)
+    workspaceId: resourceId(
+      logAnalyticsSubscriptionId,
+      logAnalyticsResourceGroup,
+      'Microsoft.OperationalInsights/workspaces',
+      logAnalyticsWorkspaceName
+    )
+    storageAccountId: resourceId(
+      diagnosticStorageAccountResourceGroup,
+      'Microsoft.Storage/storageAccounts',
+      diagnosticStorageAccountName
+    )
     logs: [
       {
         category: 'JobLogs'
@@ -118,12 +130,6 @@ resource diagnostics 'microsoft.insights/diagnosticSettings@2017-05-01-preview' 
       }
       {
         category: 'DscNodeStatus'
-        enabled: true
-      }
-    ]
-    metrics: [
-      {
-        category: 'AllMetrics'
         enabled: true
       }
     ]

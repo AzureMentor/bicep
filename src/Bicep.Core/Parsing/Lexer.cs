@@ -1,14 +1,14 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Globalization;
-using System.Linq;
+using System.Net.Http.Headers;
 using System.Text;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Extensions;
 using Bicep.Core.Syntax;
+using Bicep.Core.Text;
 
 namespace Bicep.Core.Parsing
 {
@@ -25,16 +25,21 @@ namespace Bicep.Core.Parsing
             {'$', '$'}
         }.ToImmutableSortedDictionary();
 
-        private static readonly ImmutableArray<string> CharacterEscapeSequences = SingleCharacterEscapes.Keys
-            .Select(c => $"\\{c}")
-            .Append("\\u{...}")
-            .ToImmutableArray();
+        private static readonly ImmutableArray<string> CharacterEscapeSequences =
+        [
+            .. SingleCharacterEscapes.Keys
+                        .Select(c => $"\\{c}")
+,
+            "\\u{...}",
+        ];
 
         private const int MultilineStringTerminatingQuoteCount = 3;
+        public static readonly string MultilineStringSequence = new('\'', MultilineStringTerminatingQuoteCount);
 
         // the rules for parsing are slightly different if we are inside an interpolated string (for example, a new line should result in a lex error).
         // to handle this, we use a modal lexing pattern with a stack to ensure we're applying the correct set of rules.
-        private readonly Stack<TokenType> templateStack = new Stack<TokenType>();
+        private record TemplateStackEntry(TokenType OpeningToken, bool IsMultiLine, int MultiLineInterpolationEscapeCount);
+        private readonly Stack<TemplateStackEntry> templateStack = new();
         private readonly IList<Token> tokens = new List<Token>();
         private readonly IDiagnosticWriter diagnosticWriter;
         private readonly SlidingTextWindow textWindow;
@@ -45,13 +50,13 @@ namespace Bicep.Core.Parsing
             this.diagnosticWriter = diagnosticWriter;
         }
 
-        private void AddDiagnostic(TextSpan span, DiagnosticBuilder.ErrorBuilderDelegate diagnosticFunc)
+        private void AddDiagnostic(TextSpan span, DiagnosticBuilder.DiagnosticBuilderDelegate diagnosticFunc)
         {
             var diagnostic = diagnosticFunc(DiagnosticBuilder.ForPosition(span));
             this.diagnosticWriter.Write(diagnostic);
         }
 
-        private void AddDiagnostic(DiagnosticBuilder.ErrorBuilderDelegate diagnosticFunc)
+        private void AddDiagnostic(DiagnosticBuilder.DiagnosticBuilderDelegate diagnosticFunc)
             => AddDiagnostic(textWindow.GetSpan(), diagnosticFunc);
 
         public void Lex()
@@ -68,7 +73,7 @@ namespace Bicep.Core.Parsing
             }
         }
 
-        public ImmutableArray<Token> GetTokens() => tokens.ToImmutableArray();
+        public ImmutableArray<Token> GetTokens() => [.. tokens];
 
         /// <summary>
         /// Converts a set of string literal tokens into their raw values. Returns null if any of the tokens are of the wrong type or malformed.
@@ -76,11 +81,17 @@ namespace Bicep.Core.Parsing
         /// <param name="stringTokens">the string tokens</param>
         public static IEnumerable<string>? TryGetRawStringSegments(IReadOnlyList<Token> stringTokens)
         {
+            if (stringTokens.Count == 0)
+            {
+                return [];
+            }
+
+            var (isMultiLine, interpolationEscapeCount) = GetStringTokenInfo(stringTokens[0]);
             var segments = new string[stringTokens.Count];
 
             for (var i = 0; i < stringTokens.Count; i++)
             {
-                var nextSegment = Lexer.TryGetStringValue(stringTokens[i]);
+                var nextSegment = isMultiLine ? TryGetMultilineStringValue(stringTokens[i], interpolationEscapeCount) : TryGetSingleLineStringValue(stringTokens[i]);
                 if (nextSegment == null)
                 {
                     return null;
@@ -92,58 +103,49 @@ namespace Bicep.Core.Parsing
             return segments;
         }
 
-        public static string? TryGetMultilineStringValue(Token stringToken)
+        public static (bool isMultiLine, int interpolationEscapeCount) GetStringTokenInfo(Token firstToken)
         {
-            var tokenText = stringToken.Text;
+            // if a string is 2 chars, it must be a single-line empty string ''
+            // if not, a "$" prefix indicates multi-line with interpolation
+            // otherwise, "'" in position 2 indicates a multi-line string without interpolation (for the "'''" prefix)
+            var isMultiLine = firstToken.Text.Length > 2 && (firstToken.Text[0] == '$' || firstToken.Text[1] == '\'');
 
-            if (tokenText.Length < MultilineStringTerminatingQuoteCount * 2)
+            // it's safe to iterate without a bounds check here, because we know that the lexer will
+            // only generate a string token starting with a sequence of "$" chars if it's followed by "'''"
+            var interpolationEscapeCount = 0;
+            while (isMultiLine && firstToken.Text[interpolationEscapeCount] == '$')
             {
-                return null;
+                interpolationEscapeCount++;
             }
 
-            for (var i = 0; i < MultilineStringTerminatingQuoteCount; i++)
-            {
-                if (tokenText[i] != '\'')
-                {
-                    return null;
-                }
-            }
-
-            for (var i = tokenText.Length - MultilineStringTerminatingQuoteCount; i < tokenText.Length; i++)
-            {
-                if (tokenText[i] != '\'')
-                {
-                    return null;
-                }
-            }
-
-            var startOffset = MultilineStringTerminatingQuoteCount;
-
-            // we strip a leading \r\n or \n
-            if (tokenText[startOffset] == '\r')
-            {
-                startOffset++;
-            }
-            if (tokenText[startOffset] == '\n')
-            {
-                startOffset++;
-            }
-
-            return tokenText.Substring(startOffset, tokenText.Length - startOffset - MultilineStringTerminatingQuoteCount);
+            return (isMultiLine, interpolationEscapeCount);
         }
 
-        /// <summary>
-        /// Converts string literal text into its value. Returns null if the specified string token is malformed due to lexer error recovery.
-        /// </summary>
-        /// <param name="stringToken">the string token</param>
-        public static string? TryGetStringValue(Token stringToken)
+        public static IEnumerable<(string start, string end)?> TryGetStartAndEndTokens(IReadOnlyList<Token> stringTokens)
         {
-            var (start, end) = stringToken.Type switch
+            if (stringTokens.Count == 0)
             {
-                TokenType.StringComplete => (LanguageConstants.StringDelimiter, LanguageConstants.StringDelimiter),
-                TokenType.StringLeftPiece => (LanguageConstants.StringDelimiter, LanguageConstants.StringHoleOpen),
-                TokenType.StringMiddlePiece => (LanguageConstants.StringHoleClose, LanguageConstants.StringHoleOpen),
-                TokenType.StringRightPiece => (LanguageConstants.StringHoleClose, LanguageConstants.StringDelimiter),
+                return [];
+            }
+
+            var (isMultiLine, interpolationEscapeCount) = GetStringTokenInfo(stringTokens[0]);
+            return stringTokens.Select(x => TryGetStartAndEndTokens(x, isMultiLine, interpolationEscapeCount));
+        }
+
+        private static (string start, string end)? TryGetStartAndEndTokens(Token stringToken, bool isMultiLine, int interpolationEscapeCount)
+        {
+            var interpolationStartSequence = new string('$', interpolationEscapeCount);
+
+            var (start, end) = (isMultiLine, stringToken.Type) switch
+            {
+                (false, TokenType.StringComplete) => (LanguageConstants.StringDelimiter, LanguageConstants.StringDelimiter),
+                (false, TokenType.StringLeftPiece) => (LanguageConstants.StringDelimiter, LanguageConstants.StringHoleOpen),
+                (false, TokenType.StringMiddlePiece) => (LanguageConstants.StringHoleClose, LanguageConstants.StringHoleOpen),
+                (false, TokenType.StringRightPiece) => (LanguageConstants.StringHoleClose, LanguageConstants.StringDelimiter),
+                (true, TokenType.StringComplete) => (interpolationStartSequence + MultilineStringSequence, MultilineStringSequence),
+                (true, TokenType.StringLeftPiece) when interpolationEscapeCount > 0 => (interpolationStartSequence + MultilineStringSequence, interpolationStartSequence + "{"),
+                (true, TokenType.StringMiddlePiece) when interpolationEscapeCount > 0 => ("}", interpolationStartSequence + "{"),
+                (true, TokenType.StringRightPiece) when interpolationEscapeCount > 0 => ("}", MultilineStringSequence),
                 _ => (null, null),
             };
 
@@ -159,6 +161,57 @@ namespace Bicep.Core.Parsing
                 // any lexer-generated token should not hit this problem as the start & end are already verified
                 return null;
             }
+
+            return (start, end);
+        }
+
+        public static string? TryGetMultilineStringValue(Token stringToken, int interpolationEscapeCount)
+        {
+            if (TryGetStartAndEndTokens(stringToken, true, interpolationEscapeCount) is not { } result)
+            {
+                return null;
+            }
+            var (start, end) = result;
+
+            var startOffset = start.Length;
+            if (stringToken.Type is TokenType.StringComplete or TokenType.StringLeftPiece)
+            {
+                // we strip a leading \r\n or \n
+                if (stringToken.Text[startOffset] == '\r')
+                {
+                    startOffset++;
+                }
+                if (stringToken.Text[startOffset] == '\n')
+                {
+                    startOffset++;
+                }
+            }
+
+            return stringToken.Text.Substring(startOffset, stringToken.Text.Length - startOffset - end.Length);
+        }
+
+        public static string? TryGetStringValue(Token stringToken)
+        {
+            if (stringToken.Type is not TokenType.StringComplete)
+            {
+                return null;
+            }
+
+            var (isMultiLine, _) = GetStringTokenInfo(stringToken);
+            return isMultiLine ? TryGetMultilineStringValue(stringToken, 0) : TryGetSingleLineStringValue(stringToken);
+        }
+
+        /// <summary>
+        /// Converts string literal text into its value. Returns null if the specified string token is malformed due to lexer error recovery.
+        /// </summary>
+        /// <param name="stringToken">the string token</param>
+        private static string? TryGetSingleLineStringValue(Token stringToken)
+        {
+            if (TryGetStartAndEndTokens(stringToken, false, 0) is not { } result)
+            {
+                return null;
+            }
+            var (start, end) = result;
 
             var contents = stringToken.Text.Substring(start.Length, stringToken.Text.Length - start.Length - end.Length);
             var window = new SlidingTextWindow(contents);
@@ -310,39 +363,51 @@ namespace Bicep.Core.Parsing
             }
         }
 
+        private record DiagnosticPragmaDescriptor(DiagnosticsPragmaType Type, string Keyword);
+
+        private static readonly ImmutableArray<DiagnosticPragmaDescriptor> DiagnosticPragmaDescriptors =
+            [.. Enum.GetValues<DiagnosticsPragmaType>().Select(t => new DiagnosticPragmaDescriptor(t, t.GetKeyword()))];
+
         private IEnumerable<SyntaxTrivia> ScanLeadingTrivia()
         {
+            SyntaxTrivia? current = null;
+
             while (true)
             {
                 if (IsWhiteSpace(textWindow.Peek()))
                 {
-                    yield return ScanWhitespace();
+                    current = ScanWhitespace();
                 }
                 else if (textWindow.Peek() == '/' && textWindow.Peek(1) == '/')
                 {
-                    yield return ScanSingleLineComment();
+                    current = ScanSingleLineComment();
                 }
                 else if (textWindow.Peek() == '/' && textWindow.Peek(1) == '*')
                 {
-                    yield return ScanMultiLineComment();
+                    current = ScanMultiLineComment();
                 }
-                else if (textWindow.Peek() == '#' &&
-                    CheckAdjacentText(LanguageConstants.DisableNextLineDiagnosticsKeyword) &&
+                else if (
+                    (current is null || !current.IsComment()) &&
+                    textWindow.Peek() == '#' &&
+                    DiagnosticPragmaDescriptors.Where(descriptor => CheckAdjacentText(descriptor.Keyword))
+                        .FirstOrDefault() is { } descriptor &&
                     string.IsNullOrWhiteSpace(textWindow.GetTextBetweenLineStartAndCurrentPosition()))
                 {
-                    yield return ScanDisableNextLineDiagnosticsDirective();
+                    current = ScanDiagnosticsPragma(descriptor);
                 }
                 else
                 {
                     yield break;
                 }
+
+                yield return current;
             }
         }
 
-        private SyntaxTrivia ScanDisableNextLineDiagnosticsDirective()
+        private DiagnosticsPragmaSyntaxTrivia ScanDiagnosticsPragma(DiagnosticPragmaDescriptor pragmaDescriptor)
         {
             textWindow.Reset();
-            textWindow.Advance(LanguageConstants.DisableNextLineDiagnosticsKeyword.Length + 1); // Length of disable next statement plus #
+            textWindow.Advance(pragmaDescriptor.Keyword.Length + 1); // Length of keyword plus #
 
             var span = textWindow.GetSpan();
             int start = span.Position;
@@ -415,7 +480,7 @@ namespace Bicep.Core.Parsing
                 AddDiagnostic(b => b.MissingDiagnosticCodes());
             }
 
-            return GetDisableNextLineDiagnosticsSyntaxTrivia(codes, start, end, sb.ToString());
+            return GetDiagnosticsPragmaSyntaxTrivia(pragmaDescriptor.Type, codes, start, end, sb.ToString());
         }
 
         private bool CheckAdjacentText(string text)
@@ -435,7 +500,7 @@ namespace Bicep.Core.Parsing
             return true;
         }
 
-        private DisableNextLineDiagnosticsSyntaxTrivia GetDisableNextLineDiagnosticsSyntaxTrivia(List<Token> codes, int start, int end, string text)
+        private DiagnosticsPragmaSyntaxTrivia GetDiagnosticsPragmaSyntaxTrivia(DiagnosticsPragmaType pragmaType, List<Token> codes, int start, int end, string text)
         {
             if (codes.Any())
             {
@@ -449,11 +514,11 @@ namespace Bicep.Core.Parsing
                     var delta = end - lastCodeSpanEnd;
                     textWindow.Rewind(delta);
 
-                    return new DisableNextLineDiagnosticsSyntaxTrivia(SyntaxTriviaType.DisableNextLineDiagnosticsDirective, new TextSpan(start, lastCodeSpanEnd - start), text[0..^delta], codes);
+                    return new(pragmaType, new TextSpan(start, lastCodeSpanEnd - start), text[0..^delta], codes);
                 }
             }
 
-            return new DisableNextLineDiagnosticsSyntaxTrivia(SyntaxTriviaType.DisableNextLineDiagnosticsDirective, new TextSpan(start, end - start), text, codes);
+            return new(pragmaType, new TextSpan(start, end - start), text, codes);
         }
 
         private Token? GetToken()
@@ -462,7 +527,7 @@ namespace Bicep.Core.Parsing
 
             if (text.Length > 0)
             {
-                return new FreeformToken(TokenType.StringComplete, textWindow.GetSpan(), text.ToString(), Enumerable.Empty<SyntaxTrivia>(), Enumerable.Empty<SyntaxTrivia>());
+                return new FreeformToken(TokenType.StringComplete, textWindow.GetSpan(), text.ToString(), [], []);
             }
 
             return null;
@@ -497,10 +562,10 @@ namespace Bicep.Core.Parsing
             textWindow.Reset();
 
             // important to force enum evaluation here via .ToImmutableArray()!
-            var includeComments = tokenType.GetCommentStickiness() >= CommentStickiness.Trailing;
+            var includeComments = SyntaxFacts.GetCommentStickiness(tokenType) >= CommentStickiness.Trailing;
             var trailingTrivia = ScanTrailingTrivia(includeComments).ToImmutableArray();
 
-            var token = SyntaxFacts.IsFreeform(tokenType)
+            var token = SyntaxFacts.HasFreeFromText(tokenType)
                 ? new FreeformToken(tokenType, tokenSpan, tokenText.ToString(), leadingTrivia, trailingTrivia)
                 : new Token(tokenType, tokenSpan, leadingTrivia, trailingTrivia);
 
@@ -607,34 +672,44 @@ namespace Bicep.Core.Parsing
             }
         }
 
-        private TokenType ScanMultilineString()
+        private TokenType ScanMultilineString(bool isAtStartOfString, int interpolationEscapeCount)
         {
-            var successiveQuotes = 0;
-
             // we've already scanned the "'''", so get straight to scanning the string contents.
             while (!textWindow.IsAtEnd())
             {
-                var nextChar = textWindow.Peek();
-                textWindow.Advance();
-
-                switch (nextChar)
+                switch (textWindow.Peek())
                 {
-                    case '\'':
-                        successiveQuotes++;
-                        if (successiveQuotes == MultilineStringTerminatingQuoteCount)
+                    case '$':
+                        var successiveInterpChars = 0;
+                        while (textWindow.Peek() == '$')
                         {
-                            // we've scanned the terminating "'''". Keep scanning as long as we find more "'" characters;
-                            // it is possible for the verbatim string's last character to be "'", and we should accept this.
-                            while (textWindow.Peek() == '\'')
-                            {
-                                textWindow.Advance();
-                            }
+                            textWindow.Advance();
+                            successiveInterpChars++;
+                        }
 
-                            return TokenType.MultilineString;
+                        if (interpolationEscapeCount > 0 &&
+                            successiveInterpChars >= interpolationEscapeCount &&
+                            textWindow.Peek() == '{')
+                        {
+                            textWindow.Advance();
+                            return isAtStartOfString ? TokenType.StringLeftPiece : TokenType.StringMiddlePiece;
+                        }
+                        break;
+                    case '\'':
+                        var successiveQuotes = 0;
+                        while (textWindow.Peek() == '\'')
+                        {
+                            textWindow.Advance();
+                            successiveQuotes++;
+                        }
+
+                        if (successiveQuotes >= MultilineStringTerminatingQuoteCount)
+                        {
+                            return isAtStartOfString ? TokenType.StringComplete : TokenType.StringRightPiece;
                         }
                         break;
                     default:
-                        successiveQuotes = 0;
+                        textWindow.Advance();
                         break;
                 }
             }
@@ -642,7 +717,7 @@ namespace Bicep.Core.Parsing
             // We've reached the end of the file without finding terminating quotes.
             // We still want to return a string token so that highlighting shows up.
             AddDiagnostic(b => b.UnterminatedMultilineString());
-            return TokenType.MultilineString;
+            return isAtStartOfString ? TokenType.StringComplete : TokenType.StringRightPiece;
         }
 
         private TokenType ScanStringSegment(bool isAtStartOfString)
@@ -816,7 +891,7 @@ namespace Bicep.Core.Parsing
         {
             var identifier = textWindow.GetText().ToString();
 
-            if (LanguageConstants.Keywords.TryGetValue(identifier, out var tokenType))
+            if (LanguageConstants.NonContextualKeywords.TryGetValue(identifier, out var tokenType))
             {
                 return tokenType;
             }
@@ -864,22 +939,35 @@ namespace Bicep.Core.Parsing
                         // if we're inside a string interpolation hole, and we find an object open brace,
                         // push it to the stack, so that we can match it up against an object close brace.
                         // this allows us to determine whether we're terminating an object or closing an interpolation hole.
-                        templateStack.Push(TokenType.LeftBrace);
+                        templateStack.Push(new(TokenType.LeftBrace, false, 0));
                     }
                     return TokenType.LeftBrace;
                 case '}':
                     if (templateStack.Any())
                     {
-                        var prevTemplateToken = templateStack.Peek();
-                        if (prevTemplateToken != TokenType.LeftBrace)
+                        var entry = templateStack.Peek();
+                        if (entry.OpeningToken != TokenType.LeftBrace)
                         {
-                            var stringToken = ScanStringSegment(false);
-                            if (stringToken == TokenType.StringRightPiece)
+                            if (entry.IsMultiLine)
                             {
-                                templateStack.Pop();
-                            }
+                                var multiLineToken = ScanMultilineString(false, entry.MultiLineInterpolationEscapeCount);
+                                if (multiLineToken == TokenType.StringRightPiece)
+                                {
+                                    templateStack.Pop();
+                                }
 
-                            return stringToken;
+                                return multiLineToken;
+                            }
+                            else
+                            {
+                                var stringToken = ScanStringSegment(false);
+                                if (stringToken == TokenType.StringRightPiece)
+                                {
+                                    templateStack.Pop();
+                                }
+
+                                return stringToken;
+                            }
                         }
                     }
                     return TokenType.RightBrace;
@@ -896,6 +984,12 @@ namespace Bicep.Core.Parsing
                 case ',':
                     return TokenType.Comma;
                 case '.':
+                    switch (textWindow.Peek(), textWindow.Peek(1))
+                    {
+                        case ('.', '.'):
+                            textWindow.Advance(2);
+                            return TokenType.Ellipsis;
+                    }
                     return TokenType.Dot;
                 case '?':
                     if (!textWindow.IsAtEnd())
@@ -931,6 +1025,29 @@ namespace Bicep.Core.Parsing
                     return TokenType.Asterisk;
                 case '/':
                     return TokenType.Slash;
+                case '^':
+                    return TokenType.Hat;
+                case '$':
+                    var escapeCount = 1;
+                    while (textWindow.Peek(0) == '$')
+                    {
+                        textWindow.Advance();
+                        escapeCount++;
+                    }
+
+                    if (textWindow.Peek(0) == '\'' && textWindow.Peek(1) == '\'' && textWindow.Peek(2) == '\'')
+                    {
+                        textWindow.Advance(3);
+                        var multiLineToken = ScanMultilineString(true, escapeCount);
+                        if (multiLineToken == TokenType.StringLeftPiece)
+                        {
+                            // if we're beginning a string interpolation statement, we need to keep track of it
+                            templateStack.Push(new(multiLineToken, true, escapeCount));
+                        }
+                        return multiLineToken;
+                    }
+
+                    return TokenType.Unrecognized;
                 case '!':
                     if (!textWindow.IsAtEnd())
                     {
@@ -955,7 +1072,7 @@ namespace Bicep.Core.Parsing
                                 return TokenType.LessThanOrEqual;
                         }
                     }
-                    return TokenType.LessThan;
+                    return TokenType.LeftChevron;
                 case '>':
                     if (!textWindow.IsAtEnd())
                     {
@@ -966,7 +1083,7 @@ namespace Bicep.Core.Parsing
                                 return TokenType.GreaterThanOrEqual;
                         }
                     }
-                    return TokenType.GreaterThan;
+                    return TokenType.RightChevron;
                 case '=':
                     if (!textWindow.IsAtEnd())
                     {
@@ -1011,14 +1128,14 @@ namespace Bicep.Core.Parsing
                     if (textWindow.Peek(0) == '\'' && textWindow.Peek(1) == '\'')
                     {
                         textWindow.Advance(2);
-                        return ScanMultilineString();
+                        return ScanMultilineString(true, 0);
                     }
 
                     var token = ScanStringSegment(true);
                     if (token == TokenType.StringLeftPiece)
                     {
                         // if we're beginning a string interpolation statement, we need to keep track of it
-                        templateStack.Push(token);
+                        templateStack.Push(new(token, false, 0));
                     }
                     return token;
                 case '\n':
@@ -1063,7 +1180,7 @@ namespace Bicep.Core.Parsing
 
         private static bool IsHexDigit(char c) => IsDigit(c) || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F';
 
-        private static bool IsWhiteSpace(char c) => c == ' ' || c == '\t';
+        public static bool IsWhiteSpace(char c) => c == ' ' || c == '\t';
 
         private static bool IsNewLine(char c) => c == '\n' || c == '\r';
     }

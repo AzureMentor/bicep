@@ -1,21 +1,20 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
-using System.Linq;
 using Azure.Deployments.Expression.Expressions;
 using Bicep.Core.DataFlow;
 using Bicep.Core.Emit;
+using Bicep.Core.Extensions;
 using Bicep.Core.Semantics;
 using Bicep.Core.Semantics.Metadata;
 using Bicep.Core.Semantics.Namespaces;
+using Bicep.Core.SourceGraph;
 using Bicep.Core.Syntax;
 using Bicep.Core.TypeSystem;
-using Bicep.Core.TypeSystem.Az;
-using Bicep.Core.Workspaces;
+using Bicep.Core.TypeSystem.Providers.Az;
+using Bicep.Core.TypeSystem.Types;
 using Microsoft.WindowsAzure.ResourceStack.Common.Extensions;
 using static Bicep.Core.Emit.ScopeHelper;
 
@@ -23,22 +22,24 @@ namespace Bicep.Core.Intermediate;
 
 public class ExpressionBuilder
 {
-    private static readonly ImmutableHashSet<string> NonAzResourcePropertiesToOmit = new[] {
+    private static readonly ImmutableHashSet<string> NonAzResourcePropertiesToOmit = [
         LanguageConstants.ResourceDependsOnPropertyName,
-    }.ToImmutableHashSet();
+    ];
 
-    private static readonly ImmutableHashSet<string> AzResourcePropertiesToOmit = new[] {
+    private static readonly ImmutableHashSet<string> AzResourcePropertiesToOmit = [
         AzResourceTypeProvider.ResourceNamePropertyName,
         LanguageConstants.ResourceScopePropertyName,
         LanguageConstants.ResourceParentPropertyName,
         LanguageConstants.ResourceDependsOnPropertyName,
-    }.ToImmutableHashSet();
+    ];
 
-    private static readonly ImmutableHashSet<string> ModulePropertiesToOmit = new[] {
+    private static readonly ImmutableHashSet<string> ModulePropertiesToOmit = [
+        AzResourceTypeProvider.ResourceNamePropertyName,
         LanguageConstants.ModuleParamsPropertyName,
+        LanguageConstants.ModuleExtensionConfigsPropertyName,
         LanguageConstants.ResourceScopePropertyName,
         LanguageConstants.ResourceDependsOnPropertyName,
-    }.ToImmutableHashSet();
+    ];
 
     private readonly ImmutableDictionary<LocalVariableSymbol, Expression> localReplacements;
 
@@ -51,40 +52,43 @@ public class ExpressionBuilder
     }
 
     public ExpressionBuilder(EmitterContext Context)
-        : this(Context, ImmutableDictionary<LocalVariableSymbol, Expression>.Empty)
+        : this(Context, [])
     {
     }
 
     public Expression Convert(SyntaxBase syntax)
     {
-        var expresion = ConvertWithoutLowering(syntax);
+        var expression = ConvertWithoutLowering(syntax);
 
-        return ExpressionLoweringVisitor.Lower(expresion);
+        return ExpressionLoweringVisitor.Lower(expression);
     }
 
     private Expression ConvertWithoutLowering(SyntaxBase syntax)
     {
         switch (syntax)
         {
-            case StringSyntax @string: {
-                if (@string.TryGetLiteralValue() is {} stringValue)
+            case StringSyntax @string:
                 {
-                    return new StringLiteralExpression(@string, stringValue);
-                }
+                    if (@string.TryGetLiteralValue() is { } stringValue)
+                    {
+                        return new StringLiteralExpression(@string, stringValue);
+                    }
 
-                return new InterpolatedStringExpression(
-                    @string,
-                    @string.SegmentValues,
-                    @string.Expressions.Select(ConvertWithoutLowering).ToImmutableArray());
-            }
-            case IntegerLiteralSyntax @int: {
-                var literalValue = SafeConvertIntegerValue(@int, isNegative: false);
-                return new IntegerLiteralExpression(@int, literalValue);
-            }
-            case UnaryOperationSyntax { Operator: UnaryOperator.Minus } unary when unary.Expression is IntegerLiteralSyntax @int: {
-                var literalValue = SafeConvertIntegerValue(@int, isNegative: true);
-                return new IntegerLiteralExpression(unary, literalValue);
-            }
+                    return new InterpolatedStringExpression(
+                        @string,
+                        @string.SegmentValues,
+                        [.. @string.Expressions.Select(ConvertWithoutLowering)]);
+                }
+            case IntegerLiteralSyntax @int:
+                {
+                    var literalValue = SafeConvertIntegerValue(@int, isNegative: false);
+                    return new IntegerLiteralExpression(@int, literalValue);
+                }
+            case UnaryOperationSyntax { Operator: UnaryOperator.Minus } unary when unary.Expression is IntegerLiteralSyntax @int:
+                {
+                    var literalValue = SafeConvertIntegerValue(@int, isNegative: true);
+                    return new IntegerLiteralExpression(unary, literalValue);
+                }
             case BooleanLiteralSyntax @bool:
                 return new BooleanLiteralExpression(@bool, @bool.Value);
             case NullLiteralSyntax:
@@ -96,8 +100,7 @@ public class ExpressionBuilder
             case ObjectSyntax @object:
                 return ConvertObject(@object);
             case ArraySyntax array:
-                var items = array.Items.Select(x => ConvertWithoutLowering(x.Value));
-                return new ArrayExpression(array, items.ToImmutableArray());
+                return ConvertArray(array);
             case TernaryOperationSyntax ternary:
                 return new TernaryExpression(
                     ternary,
@@ -127,12 +130,23 @@ public class ExpressionBuilder
             case ResourceAccessSyntax resourceAccess:
                 return ConvertResourceAccess(resourceAccess);
             case LambdaSyntax lambda:
-                var variableNames = lambda.GetLocalVariables().Select(x => x.Name.IdentifierName);
+                var variables = lambda.GetLocalVariables();
 
                 return new LambdaExpression(
                     lambda,
-                    variableNames.ToImmutableArray(),
-                    ConvertWithoutLowering(lambda.Body));
+                    [.. variables.Select(x => x.Name.IdentifierName)],
+                    [.. variables.Select<LocalVariableSyntax, TypeExpression?>(x => null)],
+                    ConvertWithoutLowering(lambda.Body),
+                    null);
+            case TypedLambdaSyntax lambda:
+                var typedVariables = lambda.GetLocalVariables();
+
+                return new LambdaExpression(
+                    lambda,
+                    [.. typedVariables.Select(x => x.Name.IdentifierName)],
+                    [.. typedVariables.Select(x => ConvertTypeWithoutLowering(x.Type))],
+                    ConvertWithoutLowering(lambda.Body),
+                    ConvertTypeWithoutLowering(lambda.ReturnType));
 
             case ForSyntax forSyntax:
                 return new ForLoopExpression(
@@ -149,44 +163,75 @@ public class ExpressionBuilder
                     ConvertWithoutLowering(conditionSyntax.Body));
 
             case MetadataDeclarationSyntax metadata:
-                return new DeclaredMetadataExpression(
+                return EvaluateDecorators(metadata, new DeclaredMetadataExpression(
                     metadata,
                     metadata.Name.IdentifierName,
-                    ConvertWithoutLowering(metadata.Value));
+                    ConvertWithoutLowering(metadata.Value)));
 
-            case ImportDeclarationSyntax import:
-                var symbol = GetDeclaredSymbol<ImportedNamespaceSymbol>(import);
-                return new DeclaredImportExpression(
-                    import,
+            case ExtensionDeclarationSyntax extension:
+                var symbol = GetDeclaredSymbol<ExtensionNamespaceSymbol>(extension);
+                return EvaluateDecorators(extension, new ExtensionExpression(
+                    extension,
                     symbol.Name,
-                    GetTypeInfo<NamespaceType>(import),
-                    import.Config is not null ? ConvertWithoutLowering(import.Config) : null);
+                    GetTypeInfo<NamespaceType>(extension).Settings,
+                    extension.Config is not null ? ConvertWithoutLowering(extension.Config) : null));
 
             case ParameterDeclarationSyntax parameter:
-                return new DeclaredParameterExpression(
+                return EvaluateDecorators(parameter, new DeclaredParameterExpression(
                     parameter,
                     parameter.Name.IdentifierName,
-                    GetDeclaredSymbol<ParameterSymbol>(parameter),
-                    parameter.Modifier is ParameterDefaultValueSyntax defaultValue ? ConvertWithoutLowering(defaultValue.DefaultValue) : null);
+                    ConvertTypeWithoutLowering(parameter.Type),
+                    parameter.Modifier is ParameterDefaultValueSyntax defaultValue ? ConvertWithoutLowering(defaultValue.DefaultValue) : null));
 
             case VariableDeclarationSyntax variable:
-                return new DeclaredVariableExpression(
+                return EvaluateDecorators(variable, new DeclaredVariableExpression(
                     variable,
                     variable.Name.IdentifierName,
-                    ConvertWithoutLowering(variable.Value));
+                    variable.Type != null ? ConvertTypeWithoutLowering(variable.Type) : null,
+                    ConvertWithoutLowering(variable.Value)));
+
+            case FunctionDeclarationSyntax function:
+                return EvaluateDecorators(function, new DeclaredFunctionExpression(
+                    function,
+                    EmitConstants.UserDefinedFunctionsNamespace,
+                    function.Name.IdentifierName,
+                    ConvertWithoutLowering(function.Lambda)));
 
             case OutputDeclarationSyntax output:
-                return new DeclaredOutputExpression(
+                return EvaluateDecorators(output, new DeclaredOutputExpression(
                     output,
                     output.Name.IdentifierName,
-                    GetDeclaredSymbol<OutputSymbol>(output),
-                    ConvertWithoutLowering(output.Value));
+                    ConvertTypeWithoutLowering(output.Type),
+                    ConvertWithoutLowering(output.Value)));
+
+            case AssertDeclarationSyntax assert:
+                return EvaluateDecorators(assert, new DeclaredAssertExpression(
+                    assert,
+                    assert.Name.IdentifierName,
+                    ConvertWithoutLowering(assert.Value)));
 
             case ResourceDeclarationSyntax resource:
-                return ConvertResource(resource);
+                return EvaluateDecorators(resource, ConvertResource(resource));
 
             case ModuleDeclarationSyntax module:
-                return ConvertModule(module);
+                return EvaluateDecorators(module, ConvertModule(module));
+
+            case TypeDeclarationSyntax typeDeclaration:
+                return EvaluateDecorators(typeDeclaration, new DeclaredTypeExpression(typeDeclaration,
+                    typeDeclaration.Name.IdentifierName,
+                    ConvertTypeWithoutLowering(typeDeclaration.Value)));
+
+            case ObjectTypePropertySyntax typeProperty:
+                return EvaluateDecorators(typeProperty, new ObjectTypePropertyExpression(typeProperty,
+                    typeProperty.TryGetKeyText() ?? throw new ArgumentException("Unable to resolve name of object type property"),
+                    ConvertTypeWithoutLowering(typeProperty.Value)));
+
+            case ObjectTypeAdditionalPropertiesSyntax typeAdditionalProperties:
+                return EvaluateDecorators(typeAdditionalProperties, new ObjectTypeAdditionalPropertiesExpression(typeAdditionalProperties,
+                    ConvertTypeWithoutLowering(typeAdditionalProperties.Value)));
+
+            case TupleTypeItemSyntax tupleItem:
+                return EvaluateDecorators(tupleItem, new TupleTypeItemExpression(tupleItem, ConvertTypeWithoutLowering(tupleItem.Value)));
 
             case ProgramSyntax program:
                 return ConvertProgram(program);
@@ -194,6 +239,162 @@ public class ExpressionBuilder
             default:
                 throw new ArgumentException($"Failed to convert syntax of type {syntax.GetType()}");
         }
+    }
+
+    private TypeExpression ConvertTypeWithoutLowering(SyntaxBase syntax)
+        => syntax switch
+        {
+            TypeVariableAccessSyntax variableAccess => Context.SemanticModel.Binder.GetSymbolInfo(syntax) switch
+            {
+                AmbientTypeSymbol ambientType => new AmbientTypeReferenceExpression(syntax, ambientType.Name, UnwrapType(ambientType.Type)),
+                TypeAliasSymbol typeAlias => new TypeAliasReferenceExpression(syntax, typeAlias, UnwrapType(typeAlias.Type)),
+                ImportedTypeSymbol importedSymbol => new ImportedTypeReferenceExpression(syntax, importedSymbol, UnwrapType(importedSymbol.Type)),
+                Symbol otherwise => throw new ArgumentException($"Encountered unexpected symbol of type {otherwise.GetType()} in a type expression."),
+                _ => throw new ArgumentException($"Unable to locate symbol for name '{variableAccess.Name.IdentifierName}'.")
+            },
+            StringTypeLiteralSyntax @string => new StringLiteralTypeExpression(@string, GetTypeInfo<StringLiteralType>(@string)),
+            IntegerTypeLiteralSyntax @int => new IntegerLiteralTypeExpression(@int, GetTypeInfo<IntegerLiteralType>(@int)),
+            BooleanTypeLiteralSyntax @bool => new BooleanLiteralTypeExpression(@bool, GetTypeInfo<BooleanLiteralType>(@bool)),
+            UnaryTypeOperationSyntax unaryOperation => Context.SemanticModel.GetTypeInfo(unaryOperation) switch
+            {
+                IntegerLiteralType intOperation => new IntegerLiteralTypeExpression(syntax, intOperation),
+                BooleanLiteralType boolOperation => new BooleanLiteralTypeExpression(syntax, boolOperation),
+                _ => throw new ArgumentException($"Failed to convert syntax of type {syntax.GetType()}"),
+            },
+            NullTypeLiteralSyntax @null => new NullLiteralTypeExpression(@null, GetTypeInfo<NullType>(@null)),
+            ResourceTypeSyntax resource => new ResourceTypeExpression(resource, GetTypeInfo<ResourceType>(resource)),
+            ObjectTypeSyntax objectTypeSyntax => new ObjectTypeExpression(syntax,
+                GetTypeInfo<ObjectType>(syntax),
+                [.. objectTypeSyntax.Properties.Select(p => ConvertWithoutLowering<ObjectTypePropertyExpression>(p))],
+                objectTypeSyntax.AdditionalProperties is SyntaxBase addlPropertiesSyntax
+                    ? ConvertWithoutLowering<ObjectTypeAdditionalPropertiesExpression>(addlPropertiesSyntax)
+                    : null),
+            TupleTypeSyntax tupleTypeSyntax => new TupleTypeExpression(syntax,
+                GetTypeInfo<TupleType>(syntax),
+                [.. tupleTypeSyntax.Items.Select(i => ConvertWithoutLowering<TupleTypeItemExpression>(i))]),
+            ArrayTypeSyntax arrayTypeSyntax => new ArrayTypeExpression(syntax,
+                GetTypeInfo<ArrayType>(syntax),
+                ConvertTypeWithoutLowering(arrayTypeSyntax.Item.Value)),
+            NullableTypeSyntax nullableTypeSyntax => new NullableTypeExpression(syntax, ConvertTypeWithoutLowering(nullableTypeSyntax.Base)),
+            UnionTypeSyntax unionTypeSyntax when Context.SemanticModel.GetTypeInfo(unionTypeSyntax) is DiscriminatedObjectType discriminatedObjectType =>
+                new DiscriminatedObjectTypeExpression(
+                    syntax,
+                    discriminatedObjectType,
+                    [.. unionTypeSyntax.Members.Select(m => ConvertTypeWithoutLowering(m.Value))]),
+            UnionTypeSyntax unionTypeSyntax when Context.SemanticModel.GetTypeInfo(unionTypeSyntax) is UnionType unionType
+                => new UnionTypeExpression(syntax, unionType, [.. unionTypeSyntax.Members.Select(m => ConvertTypeWithoutLowering(m.Value))]),
+            UnionTypeSyntax unionTypeSyntax => Context.SemanticModel.GetTypeInfo(unionTypeSyntax) switch
+            {
+                ErrorType errorType => throw new ArgumentException($"Failed to convert syntax of type {syntax.GetType()}"),
+                UnionType unionType => new UnionTypeExpression(syntax, unionType, [.. unionTypeSyntax.Members.Select(m => ConvertTypeWithoutLowering(m.Value))]),
+                // If a union type expression's members all refer to the same literal value, the type of the expression will be a single literal rather than a union
+                TypeSymbol otherwise => new UnionTypeExpression(syntax,
+                    new UnionType(string.Empty, [otherwise]),
+                    [.. unionTypeSyntax.Members.Select(m => ConvertTypeWithoutLowering(m.Value))]),
+            },
+            ParenthesizedTypeSyntax parenthesizedExpression => ConvertTypeWithoutLowering(parenthesizedExpression.Expression),
+            NonNullableTypeSyntax nonNullableTypeSyntax => new NonNullableTypeExpression(nonNullableTypeSyntax, ConvertTypeWithoutLowering(nonNullableTypeSyntax.Base)),
+            TypePropertyAccessSyntax propertyAccess => ConvertTypePropertyAccess(propertyAccess),
+            TypeAdditionalPropertiesAccessSyntax additionalPropertiesAccess => ConvertTypeAdditionalPropertiesAccess(additionalPropertiesAccess),
+            TypeArrayAccessSyntax arrayAccess => ConvertTypeArrayAccess(arrayAccess),
+            TypeItemsAccessSyntax itemsAccess => ConvertTypeItemsAccess(itemsAccess),
+            ParameterizedTypeInstantiationSyntaxBase parameterizedTypeInstantiation
+                => Context.SemanticModel.TypeManager.TryGetReifiedType(parameterizedTypeInstantiation) is TypeExpression reified
+                    ? reified
+                    : throw new ArgumentException($"Failed to reify parameterized type invocation."),
+            _ => throw new ArgumentException($"Failed to convert syntax of type {syntax.GetType()}"),
+        };
+
+    private static TypeSymbol UnwrapType(TypeSymbol type) => type switch
+    {
+        TypeType tt => tt.Unwrapped,
+        _ => type,
+    };
+
+    private TypeExpression ConvertTypePropertyAccess(TypePropertyAccessSyntax syntax)
+        => ConvertTypePropertyAccess(syntax, syntax.BaseExpression, syntax.PropertyName.IdentifierName);
+
+    private TypeExpression ConvertTypePropertyAccess(SyntaxBase syntax, SyntaxBase baseExpression, string propertyName)
+        => Context.SemanticModel.GetSymbolInfo(baseExpression) switch
+        {
+            BuiltInNamespaceSymbol builtIn => TryGetPropertyType(builtIn, propertyName) switch
+            {
+                TypeType typeType when builtIn is { Type: NamespaceType nsType } => new FullyQualifiedAmbientTypeReferenceExpression(syntax, nsType.ExtensionName, propertyName, typeType.Unwrapped),
+                _ => throw new ArgumentException($"Property '{propertyName}' of symbol '{builtIn.Name}' was not found or was not valid."),
+            },
+            WildcardImportSymbol wildcardImport => TryGetPropertyType(wildcardImport, propertyName) switch
+            {
+                TypeType typeType => new WildcardImportTypePropertyReferenceExpression(syntax, wildcardImport, propertyName, typeType.Unwrapped),
+                _ => throw new ArgumentException($"Property '{propertyName}' of symbol '{wildcardImport.Name}' was not found or was not valid."),
+            },
+            _ => ConvertTypePropertyAccess(syntax, ConvertTypeWithoutLowering(baseExpression), propertyName),
+        };
+
+    private static TypeReferencePropertyAccessExpression ConvertTypePropertyAccess(SyntaxBase syntax, TypeExpression baseExpression, string propertyName)
+    {
+        if (baseExpression.ExpressedType is not ObjectType baseObject || !baseObject.Properties.TryGetValue(propertyName, out var typeProperty))
+        {
+            throw new ArgumentException($"Property '{propertyName}' of type '{baseExpression.ExpressedType.Name}' was not found or was not valid.");
+        }
+
+        return new TypeReferencePropertyAccessExpression(syntax, baseExpression, propertyName, typeProperty.TypeReference.Type);
+    }
+
+    private TypeExpression ConvertTypeArrayAccess(TypeArrayAccessSyntax syntax) => Context.SemanticModel.GetTypeInfo(syntax.IndexExpression) switch
+    {
+        StringLiteralType @string => ConvertTypePropertyAccess(syntax, syntax.BaseExpression, @string.RawStringValue),
+        IntegerLiteralType @int => ConvertTypeArrayAccess(syntax, ConvertTypeWithoutLowering(syntax.BaseExpression), @int.Value),
+        _ => throw new ArgumentException("Array access syntax is not permitted in type expressions unless the indexing expression can be folded to a constant string or integer at compile time."),
+    };
+
+    private static TypeReferenceIndexAccessExpression ConvertTypeArrayAccess(TypeArrayAccessSyntax syntax, TypeExpression baseExpression, long index)
+    {
+        if (baseExpression.ExpressedType is not TupleType baseTuple || index < 0 || baseTuple.Items.Length <= index)
+        {
+            throw new ArgumentException($"Index {index} of type '{baseExpression.ExpressedType.Name}' was not found or was not valid.");
+        }
+
+        return new TypeReferenceIndexAccessExpression(syntax, baseExpression, index, baseTuple.Items[(int)index].Type);
+    }
+
+    private TypeReferenceAdditionalPropertiesAccessExpression ConvertTypeAdditionalPropertiesAccess(TypeAdditionalPropertiesAccessSyntax syntax)
+    {
+        var baseExpression = ConvertTypeWithoutLowering(syntax.BaseExpression);
+
+        if (baseExpression.ExpressedType is not ObjectType objectType || objectType.AdditionalProperties is null || !objectType.HasExplicitAdditionalPropertiesType)
+        {
+            throw new ArgumentException($"The additional properties type of type '{baseExpression.ExpressedType.Name}' was not found or was not valid.");
+        }
+
+        return new TypeReferenceAdditionalPropertiesAccessExpression(syntax, baseExpression, objectType.AdditionalProperties.TypeReference.Type);
+    }
+
+    private TypeReferenceItemsAccessExpression ConvertTypeItemsAccess(TypeItemsAccessSyntax syntax)
+    {
+        var baseExpression = ConvertTypeWithoutLowering(syntax.BaseExpression);
+
+        if (baseExpression.ExpressedType is not TypedArrayType arrayType)
+        {
+            throw new ArgumentException($"The element type of type '{baseExpression.ExpressedType.Name}' was not found or was not valid.");
+        }
+
+        return new TypeReferenceItemsAccessExpression(syntax, baseExpression, arrayType.Item.Type);
+    }
+
+    private TypeSymbol? TryGetPropertyType(INamespaceSymbol namespaceSymbol, string propertyName)
+        => namespaceSymbol.TryGetNamespaceType() is NamespaceType type && type.Properties.TryGetValue(propertyName, out var property)
+            ? property.TypeReference.Type
+            : null;
+
+    private TExpression ConvertWithoutLowering<TExpression>(SyntaxBase syntax)
+        where TExpression : Expression
+    {
+        if (ConvertWithoutLowering(syntax) is not TExpression converted)
+        {
+            throw new ArgumentException($"Failed to convert syntax of type {syntax.GetType()} to expression of type {nameof(TExpression)}.");
+        }
+
+        return converted;
     }
 
     private TSymbol GetDeclaredSymbol<TSymbol>(SyntaxBase syntax)
@@ -219,6 +420,29 @@ public class ExpressionBuilder
         return typeSymbol;
     }
 
+    private Expression EvaluateDecorators(DecorableSyntax decorable, Expression target)
+    {
+        var result = target;
+        foreach (var decoratorSyntax in decorable.Decorators)
+        {
+            var symbol = Context.SemanticModel.GetSymbolInfo(decoratorSyntax.Expression);
+
+            if (symbol is FunctionSymbol decoratorSymbol && decoratorSymbol.DeclaringObject is NamespaceType namespaceType)
+            {
+                var argumentTypes = decoratorSyntax.Arguments
+                    .Select(argument => Context.SemanticModel.TypeManager.GetTypeInfo(argument))
+                    .ToArray();
+
+                // There should be exact one matching decorator since there's no errors.
+                var decorator = namespaceType.DecoratorResolver.GetMatches(decoratorSymbol, argumentTypes).Single();
+
+                result = decorator.Evaluate(ConvertWithoutLowering<FunctionCallExpression>(decoratorSyntax.Expression), result);
+            }
+        }
+
+        return result;
+    }
+
     private ProgramExpression ConvertProgram(ProgramSyntax syntax)
     {
         var metadataArray = Context.SemanticModel.Root.MetadataDeclarations
@@ -226,9 +450,24 @@ public class ExpressionBuilder
             .OfType<DeclaredMetadataExpression>()
             .ToImmutableArray();
 
-        var imports = Context.SemanticModel.Root.ImportDeclarations
+        var declaredExtensions = Context.SemanticModel.Root.ExtensionDeclarations
             .Select(x => ConvertWithoutLowering(x.DeclaringSyntax))
-            .OfType<DeclaredImportExpression>()
+            .OfType<ExtensionExpression>()
+            .ToImmutableArray();
+
+        var implicitExtension = Context.SemanticModel.Binder.NamespaceResolver.ImplicitNamespaces
+            .Select(x => x.Value.TryGetNamespaceType())
+            .WhereNotNull()
+            .Where(x =>
+                // The 'az' and 'sys' namespaces do not utilize the extensibility contract and do not need to be emitted in the template
+                !LanguageConstants.IdentifierComparer.Equals(x.Settings.BicepExtensionName, SystemNamespaceType.BuiltInName) &&
+                !LanguageConstants.IdentifierComparer.Equals(x.Settings.BicepExtensionName, AzNamespaceType.BuiltInName))
+            .Select(x => new ExtensionExpression(null, x.Name, x.Settings, null))
+            .ToImmutableArray();
+
+        var typeDefinitions = Context.SemanticModel.Root.TypeDeclarations
+            .Select(x => ConvertWithoutLowering(x.DeclaringSyntax))
+            .OfType<DeclaredTypeExpression>()
             .ToImmutableArray();
 
         var parameters = Context.SemanticModel.Root.ParameterDeclarations
@@ -238,16 +477,17 @@ public class ExpressionBuilder
 
         var functionVariables = Context.FunctionVariables
             .OrderBy(x => x.Value.Name, LanguageConstants.IdentifierComparer)
-            .Select(x => new DeclaredVariableExpression(x.Key, x.Value.Name, x.Value.Value))
+            .Select(x => new DeclaredVariableExpression(x.Key, x.Value.Name, null, x.Value.Value))
             .ToImmutableArray();
 
         var variables = Context.SemanticModel.Root.VariableDeclarations
-            .Where(x => !Context.VariablesToInline.Contains(x))
+            .Where(x => !Context.SemanticModel.SymbolsToInline.VariablesToInline.Contains(x))
             .Select(x => ConvertWithoutLowering(x.DeclaringSyntax))
             .OfType<DeclaredVariableExpression>()
             .ToImmutableArray();
 
         var resources = Context.SemanticModel.DeclaredResources
+            .Where(x => !Context.SemanticModel.SymbolsToInline.ExistingResourcesToInline.Contains(x.Symbol))
             .Select(x => ConvertWithoutLowering(x.Symbol.DeclaringSyntax))
             .OfType<DeclaredResourceExpression>()
             .ToImmutableArray();
@@ -262,18 +502,45 @@ public class ExpressionBuilder
             .OfType<DeclaredOutputExpression>()
             .ToImmutableArray();
 
+        var asserts = Context.SemanticModel.Root.AssertDeclarations
+            .Select(x => ConvertWithoutLowering(x.DeclaringSyntax))
+            .OfType<DeclaredAssertExpression>()
+            .ToImmutableArray();
+
+        var functions = Context.SemanticModel.Root.FunctionDeclarations
+            .Select(x => ConvertWithoutLowering(x.DeclaringSyntax))
+            .OfType<DeclaredFunctionExpression>()
+            .ToImmutableArray();
+
         return new ProgramExpression(
             syntax,
             metadataArray,
-            imports,
+            [.. declaredExtensions, .. implicitExtension],
+            typeDefinitions,
             parameters,
             functionVariables.AddRange(variables),
+            functions,
             resources,
             modules,
-            outputs);
+            outputs,
+            asserts);
     }
 
     private record LoopExpressionContext(string Name, SyntaxBase SourceSyntax, Expression LoopExpression);
+
+    private ObjectPropertyExpression CreateModuleNameExpression(ModuleSymbol symbol, ObjectSyntax objectBody)
+    {
+        if (objectBody.TryGetPropertyByName(AzResourceTypeProvider.ResourceNamePropertyName) is { } namePropertySyntax)
+        {
+            // the user has specified an explicit name for the module - use it
+            return ConvertObjectProperty(namePropertySyntax);
+        }
+
+        return new ObjectPropertyExpression(
+            SourceSyntax: null,
+            Key: new StringLiteralExpression(SourceSyntax: null, Value: AzResourceTypeProvider.ResourceNamePropertyName),
+            Value: ExpressionFactory.CreateGeneratedModuleName(symbol));
+    }
 
     private DeclaredModuleExpression ConvertModule(ModuleDeclarationSyntax syntax)
     {
@@ -296,11 +563,15 @@ public class ExpressionBuilder
         }
 
         var objectBody = (ObjectSyntax)body;
+
         var properties = objectBody.Properties
-            .Where(x => x.TryGetKeyText() is not {} key || !ModulePropertiesToOmit.Contains(key))
-            .Select(ConvertObjectProperty);
-        Expression bodyExpression = new ObjectExpression(body, properties.ToImmutableArray());
+            .Where(x => x.TryGetKeyText() is not { } key || !ModulePropertiesToOmit.Contains(key))
+            .Select(ConvertObjectProperty)
+            .Append(CreateModuleNameExpression(symbol, objectBody));
+        Expression bodyExpression = new ObjectExpression(body, [.. properties]);
+
         var parameters = objectBody.TryGetPropertyByName(LanguageConstants.ModuleParamsPropertyName);
+        var extensionConfigs = objectBody.TryGetPropertyByName(LanguageConstants.ModuleExtensionConfigsPropertyName);
 
         if (condition is not null)
         {
@@ -317,27 +588,32 @@ public class ExpressionBuilder
                 GetBatchSize(syntax));
         }
 
-        var dependencies = Context.ResourceDependencies[symbol]
-            .Where(ShouldGenerateDependsOn)
-            .OrderBy(x => x.Resource.Name) // order to generate a deterministic template
-            .Select(x => ToDependencyExpression(x, body))
-            .ToImmutableArray();
-
         return new DeclaredModuleExpression(
             syntax,
             symbol,
-            Context.ModuleScopeData[symbol],
+            Context.SemanticModel.ModuleScopeData[symbol],
             body,
             bodyExpression,
             parameters is not null ? ConvertWithoutLowering(parameters.Value) : null,
-            dependencies);
+            extensionConfigs is not null ? ConvertWithoutLowering(extensionConfigs.Value) : null,
+            BuildDependencyExpressions(symbol, body));
     }
 
-    private DeclaredResourceExpression ConvertResource(ResourceDeclarationSyntax syntax)
-    {
-        var resource = Context.SemanticModel.ResourceMetadata.TryLookup(syntax) as DeclaredResourceMetadata
-            ?? throw new InvalidOperationException("Failed to find resource in cache");
+    private ImmutableArray<ResourceDependencyExpression> BuildDependencyExpressions(DeclaredSymbol dependent, SyntaxBase body)
+        => [.. Context.ResourceDependencies[dependent]
+            .SelectMany(dd => ToDependencyExpressions(dd, body, Context.ResourceDependencies))
+            .GroupBy(t => t.Target.Resource)
+            .SelectMany(g => g.FirstOrDefault(t => t.Target.IndexExpression is null) is { } dependencyOnCollection
+                ? dependencyOnCollection.AsEnumerable()
+                : g.Distinct(t => t.Target))
+            .OrderBy(t => t.TargetKey)  // order to generate a deterministic template
+            .Select(t => t.Expression)];
 
+    public Expression? GetResourceCondition(DeclaredResourceMetadata resourceMetadata)
+        => GetResourceBody(resourceMetadata).condition;
+
+    private (Expression? condition, LoopExpressionContext? loop, SyntaxBase body) GetResourceBody(DeclaredResourceMetadata resource)
+    {
         Expression? condition = null;
         LoopExpressionContext? loop = null;
 
@@ -373,7 +649,7 @@ public class ExpressionBuilder
         //
         // Children inherit the conditions of their parents, etc. This avoids a problem
         // where we emit a dependsOn to something that's not in the template, or not
-        // being evaulated in the template.
+        // being evaluated in the template.
         var ancestors = this.Context.SemanticModel.ResourceAncestors.GetAncestors(resource);
         foreach (var ancestor in ancestors)
         {
@@ -386,7 +662,10 @@ public class ExpressionBuilder
             if (ancestor.AncestorType == ResourceAncestorGraph.ResourceAncestorType.Nested &&
                 ancestor.Resource.Symbol.DeclaringResource.Value is ForSyntax ancestorFor)
             {
-                AddLoop(new(ancestor.Resource.Symbol.Name, ancestorFor, ConvertWithoutLowering(ancestorFor.Expression)));
+                AddLoop(new(
+                    ExpressionConverter.GetSymbolicName(Context.SemanticModel.ResourceAncestors, ancestor.Resource),
+                    ancestorFor,
+                    ConvertWithoutLowering(ancestorFor.Expression)));
             }
         }
 
@@ -394,7 +673,10 @@ public class ExpressionBuilder
         var body = resource.Symbol.DeclaringResource.Value;
         if (body is ForSyntax @for)
         {
-            AddLoop(new(resource.Symbol.Name, @for, ConvertWithoutLowering(@for.Expression)));
+            AddLoop(new(
+                ExpressionConverter.GetSymbolicName(Context.SemanticModel.ResourceAncestors, resource),
+                @for,
+                ConvertWithoutLowering(@for.Expression)));
             body = @for.Body;
         }
 
@@ -404,11 +686,21 @@ public class ExpressionBuilder
             body = @if.Body;
         }
 
+        return (condition, loop, body);
+    }
+
+    private DeclaredResourceExpression ConvertResource(ResourceDeclarationSyntax syntax)
+    {
+        var resource = Context.SemanticModel.ResourceMetadata.TryLookup(syntax) as DeclaredResourceMetadata
+            ?? throw new InvalidOperationException("Failed to find resource in cache");
+
+        var (condition, loop, body) = GetResourceBody(resource);
+
         var propertiesToOmit = resource.IsAzResource ? AzResourcePropertiesToOmit : NonAzResourcePropertiesToOmit;
         var properties = ((ObjectSyntax)body).Properties
-            .Where(x => x.TryGetKeyText() is not {} key || !propertiesToOmit.Contains(key))
+            .Where(x => x.TryGetKeyText() is not { } key || !propertiesToOmit.Contains(key))
             .Select(ConvertObjectProperty);
-        Expression bodyExpression = new ObjectExpression(body, properties.ToImmutableArray());
+        Expression bodyExpression = new ObjectExpression(body, [.. properties]);
 
         if (condition is not null)
         {
@@ -425,25 +717,91 @@ public class ExpressionBuilder
                 GetBatchSize(syntax));
         }
 
-        var dependencies = Context.ResourceDependencies[resource.Symbol]
-            .Where(ShouldGenerateDependsOn)
-            .OrderBy(x => x.Resource.Name) // order to generate a deterministic template
-            .Select(x => ToDependencyExpression(x, body))
-            .ToImmutableArray();
-
         return new DeclaredResourceExpression(
             syntax,
             resource,
-            Context.ResourceScopeData[resource],
+            Context.SemanticModel.ResourceScopeData[resource],
             body,
             bodyExpression,
-            dependencies);
+            BuildDependencyExpressions(resource.Symbol, body),
+            []);
     }
 
-    private ObjectExpression ConvertObject(ObjectSyntax @object)
-        => new ObjectExpression(
-            @object,
-            @object.Properties.Select(ConvertObjectProperty).ToImmutableArray());
+    private Expression ConvertArray(ArraySyntax array)
+    {
+        var hasSpread = false;
+        var chunks = new List<Expression>();
+        var currentChunk = new List<Expression>();
+        void completePreviousChunk()
+        {
+            if (currentChunk.Count > 0)
+            {
+                chunks.Add(new ArrayExpression(array, [.. currentChunk]));
+                currentChunk.Clear();
+            }
+        }
+
+        foreach (var child in array.Children)
+        {
+            if (child is SpreadExpressionSyntax spread)
+            {
+                completePreviousChunk();
+                chunks.Add(ConvertWithoutLowering(spread.Expression));
+                hasSpread = true;
+            }
+            else if (child is ArrayItemSyntax arrayItem)
+            {
+                currentChunk.Add(ConvertWithoutLowering(arrayItem.Value));
+            }
+        }
+        completePreviousChunk();
+
+        return chunks.Count switch
+        {
+            0 => new ArrayExpression(array, []),
+            // preserve [ ...[ bar ] ] rather than converting it to [ foo: bar ]
+            1 when !hasSpread => chunks[0],
+            _ => new FunctionCallExpression(array, "flatten", [new ArrayExpression(array, [.. chunks])]),
+        };
+    }
+
+    private Expression ConvertObject(ObjectSyntax @object)
+    {
+        var hasSpread = false;
+        var chunks = new List<Expression>();
+        var currentChunk = new List<ObjectPropertyExpression>();
+        void completePreviousChunk()
+        {
+            if (currentChunk.Count > 0)
+            {
+                chunks.Add(new ObjectExpression(@object, [.. currentChunk]));
+                currentChunk.Clear();
+            }
+        }
+
+        foreach (var child in @object.Children)
+        {
+            if (child is SpreadExpressionSyntax spread)
+            {
+                completePreviousChunk();
+                chunks.Add(ConvertWithoutLowering(spread.Expression));
+                hasSpread = true;
+            }
+            else if (child is ObjectPropertySyntax objectProperty)
+            {
+                currentChunk.Add(ConvertObjectProperty(objectProperty));
+            }
+        }
+        completePreviousChunk();
+
+        return chunks.Count switch
+        {
+            0 => new ObjectExpression(@object, []),
+            // preserve { ...{ foo: bar } } rather than converting it to { foo: bar }
+            1 when !hasSpread => chunks[0],
+            _ => new FunctionCallExpression(@object, "shallowMerge", [new ArrayExpression(@object, [.. chunks])]),
+        };
+    }
 
     private ObjectPropertyExpression ConvertObjectProperty(ObjectPropertySyntax syntax)
     {
@@ -462,31 +820,62 @@ public class ExpressionBuilder
                 return new FunctionCallExpression(
                     function,
                     function.Name.IdentifierName,
-                    function.Arguments.Select(a => ConvertWithoutLowering(a.Expression)).ToImmutableArray());
+                    [.. function.Arguments.Select(a => ConvertWithoutLowering(a.Expression))]);
 
             case InstanceFunctionCallSyntax method:
-                var (baseSyntax, indexExpression) = SyntaxHelper.UnwrapArrayAccessSyntax(method.BaseExpression);
+                var (baseSyntax, indexExpression) = SyntaxHelper.UnwrapArrayAccessSyntax(
+                    SyntaxHelper.UnwrapNonNullAssertion(method.BaseExpression));
                 var baseSymbol = Context.SemanticModel.GetSymbolInfo(baseSyntax);
 
-                switch (baseSymbol)
+                if (baseSymbol is INamespaceSymbol namespaceSymbol)
                 {
-                    case INamespaceSymbol namespaceSymbol:
-                        Debug.Assert(indexExpression is null, "Indexing into a namespace should have been blocked by type analysis");
-                        return new FunctionCallExpression(
-                            method,
-                            method.Name.IdentifierName,
-                            method.Arguments.Select(a => ConvertWithoutLowering(a.Expression)).ToImmutableArray());
-                    case { } _ when Context.SemanticModel.ResourceMetadata.TryLookup(baseSyntax) is DeclaredResourceMetadata resource:
-                        var indexContext = TryGetReplacementContext(resource.NameSyntax, indexExpression, method);
-
-                        // Handle list<method_name>(...) method on resource symbol - e.g. stgAcc.listKeys()
-                        // This is also used for kv.getSecret() - for passing secure values to module parameters
-                        return new ResourceFunctionCallExpression(
-                            method,
-                            new ResourceReferenceExpression(method.BaseExpression, resource, indexContext),
-                            method.Name.IdentifierName,
-                            method.Arguments.Select(a => ConvertWithoutLowering(a.Expression)).ToImmutableArray());
+                    Debug.Assert(indexExpression is null, "Indexing into a namespace should have been blocked by type analysis");
+                    return new FunctionCallExpression(
+                        method,
+                        method.Name.IdentifierName,
+                        [.. method.Arguments.Select(a => ConvertWithoutLowering(a.Expression))]);
                 }
+
+                var resource = Context.SemanticModel.ResourceMetadata.TryLookup(baseSyntax);
+                if (resource is DeclaredResourceMetadata decl && !decl.IsAzResource)
+                {
+                    Expression nameExpression = indexExpression is { } ?
+                        new FunctionCallExpression(baseSyntax, "format", new Expression[] {
+                            new StringLiteralExpression(baseSyntax, $"{decl.Symbol.Name}[{{0}}]"),
+                            ConvertWithoutLowering(indexExpression),
+                        }.ToImmutableArray()) :
+                        new StringLiteralExpression(baseSyntax, decl.Symbol.Name);
+
+                    return new FunctionCallExpression(
+                        method,
+                        "invokeResourceMethod",
+                        [
+                            nameExpression,
+                            new StringLiteralExpression(method.Name, method.Name.IdentifierName),
+                            new ArrayExpression(
+                                method,
+                                [.. method.Arguments.Select(a => ConvertWithoutLowering(a.Expression))]),
+                        ]);
+                }
+
+                var indexContext = resource switch
+                {
+                    DeclaredResourceMetadata declaredResource => TryGetReplacementContext(declaredResource.NameSyntax, indexExpression, method),
+                    ModuleOutputResourceMetadata moduleOutputResource => TryGetReplacementContext(moduleOutputResource.Module, indexExpression, method),
+                    _ => null,
+                };
+
+                if (resource is not null)
+                {
+                    // Handle list<method_name>(...) method on resource symbol - e.g. stgAcc.listKeys()
+                    // This is also used for kv.getSecret() - for passing secure values to module parameters
+                    return new ResourceFunctionCallExpression(
+                        method,
+                        new ResourceReferenceExpression(method.BaseExpression, resource, indexContext),
+                        method.Name.IdentifierName,
+                        [.. method.Arguments.Select(a => ConvertWithoutLowering(a.Expression))]);
+                }
+
                 throw new InvalidOperationException($"Unrecognized base expression {baseSymbol?.Kind}");
             default:
                 throw new NotImplementedException($"Cannot emit unexpected expression of type {functionCall.GetType().Name}");
@@ -495,20 +884,45 @@ public class ExpressionBuilder
 
     private Expression ConvertFunction(FunctionCallSyntaxBase functionCall)
     {
-        if (Context.Settings.FileKind == BicepSourceFileKind.BicepFile &&
-            Context.FunctionVariables.GetValueOrDefault(functionCall) is {} functionVariable)
+        if (Context.FunctionVariables.GetValueOrDefault(functionCall) is { } functionVariable)
         {
             return new SynthesizedVariableReferenceExpression(functionCall, functionVariable.Name);
         }
 
-        if (Context.SemanticModel.TypeManager.GetMatchedFunctionResultValue(functionCall) is {} functionValue)
+        if (Context.SemanticModel.GetSymbolInfo(functionCall) is DeclaredFunctionSymbol declaredFunction)
+        {
+            return new UserDefinedFunctionCallExpression(
+                functionCall,
+                declaredFunction,
+                [.. functionCall.Arguments.Select(a => ConvertWithoutLowering(a.Expression))]);
+        }
+
+        if (Context.SemanticModel.GetSymbolInfo(functionCall) is ImportedFunctionSymbol importedFunction)
+        {
+            return new ImportedUserDefinedFunctionCallExpression(
+                functionCall,
+                importedFunction,
+                [.. functionCall.Arguments.Select(a => ConvertWithoutLowering(a.Expression))]);
+        }
+
+        if (functionCall is InstanceFunctionCallSyntax instanceFunctionCall &&
+            Context.SemanticModel.GetSymbolInfo(instanceFunctionCall.BaseExpression) is WildcardImportSymbol wildcardImport)
+        {
+            return new WildcardImportInstanceFunctionCallExpression(
+                functionCall,
+                wildcardImport,
+                instanceFunctionCall.Name.IdentifierName,
+                [.. functionCall.Arguments.Select(a => ConvertWithoutLowering(a.Expression))]);
+        }
+
+        if (Context.SemanticModel.TypeManager.GetMatchedFunctionResultValue(functionCall) is { } functionValue)
         {
             return functionValue;
         }
 
         var converted = ConvertFunctionDirect(functionCall);
         if (converted is FunctionCallExpression convertedFunction &&
-            Context.SemanticModel.TypeManager.GetMatchedFunctionOverload(functionCall) is { Evaluator: {} } functionOverload)
+            Context.SemanticModel.TypeManager.GetMatchedFunctionOverload(functionCall) is { Evaluator: { } } functionOverload)
         {
             return functionOverload.Evaluator(convertedFunction);
         }
@@ -540,21 +954,29 @@ public class ExpressionBuilder
         var convertedBase = ConvertWithoutLowering(arrayAccess.BaseExpression);
         var convertedIndex = ConvertWithoutLowering(arrayAccess.IndexExpression);
 
-        // Looking for short-circuitable access chains
-        if (arrayAccess.SafeAccessMarker is null && IsAccessExpressionSyntax(arrayAccess.BaseExpression))
-        {
-            if (convertedBase is AccessExpression baseAccess)
-            {
-                return new AccessChainExpression(arrayAccess, baseAccess, ImmutableArray.Create(convertedIndex));
-            }
+        return new ArrayAccessExpression(arrayAccess, convertedBase, convertedIndex, GetAccessExpressionFlags(arrayAccess));
+    }
 
-            if (convertedBase is AccessChainExpression accessChain)
-            {
-                return new AccessChainExpression(arrayAccess, accessChain.FirstLink, accessChain.AdditionalProperties.Append(convertedIndex).ToImmutableArray());
-            }
+    private AccessExpressionFlags GetAccessExpressionFlags(AccessExpressionSyntax accessExpression)
+    {
+        var flags = AccessExpressionFlags.None;
+        if (accessExpression.IsSafeAccess)
+        {
+            flags |= AccessExpressionFlags.SafeAccess;
         }
 
-        return new ArrayAccessExpression(arrayAccess, convertedBase, convertedIndex, GetAccessExpressionFlags(arrayAccess, arrayAccess.SafeAccessMarker));
+        if (accessExpression is ArrayAccessSyntax arrayAccess &&
+            arrayAccess.FromEndMarker is not null)
+        {
+            flags |= AccessExpressionFlags.FromEnd;
+        }
+
+        if (IsAccessExpressionSyntax(accessExpression.BaseExpression))
+        {
+            flags |= AccessExpressionFlags.Chained;
+        }
+
+        return flags;
     }
 
     private bool IsAccessExpressionSyntax(SyntaxBase syntax) => syntax switch
@@ -563,6 +985,12 @@ public class ExpressionBuilder
 
         // type transformations with no runtime representation should be unwrapped and inspected
         NonNullAssertionSyntax nonNullAssertion => IsAccessExpressionSyntax(nonNullAssertion.BaseExpression),
+        _ when SemanticModelHelper.TryGetFunctionInNamespace(
+                Context.SemanticModel,
+                SystemNamespaceType.BuiltInName,
+                syntax) is { } functionCall &&
+            functionCall.NameEquals(LanguageConstants.AnyFunction) &&
+            functionCall.Arguments.Length == 1 => IsAccessExpressionSyntax(functionCall.Arguments[0].Expression),
 
         _ => false,
     };
@@ -572,7 +1000,7 @@ public class ExpressionBuilder
 
     private Expression ConvertPropertyAccess(PropertyAccessSyntax propertyAccess)
     {
-        var flags = GetAccessExpressionFlags(propertyAccess, propertyAccess.SafeAccessMarker);
+        var flags = GetAccessExpressionFlags(propertyAccess);
 
         // Looking for: myResource.someProp (where myResource is a resource declared in-file)
         if (Context.SemanticModel.ResourceMetadata.TryLookup(propertyAccess.BaseExpression) is DeclaredResourceMetadata resource)
@@ -609,7 +1037,7 @@ public class ExpressionBuilder
             Context.SemanticModel.ResourceMetadata.TryLookup(propertyAccess.BaseExpression) is ModuleOutputResourceMetadata moduleCollectionOutputMetadata &&
             moduleCollectionOutputMetadata.Module.IsCollection)
         {
-            var indexContext = TryGetReplacementContext(moduleCollectionOutputMetadata.NameSyntax, moduleArrayAccess.IndexExpression, propertyAccess);
+            var indexContext = TryGetReplacementContext(moduleCollectionOutputMetadata.Module, moduleArrayAccess.IndexExpression, propertyAccess);
             return ConvertResourcePropertyAccess(propertyAccess, moduleCollectionOutputMetadata, indexContext, propertyAccess.PropertyName.IdentifierName, flags);
         }
 
@@ -622,30 +1050,22 @@ public class ExpressionBuilder
                 propertyAccess,
                 ConvertWithoutLowering(propertyAccess.BaseExpression),
                 propertyAccess.PropertyName.IdentifierName,
+                IsSecureOutput: TypeHelper.SatisfiesCondition(
+                    Context.SemanticModel.GetTypeInfo(childPropertyAccess.BaseExpression),
+                    x => (x as ModuleType)?.TryGetOutputType(propertyAccess.PropertyName.IdentifierName) is { } outputType &&
+                        TypeHelper.IsOrContainsSecureType(outputType)),
                 flags);
         }
 
-        var convertedBase = ConvertWithoutLowering(propertyAccess.BaseExpression);
-
-        // Looking for short-circuitable access chains
-        if (propertyAccess.SafeAccessMarker is null && IsAccessExpressionSyntax(propertyAccess.BaseExpression))
+        // Looking for: expr.blah (where expr is a wildcard import)
+        if (Context.SemanticModel.GetSymbolInfo(propertyAccess.BaseExpression) is WildcardImportSymbol wildcardImport)
         {
-            Expression nextLink = new StringLiteralExpression(propertyAccess.PropertyName, propertyAccess.PropertyName.IdentifierName);
-
-            if (convertedBase is AccessExpression baseAccess)
-            {
-                return new AccessChainExpression(propertyAccess, baseAccess, ImmutableArray.Create(nextLink));
-            }
-
-            if (convertedBase is AccessChainExpression accessChain)
-            {
-                return new AccessChainExpression(propertyAccess, accessChain.FirstLink, accessChain.AdditionalProperties.Append(nextLink).ToImmutableArray());
-            }
+            return new WildcardImportVariablePropertyReferenceExpression(propertyAccess, wildcardImport, propertyAccess.PropertyName.IdentifierName);
         }
 
         return new PropertyAccessExpression(
             propertyAccess,
-            convertedBase,
+            ConvertWithoutLowering(propertyAccess.BaseExpression),
             propertyAccess.PropertyName.IdentifierName,
             flags);
     }
@@ -662,25 +1082,28 @@ public class ExpressionBuilder
 
     private Expression ConvertVariableAccess(VariableAccessSyntax variableAccessSyntax)
     {
-        var name = variableAccessSyntax.Name.IdentifierName;
-
         var symbol = Context.SemanticModel.GetSymbolInfo(variableAccessSyntax);
 
         switch (symbol)
         {
-            case DeclaredSymbol declaredSymbol when Context.SemanticModel.ResourceMetadata.TryLookup(declaredSymbol.DeclaringSyntax) is {} resource:
+            case DeclaredSymbol declaredSymbol when Context.SemanticModel.ResourceMetadata.TryLookup(declaredSymbol.DeclaringSyntax) is { } resource:
                 return new ResourceReferenceExpression(variableAccessSyntax, resource, null);
 
             case ParameterSymbol parameterSymbol:
                 return new ParametersReferenceExpression(variableAccessSyntax, parameterSymbol);
 
             case ParameterAssignmentSymbol parameterSymbol:
+                if (Context.SemanticModel.SymbolsToInline.ParameterAssignmentsToInline.Contains(parameterSymbol))
+                {
+                    // we've got a runtime dependency so we have to inline the parameter assignment
+                    return ConvertWithoutLowering(parameterSymbol.DeclaringParameterAssignment.Value);
+                }
                 return new ParametersAssignmentReferenceExpression(variableAccessSyntax, parameterSymbol);
 
             case VariableSymbol variableSymbol:
-                if (Context.VariablesToInline.Contains(variableSymbol))
+                if (Context.SemanticModel.SymbolsToInline.VariablesToInline.Contains(variableSymbol))
                 {
-                    // we've got a runtime dependency, so we have to inline the variable usage
+                    // we've got a runtime dependency so we have to inline the variable usage
                     return ConvertWithoutLowering(variableSymbol.DeclaringVariable.Value);
                 }
 
@@ -692,8 +1115,27 @@ public class ExpressionBuilder
             case LocalVariableSymbol localVariableSymbol:
                 return GetLocalVariableExpression(variableAccessSyntax, localVariableSymbol);
 
+            case ImportedVariableSymbol importedSymbol:
+                return new ImportedVariableReferenceExpression(variableAccessSyntax, importedSymbol);
+
+            case ExtensionNamespaceSymbol extensionNamespaceSymbol:
+                return new ExtensionReferenceExpression(variableAccessSyntax, extensionNamespaceSymbol);
+
+            case ExtensionConfigAssignmentSymbol extensionConfigAssignmentSymbol:
+                return new ExtensionConfigAssignmentReferenceExpression(variableAccessSyntax, extensionConfigAssignmentSymbol);
+
+            case BaseParametersSymbol baseParamsSymbol:
+                var objectProperties = baseParamsSymbol.ParentAssignments
+                    .Select(pa => new ObjectPropertyExpression(
+                        pa.DeclaringParameterAssignment,
+                        new StringLiteralExpression(pa.DeclaringParameterAssignment.Name, pa.Name),
+                        ConvertWithoutLowering(pa.DeclaringParameterAssignment.Value)))
+                    .ToImmutableArray();
+
+                return new ObjectExpression(variableAccessSyntax, objectProperties);
+
             default:
-                throw new NotImplementedException($"Encountered an unexpected symbol kind '{symbol?.Kind}' when generating a variable access expression.");
+                throw new NotImplementedException($"Encountered an unexpected symbol kind '{symbol?.Kind}' and type '{symbol?.GetType().Name}' when generating a variable access expression.");
 
         }
     }
@@ -712,8 +1154,10 @@ public class ExpressionBuilder
         {
             case ForSyntax @for:
                 return GetLoopVariable(localVariableSymbol, @for, new CopyIndexExpression(sourceSyntax, GetCopyIndexName(@for)));
-            case LambdaSyntax lambda:
-                return new LambdaVariableReferenceExpression(sourceSyntax, localVariableSymbol);
+            case LambdaSyntax:
+                return new LambdaVariableReferenceExpression(sourceSyntax, localVariableSymbol, IsFunctionLambda: false);
+            case TypedLambdaSyntax:
+                return new LambdaVariableReferenceExpression(sourceSyntax, localVariableSymbol, IsFunctionLambda: true);
         }
 
         throw new NotImplementedException($"{nameof(LocalVariableSymbol)} was declared by an unexpected syntax type '{enclosingSyntax?.GetType().Name}'.");
@@ -729,6 +1173,9 @@ public class ExpressionBuilder
 
             // variable copy index has the name of the variable
             VariableDeclarationSyntax variable when variable.Name.IsValid => variable.Name.IdentifierName,
+
+            // parameter assignment copy index has the name of the parameter
+            ParameterAssignmentSyntax parameter when parameter.Name.IsValid => parameter.Name.IdentifierName,
 
             // output loops are only allowed at the top level and don't have names, either
             OutputDeclarationSyntax => null,
@@ -798,7 +1245,17 @@ public class ExpressionBuilder
     }
 
     private IndexReplacementContext? TryGetReplacementContext(ModuleSymbol module, SyntaxBase? indexExpression, SyntaxBase newContext)
-        => TryGetReplacementContext(GetModuleNameSyntax(module), indexExpression, newContext);
+    {
+        if (module.TryGetBodyProperty(LanguageConstants.ModuleNamePropertyName) is null)
+        {
+            // The module has a generated module name.
+            return indexExpression is not null
+                ? new(ImmutableDictionary<LocalVariableSymbol, Expression>.Empty, this.ConvertWithoutLowering(indexExpression))
+                : null;
+        }
+
+        return TryGetReplacementContext(module.GetBodyPropertyValue(LanguageConstants.ModuleNamePropertyName), indexExpression, newContext);
+    }
 
     private IndexReplacementContext? TryGetReplacementContext(DeclaredResourceMetadata resource, SyntaxBase? indexExpression, SyntaxBase newContext)
     {
@@ -841,13 +1298,6 @@ public class ExpressionBuilder
         }
     }
 
-    private static SyntaxBase GetModuleNameSyntax(ModuleSymbol moduleSymbol)
-    {
-        // this condition should have already been validated by the type checker
-        return moduleSymbol.TryGetBodyPropertyValue(LanguageConstants.ModuleNamePropertyName)
-            ?? throw new ArgumentException($"Expected module syntax body to contain property 'name'");
-    }
-
     private ulong? GetBatchSize(StatementSyntax statement)
     {
         var decorator = SemanticModelHelper.TryGetDecoratorInNamespace(
@@ -865,47 +1315,154 @@ public class ExpressionBuilder
         return null;
     }
 
-    private static bool ShouldGenerateDependsOn(ResourceDependency dependency)
-    {
-        if (dependency.Kind == ResourceDependencyKind.Transitive)
-        {
-            // transitive dependencies do not have to be emitted
-            return false;
-        }
+    private record DependencyExpression(
+        string TargetKey, // Used for sorting.
+        ResourceDependency Target,
+        ResourceDependencyExpression Expression);
 
-        return dependency.Resource switch
-        {   // We only want to add a 'dependsOn' for resources being deployed in this file.
-            ResourceSymbol resource => !resource.DeclaringResource.IsExistingResource(),
-            ModuleSymbol => true,
-            _ => throw new InvalidOperationException($"Found dependency '{dependency.Resource.Name}' of unexpected type {dependency.GetType()}"),
-        };
+    private IEnumerable<DependencyExpression> ToDependencyExpressions(
+        ResourceDependency dependency,
+        SyntaxBase newContext,
+        ImmutableDictionary<DeclaredSymbol, ImmutableHashSet<ResourceDependency>> dependencies)
+    {
+        foreach (var path in GatherDependencyPaths([dependency], dependencies))
+        {
+            Expression reference;
+            ResourceDependency target;
+            string targetKey;
+            var localReplacements = this.localReplacements;
+            var allNodesInPathAccessCopyIndex = true;
+
+            int i = 0;
+            do
+            {
+                target = path[i];
+                targetKey = target.Resource.Name;
+                var targetContext = i == 0 ? newContext : path[i - 1].Resource.DeclaringSyntax;
+                IndexReplacementContext? indexContext = null;
+
+                switch (target.Resource)
+                {
+                    case ResourceSymbol resource:
+                        {
+                            var metadata = Context.SemanticModel.ResourceMetadata.TryLookup(resource.DeclaringSyntax) as DeclaredResourceMetadata
+                                ?? throw new InvalidOperationException("Failed to find resource in cache");
+
+                            targetKey = ExpressionConverter.GetSymbolicName(Context.SemanticModel.ResourceAncestors, metadata);
+                            indexContext = (resource.IsCollection && target.IndexExpression is null)
+                                ? null
+                                : new ExpressionBuilder(Context, localReplacements)
+                                    .TryGetReplacementContext(metadata, target.IndexExpression, targetContext);
+                            reference = new ResourceReferenceExpression(null, metadata, indexContext);
+                            break;
+                        }
+                    case ModuleSymbol module:
+                        {
+                            indexContext = (module.IsCollection && target.IndexExpression is null)
+                                ? null
+                                : new ExpressionBuilder(Context, localReplacements)
+                                    .TryGetReplacementContext(module, target.IndexExpression, targetContext);
+                            reference = new ModuleReferenceExpression(null, module, indexContext);
+                            break;
+                        }
+                    case VariableSymbol variable:
+                        {
+                            indexContext = (variable.IsCopyVariable && target.IndexExpression is null)
+                                ? null
+                                : new ExpressionBuilder(Context, localReplacements)
+                                    .TryGetReplacementContext(variable.DeclaringVariable.GetBody(), target.IndexExpression, targetContext);
+                            reference = new VariableReferenceExpression(null, variable);
+                            break;
+                        }
+                    default:
+                        throw new InvalidOperationException($"Found dependency '{target.Resource.Name}' of unexpected type {target.Resource.GetType()}");
+                }
+
+                localReplacements = indexContext?.LocalReplacements ?? localReplacements;
+                var copyIndexAccesses = indexContext is not null
+                    ? CopyIndexExpressionCollector.FindContainedCopyIndexExpressions(indexContext.Index)
+                    : [];
+
+                if (copyIndexAccesses.Length > 0 && !allNodesInPathAccessCopyIndex)
+                {
+                    target = target with { IndexExpression = null };
+                    reference = reference switch
+                    {
+                        ModuleReferenceExpression modRef => modRef with { IndexContext = null },
+                        ResourceReferenceExpression resourceRef => resourceRef with { IndexContext = null },
+                        _ => reference,
+                    };
+                }
+
+                allNodesInPathAccessCopyIndex = allNodesInPathAccessCopyIndex && copyIndexAccesses.Length > 0;
+            } while (++i < path.Length);
+
+            yield return new(targetKey, target, new(null, reference));
+        }
     }
 
-    private ResourceDependencyExpression ToDependencyExpression(ResourceDependency dependency, SyntaxBase newContext)
+    private class CopyIndexExpressionCollector : ExpressionVisitor
     {
-        switch (dependency.Resource)
+        private readonly ImmutableArray<CopyIndexExpression>.Builder copyIndexExpressions
+            = ImmutableArray.CreateBuilder<CopyIndexExpression>();
+
+        private CopyIndexExpressionCollector() { }
+
+        public static ImmutableArray<CopyIndexExpression> FindContainedCopyIndexExpressions(Expression? expression)
         {
-            case ResourceSymbol resource: {
-                var metadata = Context.SemanticModel.ResourceMetadata.TryLookup(resource.DeclaringSyntax) as DeclaredResourceMetadata
-                    ?? throw new InvalidOperationException("Failed to find resource in cache");
-
-                var indexContext = (resource.IsCollection && dependency.IndexExpression is null) ? null :
-                    TryGetReplacementContext(metadata, dependency.IndexExpression, newContext);
-
-                var reference = new ResourceReferenceExpression(null, metadata, indexContext);
-                return new ResourceDependencyExpression(null, reference);
+            if (expression is null)
+            {
+#pragma warning disable IDE0301 // Using a simplified collection initialization results in an allocation, whereas using ImmutableArray<T>.Empty does not
+                return ImmutableArray<CopyIndexExpression>.Empty;
+#pragma warning restore IDE0301
             }
-            case ModuleSymbol module: {
-                var indexContext = (module.IsCollection && dependency.IndexExpression is null) ? null :
-                    TryGetReplacementContext(module, dependency.IndexExpression, newContext);
 
-                var reference = new ModuleReferenceExpression(null, module, indexContext);
-                return new ResourceDependencyExpression(null, reference);
-            }
-            default:
-                throw new InvalidOperationException($"Found dependency '{dependency.Resource.Name}' of unexpected type {dependency.GetType()}");
+            var visitor = new CopyIndexExpressionCollector();
+            expression.Accept(visitor);
+
+            return visitor.copyIndexExpressions.ToImmutable();
+        }
+
+        public override void VisitCopyIndexExpression(CopyIndexExpression expression)
+        {
+            copyIndexExpressions.Add(expression);
         }
     }
+
+    private IEnumerable<ImmutableArray<ResourceDependency>> GatherDependencyPaths(
+        ImmutableArray<ResourceDependency> currentPath,
+        ImmutableDictionary<DeclaredSymbol, ImmutableHashSet<ResourceDependency>> dependencies)
+    {
+        if (IsDependencyPathTerminus(currentPath[^1]))
+        {
+            yield return currentPath;
+            yield break;
+        }
+
+        foreach (var transitiveDependency in dependencies[currentPath[^1].Resource])
+        {
+            if (currentPath.Contains(transitiveDependency))
+            {
+                // We've got a cycle. This should have been caught and blocked earlier
+                throw new InvalidOperationException("Dependency cycle detected: "
+                    + string.Join(" -> ", currentPath.Select(d => d.Resource.Name)));
+            }
+
+            foreach (var transitivePath in GatherDependencyPaths(currentPath.Add(transitiveDependency), dependencies))
+            {
+                yield return transitivePath;
+            }
+        }
+    }
+
+    private bool IsDependencyPathTerminus(ResourceDependency dependency) => dependency.Resource switch
+    {
+        ModuleSymbol => true,
+        ResourceSymbol r => !r.DeclaringResource.IsExistingResource() ||
+            // only use an existing resource as the terminus iff the compilation will include existing resources and the reference is not weak
+            (Context.Settings.EnableSymbolicNames && !dependency.WeakReference),
+        _ => false,
+    };
 
     /// <summary>
     /// Returns a collection of name segment expressions for the specified resource. Local variable replacements
@@ -1037,13 +1594,25 @@ public class ExpressionBuilder
         {
             // emit the resource id of the resource being extended
             var indexContext = TryGetReplacementContext(scopeResource, resource.ScopeData.IndexExpression, resource.BodySyntax);
-            expressionEmitter.EmitProperty("scope", () => expressionEmitter.EmitUnqualifiedResourceId(scopeResource, indexContext));
+            expressionEmitter.EmitProperty("scope", () => expressionEmitter.EmitFullyQualifiedResourceId(scopeResource, indexContext));
             return;
         }
 
         EmitResourceOrModuleScopeProperties(resource.ScopeData, expressionEmitter, resource.BodySyntax);
     }
 
+    /*public void EmitResourceOptionsProperties(ExpressionEmitter expressionEmitter, DeclaredResourceExpression resource)
+    {
+        if (resource.SourceSyntax is FunctionCallSyntax functionCallSyntax)
+        {
+            // emit the resource id of the resource being extended
+            var indexContext = TryGetReplacementContext(scopeResource, resource.ScopeData.IndexExpression, resource.BodySyntax);
+            expressionEmitter.EmitProperty("parent", () => expressionEmitter.EmitUnqualifiedResourceId(scopeResource, indexContext));
+            return;
+        }
+        EmitResourceOrModuleScopeProperties(resource.ScopeData, expressionEmitter, resource.BodySyntax);
+    }
+*/
     public void EmitModuleScopeProperties(ExpressionEmitter expressionEmitter, DeclaredModuleExpression module)
     {
         EmitResourceOrModuleScopeProperties(module.ScopeData, expressionEmitter, module.BodySyntax);
@@ -1079,7 +1648,7 @@ public class ExpressionBuilder
                 else if (Context.SemanticModel.TargetScope == ResourceScope.ResourceGroup)
                 {
                     // TODO: It's very suspicious that this doesn't reference scopeData.IndexExpression
-                    expressionEmitter.EmitProperty("subscriptionId", new FunctionExpression("subscription", Array.Empty<LanguageExpression>(), new LanguageExpression[] { new JTokenExpression("subscriptionId") }));
+                    expressionEmitter.EmitProperty("subscriptionId", new FunctionExpression("subscription", [], [new JTokenExpression("subscriptionId")]));
                 }
                 return;
             case ResourceScope.ResourceGroup:
@@ -1094,28 +1663,21 @@ public class ExpressionBuilder
                     expressionEmitter.EmitProperty("resourceGroup", () => expressionEmitter.EmitExpression(scopeData.ResourceGroupProperty, indexContext));
                 }
                 return;
+            case ResourceScope.Local:
+                // These scopes just change the schema so there are no properties to emit.
+                return;
             default:
                 throw new InvalidOperationException($"Cannot format resourceId for scope {scopeData.RequestedScope}");
         }
     }
 
     private static long SafeConvertIntegerValue(IntegerLiteralSyntax @int, bool isNegative)
-        => (@int.Value, isNegative) switch {
-            (<= long.MaxValue, false) => (long)@int.Value,
-            (<= long.MaxValue, true) => -(long)@int.Value,
+        => (@int.Value, isNegative) switch
+        {
+            ( <= long.MaxValue, false) => (long)@int.Value,
+            ( <= long.MaxValue, true) => -(long)@int.Value,
             // long.MaxValue is 9223372036854775807, whereas long.MinValue is -9223372036854775808, hence this special-case check:
             (1UL + long.MaxValue, true) => long.MinValue,
             _ => throw new NotImplementedException($"Unexpected out-of-range integer value"),
         };
-
-    private static AccessExpressionFlags GetAccessExpressionFlags(SyntaxBase accessExpression, SyntaxBase? safeAccessMarker)
-    {
-        var flags = AccessExpressionFlags.None;
-        if (safeAccessMarker is not null)
-        {
-            flags |= AccessExpressionFlags.SafeAccess;
-        }
-
-        return flags;
-    }
 }

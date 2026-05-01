@@ -1,10 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 using Bicep.Core.Configuration;
 using Bicep.LanguageServer.Providers;
 using MediatR;
@@ -34,7 +30,7 @@ namespace Bicep.LanguageServer.Handlers
         private readonly ILanguageServerFacade server;
 
         public BicepCreateConfigFileHandler(ILanguageServerFacade server, IClientCapabilitiesProvider clientCapabilitiesProvider, ILogger<BicepCreateConfigFileHandler> logger, ISerializer serializer)
-            :base(LangServerConstants.CreateConfigFile, serializer)
+            : base(LangServerConstants.CreateConfigFile, serializer)
         {
             this.clientCapabilitiesProvider = clientCapabilitiesProvider;
             this.server = server;

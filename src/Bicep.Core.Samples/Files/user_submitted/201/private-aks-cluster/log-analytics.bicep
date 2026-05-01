@@ -4,12 +4,7 @@ param location string = resourceGroup().location
 @description('Specifies the name of the Log Analytics Workspace.')
 param logAnalyticsWorkspaceName string
 
-@allowed([
-  'Free'
-  'Standalone'
-  'PerNode'
-  'PerGB2018'
-])
+@allowed(['Free', 'Standalone', 'PerNode', 'PerGB2018'])
 @description('Specifies the service tier of the workspace: Free, Standalone, PerNode, Per-GB.')
 param logAnalyticsSku string = 'PerGB2018'
 

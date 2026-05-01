@@ -5,6 +5,7 @@ using Bicep.Core.Diagnostics;
 using Bicep.Core.Intermediate;
 using Bicep.Core.Syntax;
 using Bicep.Core.TypeSystem;
+using Bicep.Core.TypeSystem.Types;
 
 namespace Bicep.Core.Semantics
 {
@@ -17,10 +18,9 @@ namespace Bicep.Core.Semantics
         IDiagnosticLookup parsingErrorLookup,
         IDiagnosticWriter diagnosticWriter);
 
-    public delegate ObjectExpression? DecoratorEvaluator(
-        FunctionCallExpression functionCall,
-        TypeSymbol targetType,
-        ObjectExpression? targetObject);
+    public delegate Expression DecoratorEvaluator(
+        FunctionCallExpression decorator,
+        Expression decorated);
 
     public class Decorator
     {
@@ -46,7 +46,7 @@ namespace Bicep.Core.Semantics
         {
             // The following line makes the simplifying assumption that nullability does not impact decorator validity. This assumption is true at the moment
             // because aside from @metadata and @description (which are attachable to targets of any type), all decorators represent validation constraints
-            // (which are no-ops on null values within the ARM runtime). This assumption may or may not hold when 3P extensibility providers define their own
+            // (which are no-ops on null values within the ARM runtime). This assumption may or may not hold when 3P extensions define their own
             // decorators, at which point we'll probably want a .AllowsNullableTargets property on decorators or the like.
             targetType = RemoveImplicitNull(targetType);
 
@@ -64,14 +64,14 @@ namespace Bicep.Core.Semantics
             this.validator?.Invoke(this.Overload.Name, decoratorSyntax, targetType, typeManager, binder, parsingErrorLookup, diagnosticWriter);
         }
 
-        public ObjectExpression? Evaluate(FunctionCallExpression functionCall, TypeSymbol targetType, ObjectExpression? targetObject)
+        public Expression Evaluate(FunctionCallExpression functionCall, Expression decoratedExpression)
         {
             if (this.evaluator is null)
             {
-                return targetObject;
+                return decoratedExpression;
             }
 
-            return this.evaluator(functionCall, RemoveImplicitNull(targetType), targetObject);
+            return this.evaluator(functionCall, decoratedExpression);
         }
 
         private static TypeSymbol RemoveImplicitNull(TypeSymbol type) => TypeHelper.TryRemoveNullability(type) ?? type;

@@ -1,15 +1,17 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Text.Json;
 using Bicep.Core.Extensions;
 using Bicep.Core.Json;
-using System.Text.Json;
 
 namespace Bicep.Core.Configuration
 {
     public class AnalyzersConfiguration : ConfigurationSection<JsonElement>
     {
         public AnalyzersConfiguration(JsonElement data) : base(data) { }
+
+        public AnalyzersConfiguration(string json) : base(JsonElementFactory.CreateElement(json)) { }
 
         public static AnalyzersConfiguration Empty => CreateEmptyAnalyzersConfiguration();
 

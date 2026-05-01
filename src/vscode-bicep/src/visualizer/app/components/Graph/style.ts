@@ -1,8 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-import { Stylesheet } from "cytoscape";
+import cytoscape, { StylesheetStyle } from "cytoscape";
 import { DefaultTheme } from "styled-components";
-
 import { importResourceIconInline } from "../../assets/icons/azure";
 import moduleIcon from "../../assets/icons/azure/general/10802-icon-service-Folder-Blank.svg";
 
@@ -34,14 +33,12 @@ function truncate(text: string, lengthLimit: number) {
   const headLength = Math.ceil(charsLength / 2);
   const tailLength = Math.floor(charsLength / 2);
 
-  return (
-    text.substr(0, headLength) + "..." + text.substr(text.length - tailLength)
-  );
+  return text.substr(0, headLength) + "..." + text.substr(text.length - tailLength);
 }
 
 function createDataUri(svg: string) {
   const domParser = new DOMParser();
-  const svgElement = domParser.parseFromString(svg, "text/xml").documentElement;
+  const svgElement = domParser.parseFromString(svg, "text/xml").documentElement; // CodeQL [SM01525] svg is not from user input
 
   return "data:image/svg+xml;utf8," + encodeURIComponent(svgElement.outerHTML);
 }
@@ -50,10 +47,9 @@ export async function createChildlessNodeBackgroundUri(
   symbol: string,
   type: string,
   isCollection: boolean,
-  theme: DefaultTheme
+  theme: DefaultTheme,
 ): Promise<string> {
-  const icon =
-    type !== "<module>" ? await importResourceIconInline(type) : moduleIcon;
+  const icon = type !== "<module>" ? await importResourceIconInline(type) : moduleIcon;
 
   type = type.split("/").pop() ?? type;
   type += isCollection ? "[]" : "";
@@ -66,14 +62,10 @@ export async function createChildlessNodeBackgroundUri(
           ${icon}
         </svg>
       </g>
-      <text x="72" y="36" font-family="${
-        theme.fontFamily
-      }" font-size="16" fill="${foregroundColor}">
+      <text x="72" y="36" font-family="${theme.fontFamily}" font-size="16" fill="${foregroundColor}">
        ${escapeXml(truncate(symbol, 17))}
       </text>
-      <text x="72" y="56" font-family="${
-        theme.fontFamily
-      }" font-size="12" fill="${foregroundSecondaryColor}">
+      <text x="72" y="56" font-family="${theme.fontFamily}" font-size="12" fill="${foregroundSecondaryColor}">
        ${escapeXml(truncate(type, 23))}
       </text>
     </svg>
@@ -82,11 +74,7 @@ export async function createChildlessNodeBackgroundUri(
   return createDataUri(backgroundSvg);
 }
 
-export function createContainerNodeBackgroundUri(
-  symbol: string,
-  isCollection: boolean,
-  theme: DefaultTheme
-): string {
+export function createContainerNodeBackgroundUri(symbol: string, isCollection: boolean, theme: DefaultTheme): string {
   symbol += isCollection ? " <collection>" : "";
 
   const { foregroundSecondaryColor } = theme.common;
@@ -95,9 +83,7 @@ export function createContainerNodeBackgroundUri(
       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18">
         ${moduleIcon}
       </svg>
-      <text x="28" y="14" font-family="${
-        theme.fontFamily
-      }" font-size="12" fill="${foregroundSecondaryColor}">
+      <text x="28" y="14" font-family="${theme.fontFamily}" font-size="12" fill="${foregroundSecondaryColor}">
        ${escapeXml(truncate(symbol, 37))}
       </text>
     </svg>
@@ -106,7 +92,7 @@ export function createContainerNodeBackgroundUri(
   return createDataUri(backgroundSvg);
 }
 
-export function createStylesheet(theme: DefaultTheme): Stylesheet[] {
+export function createStylesheet(theme: DefaultTheme): StylesheetStyle[] {
   const {
     common: { errorIndicatorColor },
     graph: { childlessNode, containerNode, edge },
@@ -122,10 +108,8 @@ export function createStylesheet(theme: DefaultTheme): Stylesheet[] {
         "background-color": childlessNode.backgroundColor,
         "background-image": "data(backgroundDataUri)",
         "border-width": childlessNode.borderWidth,
-        "border-color": (node) =>
-          node.data("hasError") === true
-            ? errorIndicatorColor
-            : childlessNode.borderColor,
+        "border-color": (node: cytoscape.NodeSingular) =>
+          node.data("hasError") === true ? errorIndicatorColor : childlessNode.borderColor,
         "border-opacity": childlessNode.borderOpacity,
       },
     },
@@ -138,10 +122,8 @@ export function createStylesheet(theme: DefaultTheme): Stylesheet[] {
         "background-position-x": 12,
         "background-position-y": 8,
         "border-width": containerNode.borderWidth,
-        "border-color": (node) =>
-          node.data("hasError") === true
-            ? errorIndicatorColor
-            : containerNode.borderColor,
+        "border-color": (node: cytoscape.NodeSingular) =>
+          node.data("hasError") === true ? errorIndicatorColor : containerNode.borderColor,
         "border-opacity": containerNode.borderOpacity,
         "background-opacity": containerNode.backgroundOpacity,
         "padding-top": "40px",

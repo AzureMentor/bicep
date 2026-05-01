@@ -1,6 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
 using System.Reflection;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Parsing;
@@ -174,6 +173,6 @@ namespace Bicep.Core.UnitTests.TypeSystem
             yield return CreateRow("empty file", new Parser("").Program());
         }
 
-        private static object[] CreateRow(string name, SyntaxBase expression) => new object[] { name, expression };
+        private static object[] CreateRow(string name, SyntaxBase expression) => [name, expression];
     }
 }

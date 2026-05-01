@@ -1,24 +1,18 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Bicep.Core.Modules;
-using Bicep.Core.Registry;
-using Bicep.Core.Syntax;
-using Bicep.Core.Workspaces;
-using Bicep.LanguageServer.CompilationManager;
-using OmniSharp.Extensions.LanguageServer.Protocol;
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
-using System.Threading;
-using System.Threading.Tasks;
+using Bicep.Core.Registry;
+using Bicep.Core.SourceGraph;
+using Bicep.LanguageServer.CompilationManager;
+using OmniSharp.Extensions.LanguageServer.Protocol;
 
 namespace Bicep.LanguageServer.Registry
 {
     public sealed class ModuleRestoreScheduler : IModuleRestoreScheduler, IAsyncDisposable
     {
-        private record QueueItem(ICompilationManager CompilationManager, DocumentUri Uri, ImmutableArray<ModuleReference> ModuleReferences);
+        private record QueueItem(ICompilationManager CompilationManager, DocumentUri Uri, ImmutableArray<ArtifactReference> ModuleReferences);
 
         private record CompletionNotification(ICompilationManager CompilationManager, DocumentUri Uri);
 
@@ -45,14 +39,13 @@ namespace Bicep.LanguageServer.Registry
         /// Does not wait for the operation to complete and returns immediately.
         /// </summary>
         /// <param name="compilationManager"></param>
-        /// <param name="modules">The module references</param>
+        /// <param name="artifacts">The artifacts</param>
         /// <param name="documentUri">The document URI that needs to be recompiled once restore completes asynchronously</param>
-        public void RequestModuleRestore(ICompilationManager compilationManager, DocumentUri documentUri, IEnumerable<ModuleSourceResolutionInfo> modules)
+        public void RequestModuleRestore(ICompilationManager compilationManager, DocumentUri documentUri, IEnumerable<ArtifactReference> artifacts)
         {
             this.CheckDisposed();
 
-            var moduleReferences = this.moduleDispatcher.GetValidModuleReferences(modules).ToImmutableArray();
-            var item = new QueueItem(compilationManager, documentUri, moduleReferences);
+            var item = new QueueItem(compilationManager, documentUri, artifacts.ToImmutableArray());
             lock (this.queue)
             {
                 this.queue.Enqueue(item);
@@ -77,7 +70,7 @@ namespace Bicep.LanguageServer.Registry
                 if (this.consumerTask is not null)
                 {
                     // signal cancellation first
-                    this.cancellationTokenSource.Cancel();
+                    await this.cancellationTokenSource.CancelAsync();
 
                     lock (this.queue)
                     {
@@ -126,7 +119,7 @@ namespace Bicep.LanguageServer.Registry
                 foreach (var item in items)
                 {
                     token.ThrowIfCancellationRequested();
-                    if (!await this.moduleDispatcher.RestoreModules(item.ModuleReferences))
+                    if (!await this.moduleDispatcher.RestoreArtifacts(item.ModuleReferences, forceRestore: false))
                     {
                         // nothing needed to be restored
                         // no need to notify about completion

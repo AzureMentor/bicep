@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "languageVersion": "2.0",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "dev",
+      "templateHash": "12954689372426084422"
+    }
+  },
+  "imports": {
+    "microsoftGraphBeta": {
+      "provider": "MicrosoftGraph",
+      "version": "0.1.8-preview"
+    }
+  },
+  "resources": {
+    "resourceApp": {
+      "existing": true,
+      "import": "microsoftGraphBeta",
+      "type": "Microsoft.Graph/applications@beta",
+      "properties": {
+        "uniqueName": "resourceApp"
+      }
+    },
+    "group": {
+      "existing": true,
+      "import": "microsoftGraphBeta",
+      "type": "Microsoft.Graph/applications@beta",
+      "properties": {
+        "uniqueName": "myGroup"
+      }
+    }
+  }
+}

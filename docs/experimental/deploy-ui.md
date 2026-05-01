@@ -1,0 +1,1 @@
+This content has been moved to [Deployment Pane](https://learn.microsoft.com/azure/azure-resource-manager/bicep/visual-studio-code#deployment-pane).

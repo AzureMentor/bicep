@@ -1,46 +1,36 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using Bicep.Core;
-using Bicep.Core.Parsing;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
+using Bicep.Core.Text;
 using Bicep.Core.TypeSystem;
+using Bicep.Core.TypeSystem.Types;
 using Bicep.LanguageServer.CompilationManager;
 using Bicep.LanguageServer.Completions;
 using Bicep.LanguageServer.Utils;
+using Microsoft.WindowsAzure.ResourceStack.Common.Extensions;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
-using Microsoft.WindowsAzure.ResourceStack.Common.Extensions;
 
 namespace Bicep.LanguageServer.Handlers
 {
-    public class BicepSignatureHelpHandler : SignatureHelpHandlerBase
+    public class BicepSignatureHelpHandler(ICompilationManager compilationManager, DocumentSelectorFactory documentSelectorFactory) : SignatureHelpHandlerBase
     {
         private const string FunctionArgumentStart = "(";
         private const string FunctionArgumentEnd = ")";
-
-        private readonly ICompilationManager compilationManager;
-
-        public BicepSignatureHelpHandler(ICompilationManager compilationManager)
-        {
-            this.compilationManager = compilationManager;
-        }
+        private const string TypeArgumentsStart = "<";
+        private const string TypeArgumentsEnd = ">";
 
         public override Task<SignatureHelp?> Handle(SignatureHelpParams request, CancellationToken cancellationToken)
         {
             // local function
-            static Task<SignatureHelp?> NoHelp() => Task.FromResult<SignatureHelp?>(null);
 
-            CompilationContext? context = this.compilationManager.GetCompilation(request.TextDocument.Uri);
+            CompilationContext? context = compilationManager.GetCompilation(request.TextDocument.Uri);
             if (context == null)
             {
                 return NoHelp();
@@ -48,15 +38,56 @@ namespace Bicep.LanguageServer.Handlers
 
             int offset = PositionHelper.GetOffset(context.LineStarts, request.Position);
 
-            var functionCall = GetActiveFunctionCall(context.ProgramSyntax, offset);
-            if (functionCall == null)
+            return GetActiveSyntaxInNeedOfSignatureHelp(context.ProgramSyntax, offset) switch
             {
-                return NoHelp();
+                FunctionCallSyntaxBase functionCall
+                    => Handle(context, functionCall, offset, request),
+                ParameterizedTypeInstantiationSyntaxBase typeInstantiation
+                    => Handle(context, typeInstantiation, offset),
+                _ => NoHelp(),
+            };
+        }
+
+        private static Task<SignatureHelp?> NoHelp() => Task.FromResult<SignatureHelp?>(null);
+
+        private static SyntaxBase? GetActiveSyntaxInNeedOfSignatureHelp(ProgramSyntax syntax, int offset)
+        {
+            // if the cursor is placed after the closing paren of a function, it needs to count as outside of that function call
+            // for purposes of signature help (otherwise we'll show the wrong function when function calls are nested)
+            var matchingNodes = SyntaxMatcher.FindNodesMatchingOffsetExclusive(syntax, offset);
+
+            var functionCallIndex = matchingNodes
+                .FindLastIndex(
+                    matchingNodes.Count - 1,
+                    current => current is FunctionCallSyntaxBase functionCall && TextSpan.BetweenExclusive(functionCall.OpenParen.Span, functionCall.CloseParen).ContainsInclusive(offset));
+
+            if (functionCallIndex >= 0)
+            {
+                return matchingNodes[functionCallIndex];
             }
 
+            var parameterizedTypeInstantiationIndex = matchingNodes
+                .FindLastIndex(
+                    matchingNodes.Count - 1,
+                    current => current is ParameterizedTypeInstantiationSyntaxBase typeInstantiation &&
+                        TextSpan.BetweenExclusive(typeInstantiation.OpenChevron.Span, typeInstantiation.CloseChevron).ContainsInclusive(offset));
+
+            if (parameterizedTypeInstantiationIndex >= 0)
+            {
+                return matchingNodes[parameterizedTypeInstantiationIndex];
+            }
+
+            return null;
+        }
+
+        private static Task<SignatureHelp?> Handle(CompilationContext context,
+            FunctionCallSyntaxBase functionCall,
+            int offset,
+            SignatureHelpParams request)
+        {
             var semanticModel = context.Compilation.GetEntrypointSemanticModel();
             var symbol = semanticModel.GetSymbolInfo(functionCall);
-            if (symbol is not FunctionSymbol functionSymbol)
+            if (symbol is not IFunctionSymbol functionSymbol)
             {
                 // no symbol or symbol is not a function
                 return NoHelp();
@@ -64,8 +95,7 @@ namespace Bicep.LanguageServer.Handlers
 
             // suppress ErrorType in arguments because the code is being written
             // this prevents function signature mismatches due to errors
-            var arguments = functionCall.Arguments.ToImmutableArray();
-            var normalizedArgumentTypes = NormalizeArgumentTypes(arguments, semanticModel);
+            var normalizedArgumentTypes = NormalizeArgumentTypes(functionCall.Arguments, semanticModel);
 
             // do not include return type in signatures for decorator functions
             // because the return type on decorators is currently an internal implementation detail
@@ -73,24 +103,10 @@ namespace Bicep.LanguageServer.Handlers
             // (can revisit if we add decorator extensibility in the future)
             var includeReturnType = semanticModel.Binder.GetParent(functionCall) is not DecoratorSyntax;
 
-            var signatureHelp = CreateSignatureHelp(arguments, normalizedArgumentTypes, functionSymbol, offset, includeReturnType);
+            var signatureHelp = CreateSignatureHelp(functionCall.Arguments, normalizedArgumentTypes, functionSymbol, offset, includeReturnType);
             signatureHelp = TryReuseActiveSignature(request.Context, signatureHelp);
 
             return Task.FromResult<SignatureHelp?>(signatureHelp);
-        }
-
-        private static FunctionCallSyntaxBase? GetActiveFunctionCall(ProgramSyntax syntax, int offset)
-        {
-            // if the cursor is placed after the closing paren of a function, it needs to count as outside of that function call
-            // for purposes of signature help (otherwise we'll show the wrong function when function calls are nested)
-            var matchingNodes = SyntaxMatcher.FindNodesMatchingOffsetExclusive(syntax, offset);
-
-            var index = matchingNodes
-                .FindLastIndex(
-                    matchingNodes.Count - 1,
-                    current => current is FunctionCallSyntaxBase functionCall && TextSpan.BetweenExclusive(functionCall.OpenParen.Span, functionCall.CloseParen).ContainsInclusive(offset));
-
-            return index < 0 ? null : (FunctionCallSyntaxBase)matchingNodes[index];
         }
 
         private static SignatureHelp TryReuseActiveSignature(SignatureHelpContext? context, SignatureHelp signatureHelp)
@@ -149,7 +165,7 @@ namespace Bicep.LanguageServer.Handlers
                 .ToList();
         }
 
-        private static SignatureHelp CreateSignatureHelp(ImmutableArray<FunctionArgumentSyntax> arguments, List<TypeSymbol> normalizedArgumentTypes, FunctionSymbol symbol, int offset, bool includeReturnType)
+        private static SignatureHelp CreateSignatureHelp(ImmutableArray<FunctionArgumentSyntax> arguments, List<TypeSymbol> normalizedArgumentTypes, IFunctionSymbol symbol, int offset, bool includeReturnType)
         {
             // exclude overloads where the specified arguments have exceeded the maximum
             // allow count mismatches because the user may not have started typing the arguments yet
@@ -261,15 +277,102 @@ namespace Bicep.LanguageServer.Handlers
             });
         }
 
+        private static Task<SignatureHelp?> Handle(CompilationContext context,
+            ParameterizedTypeInstantiationSyntaxBase typeInstantiation,
+            int offset)
+        {
+            var semanticModel = context.Compilation.GetEntrypointSemanticModel();
+            var symbol = semanticModel.GetSymbolInfo(typeInstantiation);
+            if (GetSymbolType(symbol) is not TypeTemplate parameterizable)
+            {
+                // no symbol or symbol type is not parameterizable
+                return NoHelp();
+            }
+
+            var documentation = symbol switch
+            {
+                AmbientTypeSymbol ambientType => ambientType.Description,
+                _ => null,
+            };
+
+            return Task.FromResult<SignatureHelp?>(CreateSignatureHelp(parameterizable, documentation, typeInstantiation.Arguments, offset));
+        }
+
+        private static TypeSymbol? GetSymbolType(Symbol? symbol) => symbol switch
+        {
+            ITypeReference typeReference => typeReference.Type,
+            DeclaredSymbol declared => declared.Type,
+            PropertySymbol property => property.Type,
+            _ => null,
+        };
+
+        private static SignatureHelp CreateSignatureHelp(TypeTemplate typeTemplate, string? documentation, ImmutableArray<ParameterizedTypeArgumentSyntax> arguments, int offset)
+        {
+            return new SignatureHelp
+            {
+                Signatures = new Container<SignatureInformation>(CreateSignature(typeTemplate, documentation)),
+                ActiveSignature = 0,
+                ActiveParameter = GetActiveParameterIndex(arguments, offset)
+            };
+        }
+
+        private static int? GetActiveParameterIndex(ImmutableArray<ParameterizedTypeArgumentSyntax> arguments, int offset)
+        {
+            for (int i = 0; i < arguments.Length; i++)
+            {
+                // the comma token is included in the argument node, so we need to check the span of the expression
+                if (arguments[i].Expression.Span.ContainsInclusive(offset))
+                {
+                    return i;
+                }
+            }
+
+            return null;
+        }
+
+        private static SignatureInformation CreateSignature(TypeTemplate typeTemplate, string? documentation)
+        {
+            const string delimiter = ", ";
+
+            var typeSignature = new StringBuilder();
+            var parameters = new List<ParameterInformation>();
+
+            typeSignature.Append(typeTemplate.UnparameterizedName);
+            typeSignature.Append(TypeArgumentsStart);
+
+            for (int i = 0; i < typeTemplate.Parameters.Length; i++)
+            {
+                if (i > 0)
+                {
+                    typeSignature.Append(delimiter);
+                }
+
+                AppendParameter(typeSignature, parameters, typeTemplate.Parameters[i].Signature, typeTemplate.Parameters[i].Description);
+            }
+
+            typeSignature.Append(TypeArgumentsEnd);
+
+            return new SignatureInformation
+            {
+                Label = typeSignature.ToString(),
+                Documentation = documentation is not null
+                    ? new MarkupContent { Kind = MarkupKind.Markdown, Value = documentation }
+                    : null,
+                Parameters = new Container<ParameterInformation>(parameters)
+            };
+        }
+
         protected override SignatureHelpRegistrationOptions CreateRegistrationOptions(SignatureHelpCapability capability, ClientCapabilities clientCapabilities) => new()
         {
-            DocumentSelector = DocumentSelectorFactory.CreateForBicepAndParams(),
+            DocumentSelector = documentSelectorFactory.CreateForBicepAndParams(),
             /*
              * ( - triggers sig. help when starting function arguments
              * , - separates function arguments
              * ) - triggers sig. help for the outer function (or nothing)
+             * < - triggers sig. help when starting type parameterization arguments
+             * > - triggers sig. help for the outer parameterized type (or nothing)
              */
-            TriggerCharacters = new Container<string>(FunctionArgumentStart, ",", FunctionArgumentEnd),
+            TriggerCharacters = new Container<string>(FunctionArgumentStart, ",", FunctionArgumentEnd, TypeArgumentsStart, TypeArgumentsEnd),
             RetriggerCharacters = new Container<string>()
         };
     }

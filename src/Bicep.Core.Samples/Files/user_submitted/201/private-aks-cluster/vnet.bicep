@@ -76,10 +76,7 @@ resource bastionSubnetNsg 'Microsoft.Network/networkSecurityGroups@2020-08-01' =
           protocol: 'Tcp'
           sourcePortRange: '*'
           sourceAddressPrefix: 'GatewayManager'
-          destinationPortRanges: [
-            '443'
-            '4443'
-          ]
+          destinationPortRanges: ['443', '4443']
           destinationAddressPrefix: '*'
           access: 'Allow'
           priority: 120
@@ -105,10 +102,7 @@ resource bastionSubnetNsg 'Microsoft.Network/networkSecurityGroups@2020-08-01' =
           protocol: '*'
           sourcePortRange: '*'
           sourceAddressPrefix: 'VirtualNetwork'
-          destinationPortRanges: [
-            '8080'
-            '5701'
-          ]
+          destinationPortRanges: ['8080', '5701']
           destinationAddressPrefix: 'VirtualNetwork'
           access: 'Allow'
           priority: 140
@@ -134,10 +128,7 @@ resource bastionSubnetNsg 'Microsoft.Network/networkSecurityGroups@2020-08-01' =
           protocol: 'Tcp'
           sourcePortRange: '*'
           sourceAddressPrefix: '*'
-          destinationPortRanges: [
-            '22'
-            '3389'
-          ]
+          destinationPortRanges: ['22', '3389']
           destinationAddressPrefix: 'VirtualNetwork'
           access: 'Allow'
           priority: 100
@@ -166,9 +157,7 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2020-08-01' = {
   location: location
   properties: {
     addressSpace: {
-      addressPrefixes: [
-        virtualNetworkAddressPrefixes
-      ]
+      addressPrefixes: [virtualNetworkAddressPrefixes]
     }
     subnets: [
       {

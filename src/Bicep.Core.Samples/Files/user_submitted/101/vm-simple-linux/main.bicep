@@ -12,12 +12,7 @@ param vmSshKey string
 param dnsLabelPrefix string = toLower('simplelinuxvm-${uniqueString(resourceGroup().id)}')
 
 @description('The Ubuntu version for the VM. This will pick a fully patched image of this given Ubuntu version.')
-@allowed([
-  '12.04.5-LTS'
-  '14.04.5-LTS'
-  '16.04.0-LTS'
-  '18.04-LTS'
-])
+@allowed(['12.04.5-LTS', '14.04.5-LTS', '16.04.0-LTS', '18.04-LTS'])
 param ubuntuOSVersion string = '18.04-LTS'
 
 @description('Location for all resources.')
@@ -103,9 +98,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2020-06-01' = {
   location: location
   properties: {
     addressSpace: {
-      addressPrefixes: [
-        addressPrefix
-      ]
+      addressPrefixes: [addressPrefix]
     }
   }
 }

@@ -2,8 +2,9 @@ using 'main.bicep'
 //@[00:2624) ProgramSyntax
 //@[00:0018) ├─UsingDeclarationSyntax
 //@[00:0005) | ├─Token(Identifier) |using|
-//@[06:0018) | └─StringSyntax
-//@[06:0018) |   └─Token(StringComplete) |'main.bicep'|
+//@[06:0018) | ├─StringSyntax
+//@[06:0018) | | └─Token(StringComplete) |'main.bicep'|
+//@[18:0018) | └─SkippedTriviaSyntax
 //@[18:0020) ├─Token(NewLine) |\n\n|
 
 param testAny = any('foo')
@@ -303,7 +304,7 @@ param testFilter = filter([1, 2], i => i < 'foo')
 //@[39:0040) |   |     ├─VariableAccessSyntax
 //@[39:0040) |   |     | └─IdentifierSyntax
 //@[39:0040) |   |     |   └─Token(Identifier) |i|
-//@[41:0042) |   |     ├─Token(LessThan) |<|
+//@[41:0042) |   |     ├─Token(LeftChevron) |<|
 //@[43:0048) |   |     └─StringSyntax
 //@[43:0048) |   |       └─Token(StringComplete) |'foo'|
 //@[48:0049) |   └─Token(RightParen) |)|

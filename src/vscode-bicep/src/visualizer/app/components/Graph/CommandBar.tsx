@@ -1,9 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-import { VFC } from "react";
-import styled, { DefaultTheme, withTheme, css } from "styled-components";
-import { VscWand } from "react-icons/vsc";
+import { FC } from "react";
 import { CgMaximize, CgZoomIn, CgZoomOut } from "react-icons/cg";
+import { VscWand } from "react-icons/vsc";
+import styled, { css, DefaultTheme, withTheme } from "styled-components";
 import { TooltipHost } from "../Tooltip";
 
 interface CommandBarProps {
@@ -61,41 +61,30 @@ const CommandBarButton = styled.div`
   }}
 `;
 
-const CommandBarComponent: VFC<CommandBarProps> = (props) => (
+const CommandBarComponent: FC<CommandBarProps> = (props) => (
   <CommandBarContainer>
     <TooltipHost content="Zoom in">
       <CommandBarButton onClick={props.onZoomIn}>
-        <CgZoomIn
-          size={20}
-          color={props.theme.common.foregroundSecondaryColor}
-        />
+        <CgZoomIn size={20} color={props.theme.common.foregroundSecondaryColor} />
       </CommandBarButton>
     </TooltipHost>
     <TooltipHost content="Zoom out">
       <CommandBarButton onClick={props.onZoomOut}>
-        <CgZoomOut
-          size={20}
-          color={props.theme.common.foregroundSecondaryColor}
-        />
+        <CgZoomOut size={20} color={props.theme.common.foregroundSecondaryColor} />
       </CommandBarButton>
     </TooltipHost>
     <TooltipHost content="Reset layout">
       <CommandBarButton onClick={props.onLayout}>
-        <VscWand
-          size={20}
-          color={props.theme.common.foregroundSecondaryColor}
-        />
+        <VscWand size={20} color={props.theme.common.foregroundSecondaryColor} />
       </CommandBarButton>
     </TooltipHost>
     <TooltipHost content="Fit">
       <CommandBarButton onClick={props.onFit}>
-        <CgMaximize
-          size={20}
-          color={props.theme.common.foregroundSecondaryColor}
-        />
+        <CgMaximize size={20} color={props.theme.common.foregroundSecondaryColor} />
       </CommandBarButton>
     </TooltipHost>
   </CommandBarContainer>
 );
 
-export const CommandBar = withTheme(CommandBarComponent);
+// Workaround for https://github.com/styled-components/styled-components/issues/4082.
+export const CommandBar = withTheme(CommandBarComponent) as FC<Omit<CommandBarProps, "theme">>;

@@ -1,18 +1,18 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
-using System.Threading.Tasks;
 using Bicep.Core.Extensions;
 using Bicep.Core.Parsing;
 using Bicep.Core.Samples;
 using Bicep.Core.Semantics;
+using Bicep.Core.SourceGraph;
 using Bicep.Core.Syntax;
 using Bicep.Core.Syntax.Visitors;
+using Bicep.Core.Text;
+using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
-using Bicep.Core.Workspaces;
+using Bicep.Core.UnitTests.Utils;
 using Bicep.LangServer.IntegrationTests.Extensions;
 using Bicep.LangServer.IntegrationTests.Helpers;
 using Bicep.LanguageServer.Utils;
@@ -82,12 +82,12 @@ namespace Bicep.LangServer.IntegrationTests
                 // if the cursor is present immediate after the function argument opening paren,
                 // the signature help can only show the signature of the enclosing function
                 var startOffset = functionCall.OpenParen.GetEndPosition();
-                await ValidateOffset(helper.Client, uri, tree, startOffset, symbol as FunctionSymbol, expectDecorator);
+                await ValidateOffset(helper.Client, uri, tree, startOffset, symbol as IFunctionSymbol, expectDecorator);
 
                 // if the cursor is present immediately before the function argument closing paren,
                 // the signature help can only show the signature of the enclosing function
                 var endOffset = functionCall.CloseParen.Span.Position;
-                await ValidateOffset(helper.Client, uri, tree, endOffset, symbol as FunctionSymbol, expectDecorator);
+                await ValidateOffset(helper.Client, uri, tree, endOffset, symbol as IFunctionSymbol, expectDecorator);
             }
         }
 
@@ -118,7 +118,7 @@ namespace Bicep.LangServer.IntegrationTests
                 new List<SyntaxBase>(),
                 (accumulated, current) =>
                 {
-                    if (current is not FunctionCallSyntaxBase)
+                    if (current is not FunctionCallSyntaxBase && current is not ParameterizedTypeInstantiationSyntaxBase)
                     {
                         accumulated.Add(current);
                     }
@@ -128,7 +128,7 @@ namespace Bicep.LangServer.IntegrationTests
                 accumulated => accumulated,
                 // requesting signature help on non-function nodes that are placed inside function call nodes will produce signature help
                 // since we don't want that, stop the visitor from visiting inner nodes when a function call is encountered
-                (accumulated, current) => current is not FunctionCallSyntaxBase);
+                (accumulated, current) => current is not FunctionCallSyntaxBase && current is not ParameterizedTypeInstantiationSyntaxBase);
 
             foreach (var nonFunction in nonFunctions)
             {
@@ -141,7 +141,46 @@ namespace Bicep.LangServer.IntegrationTests
             }
         }
 
-        private static async Task ValidateOffset(ILanguageClient client, DocumentUri uri, BicepSourceFile bicepFile, int offset, FunctionSymbol? symbol, bool expectDecorator)
+        [TestMethod]
+        public async Task Signature_help_works_with_user_defined_functions()
+        {
+            var (text, cursor) = ParserHelper.GetFileWithSingleCursor(@"
+@description('Checks whether the input is true in a roundabout way')
+func isTrue(input bool) bool => !(input == false)
+
+var test = isTrue(|)
+");
+
+            var helper = await DefaultServer.GetAsync();
+            var file = await new ServerRequestHelper(TestContext, helper).OpenFile(text);
+
+            var signatureHelp = await file.RequestSignatureHelp(cursor);
+            var signature = signatureHelp!.Signatures.Single();
+
+            signature.Label.Should().Be("isTrue(input: bool): bool");
+            signature.Documentation!.MarkupContent!.Value.Should().Be("Checks whether the input is true in a roundabout way");
+        }
+
+        [TestMethod]
+        public async Task Signature_help_works_with_parameterized_types()
+        {
+            var (text, cursor) = ParserHelper.GetFileWithSingleCursor(@"type resourceDerived = resourceInput<|>");
+
+            using var server = await MultiFileLanguageServerHelper.StartLanguageServer(TestContext);
+            var file = await new ServerRequestHelper(TestContext, server).OpenFile(text);
+
+            var signatureHelp = await file.RequestSignatureHelp(cursor);
+            var signature = signatureHelp!.Signatures.Single();
+
+            signature.Label.Should().Be("resourceInput<ResourceTypeIdentifier: string>");
+            signature.Documentation!.MarkupContent!.Value.Should().Be("""
+                Use the type definition of the input for a specific resource rather than a user-defined type.
+
+                NB: The type definition will be checked by Bicep when the template is compiled but will not be enforced by the ARM engine during a deployment.
+                """);
+        }
+
+        private static async Task ValidateOffset(ILanguageClient client, DocumentUri uri, BicepSourceFile bicepFile, int offset, IFunctionSymbol? symbol, bool expectDecorator)
         {
             var position = PositionHelper.GetPosition(bicepFile.LineStarts, offset);
             var initial = await RequestSignatureHelp(client, position, uri);
@@ -184,7 +223,7 @@ namespace Bicep.LangServer.IntegrationTests
             }
         }
 
-        private static void AssertValidSignatureHelp(SignatureHelp? signatureHelp, FunctionSymbol symbol, bool expectDecorator)
+        private static void AssertValidSignatureHelp(SignatureHelp? signatureHelp, IFunctionSymbol symbol, bool expectDecorator)
         {
             signatureHelp.Should().NotBeNull();
 
@@ -227,8 +266,9 @@ namespace Bicep.LangServer.IntegrationTests
                 signature.Documentation!.MarkupContent.Should().NotBeNull();
                 signature.Documentation.MarkupContent!.Kind.Should().Be(MarkupKind.Markdown);
 
+                // func declarations will only contain documentation if there's a @description decorator.
                 // List functions provided by the bicep-types-az library do not contain documentation: https://github.com/Azure/bicep/issues/7611
-                if (!isWellKnownListFunction)
+                if (symbol is not DeclaredFunctionSymbol && !isWellKnownListFunction)
                 {
                     signature.Documentation.MarkupContent.Value.Should().NotBeEmpty();
                 }

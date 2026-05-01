@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Threading;
-using System.Threading.Tasks;
 using Bicep.LanguageServer.Deploy;
 using Bicep.LanguageServer.Telemetry;
 using MediatR;
@@ -25,7 +23,7 @@ namespace Bicep.LanguageServer.Handlers
         /// <summary>
         /// Handles "deploy/waitForCompletion" LSP request.
         /// This handler waits for the deployment to complete and sends a "deploymentComplete" notification to the client.
-        /// This notification can be used on the client side to write success/failure messsage to the output channel without
+        /// This notification can be used on the client side to write success/failure message to the output channel without
         /// blocking other commands.
         /// Note: Base handler (ExecuteTypedResponseCommandHandlerBase) is serial. This blocks other commands on the client side.
         /// To avoid the above issue, we changed the RequestProcessType to parallel in <see cref="Server"/>

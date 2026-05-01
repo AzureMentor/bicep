@@ -38,14 +38,10 @@ resource vnet 'Microsoft.Network/virtualNetworks@2020-06-01' = {
   location: resourceGroup().location
   properties: {
     addressSpace: {
-      addressPrefixes: [
-        vnetaddressPrefix
-      ]
+      addressPrefixes: [vnetaddressPrefix]
     }
     dhcpOptions: {
-      dnsServers: [
-        dnsServer
-      ]
+      dnsServers: [dnsServer]
     }
     subnets: [
       {

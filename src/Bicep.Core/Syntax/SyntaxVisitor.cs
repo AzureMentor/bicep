@@ -1,9 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Bicep.Core.Parsing;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using Bicep.Core.Parsing;
 
 namespace Bicep.Core.Syntax
 {
@@ -37,11 +36,13 @@ namespace Bicep.Core.Syntax
 
         public abstract void VisitIfConditionSyntax(IfConditionSyntax syntax);
 
-        public abstract void VisitImportAsClauseSyntax(ImportAsClauseSyntax syntax);
+        public abstract void VisitAliasAsClauseSyntax(AliasAsClauseSyntax syntax);
 
-        public abstract void VisitImportDeclarationSyntax(ImportDeclarationSyntax syntax);
+        public abstract void VisitExtensionDeclarationSyntax(ExtensionDeclarationSyntax syntax);
 
-        public abstract void VisitImportWithClauseSyntax(ImportWithClauseSyntax syntax);
+        public abstract void VisitExtensionConfigAssignmentSyntax(ExtensionConfigAssignmentSyntax syntax);
+
+        public abstract void VisitExtensionWithClauseSyntax(ExtensionWithClauseSyntax syntax);
 
         public abstract void VisitInstanceFunctionCallSyntax(InstanceFunctionCallSyntax syntax);
 
@@ -57,11 +58,15 @@ namespace Bicep.Core.Syntax
 
         public abstract void VisitModuleDeclarationSyntax(ModuleDeclarationSyntax syntax);
 
+        public abstract void VisitTestDeclarationSyntax(TestDeclarationSyntax syntax);
+
         public abstract void VisitNonNullAssertionSyntax(NonNullAssertionSyntax syntax);
 
         public abstract void VisitNullableTypeSyntax(NullableTypeSyntax syntax);
 
         public abstract void VisitNullLiteralSyntax(NullLiteralSyntax syntax);
+
+        public abstract void VisitNoneLiteralSyntax(NoneLiteralSyntax syntax);
 
         public abstract void VisitObjectPropertySyntax(ObjectPropertySyntax syntax);
 
@@ -97,6 +102,8 @@ namespace Bicep.Core.Syntax
 
         public abstract void VisitResourceTypeSyntax(ResourceTypeSyntax syntax);
 
+        public abstract void VisitAssertDeclarationSyntax(AssertDeclarationSyntax syntax);
+
         public abstract void VisitSeparatedSyntaxList(SeparatedSyntaxList syntax);
 
         public abstract void VisitSkippedTriviaSyntax(SkippedTriviaSyntax syntax);
@@ -119,11 +126,65 @@ namespace Bicep.Core.Syntax
 
         public abstract void VisitUsingDeclarationSyntax(UsingDeclarationSyntax syntax);
 
+        public abstract void VisitUsingWithClauseSyntax(UsingWithClauseSyntax syntax);
+
+        public abstract void VisitExtendsDeclarationSyntax(ExtendsDeclarationSyntax syntax);
+
         public abstract void VisitVariableAccessSyntax(VariableAccessSyntax syntax);
 
         public abstract void VisitVariableBlockSyntax(VariableBlockSyntax syntax);
 
         public abstract void VisitVariableDeclarationSyntax(VariableDeclarationSyntax syntax);
+
+        public abstract void VisitTypedVariableBlockSyntax(TypedVariableBlockSyntax syntax);
+
+        public abstract void VisitTypedLocalVariableSyntax(TypedLocalVariableSyntax syntax);
+
+        public abstract void VisitTypedLambdaSyntax(TypedLambdaSyntax syntax);
+
+        public abstract void VisitFunctionDeclarationSyntax(FunctionDeclarationSyntax syntax);
+
+        public abstract void VisitCompileTimeImportDeclarationSyntax(CompileTimeImportDeclarationSyntax syntax);
+
+        public abstract void VisitImportedSymbolsListSyntax(ImportedSymbolsListSyntax syntax);
+
+        public abstract void VisitImportedSymbolsListItemSyntax(ImportedSymbolsListItemSyntax syntax);
+
+        public abstract void VisitWildcardImportSyntax(WildcardImportSyntax syntax);
+
+        public abstract void VisitCompileTimeImportFromClauseSyntax(CompileTimeImportFromClauseSyntax syntax);
+
+        public abstract void VisitParameterizedTypeInstantiationSyntax(ParameterizedTypeInstantiationSyntax syntax);
+
+        public abstract void VisitInstanceParameterizedTypeInstantiationSyntax(InstanceParameterizedTypeInstantiationSyntax syntax);
+
+        public abstract void VisitParameterizedTypeArgumentSyntax(ParameterizedTypeArgumentSyntax syntax);
+
+        public abstract void VisitTypePropertyAccessSyntax(TypePropertyAccessSyntax syntax);
+
+        public abstract void VisitTypeAdditionalPropertiesAccessSyntax(TypeAdditionalPropertiesAccessSyntax syntax);
+
+        public abstract void VisitTypeArrayAccessSyntax(TypeArrayAccessSyntax syntax);
+
+        public abstract void VisitTypeItemsAccessSyntax(TypeItemsAccessSyntax syntax);
+
+        public abstract void VisitTypeVariableAccessSyntax(TypeVariableAccessSyntax syntax);
+
+        public abstract void VisitStringTypeLiteralSyntax(StringTypeLiteralSyntax syntax);
+
+        public abstract void VisitIntegerTypeLiteralSyntax(IntegerTypeLiteralSyntax syntax);
+
+        public abstract void VisitBooleanTypeLiteralSyntax(BooleanTypeLiteralSyntax syntax);
+
+        public abstract void VisitNullTypeLiteralSyntax(NullTypeLiteralSyntax syntax);
+
+        public abstract void VisitUnaryTypeOperationSyntax(UnaryTypeOperationSyntax syntax);
+
+        public abstract void VisitNonNullableTypeSyntax(NonNullableTypeSyntax syntax);
+
+        public abstract void VisitParenthesizedTypeSyntax(ParenthesizedTypeSyntax syntax);
+
+        public abstract void VisitSpreadExpressionSyntax(SpreadExpressionSyntax syntax);
 
         public void Visit(SyntaxBase? node)
         {

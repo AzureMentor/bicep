@@ -1,16 +1,16 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Linq;
 using Bicep.Core.Navigation;
 using Bicep.Core.Parsing;
+using Bicep.Core.Text;
 
 namespace Bicep.Core.Syntax
 {
     public class ParameterAssignmentSyntax : StatementSyntax, ITopLevelNamedDeclarationSyntax
     {
-        public ParameterAssignmentSyntax(Token keyword, IdentifierSyntax name, SyntaxBase assignment, SyntaxBase value)
-            : base(Enumerable.Empty<SyntaxBase>())
+        public ParameterAssignmentSyntax(IEnumerable<SyntaxBase> leadingNodes, Token keyword, IdentifierSyntax name, SyntaxBase assignment, SyntaxBase value)
+            : base(leadingNodes)
         {
             AssertKeyword(keyword, nameof(keyword), LanguageConstants.ParameterKeyword);
             AssertSyntaxType(name, nameof(name), typeof(IdentifierSyntax));

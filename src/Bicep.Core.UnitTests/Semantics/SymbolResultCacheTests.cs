@@ -1,18 +1,16 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
 using Bicep.Core.Semantics;
 using FluentAssertions;
-using Moq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
 
 namespace Bicep.Core.UnitTests.Semantics
 {
     [TestClass]
     public class SymbolResultCacheTests
     {
-        private static readonly MockRepository Repository = new MockRepository(MockBehavior.Strict);
+        private static readonly MockRepository Repository = new(MockBehavior.Strict);
 
         [TestMethod]
         public void Lookup_should_use_the_getter_function_to_select_items()

@@ -1,6 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Intermediate;
 using Bicep.Core.Syntax;
@@ -21,5 +20,7 @@ namespace Bicep.Core.Semantics
         FunctionOverload? GetMatchedFunctionOverload(FunctionCallSyntaxBase syntax);
 
         Expression? GetMatchedFunctionResultValue(FunctionCallSyntaxBase syntax);
+
+        TypeExpression? TryGetReifiedType(ParameterizedTypeInstantiationSyntaxBase syntax);
     }
 }

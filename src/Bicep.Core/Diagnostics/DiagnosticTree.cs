@@ -1,18 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Collections;
 using Bicep.Core.Collections.Trees;
 using Bicep.Core.Extensions;
-using Bicep.Core.Parsing;
-using Bicep.Core.PrettyPrint.Documents;
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
-using System.Xml;
+using Bicep.Core.Text;
 
 namespace Bicep.Core.Diagnostics
 {
@@ -69,7 +61,7 @@ namespace Bicep.Core.Diagnostics
                     // are spans of diagnostics attached to syntax nodes, and one syntax node can overlap with
                     // another only when one of them is enclosed by the other, the following situation is impossible:
                     //
-                    // ---|diganostic1.start...diagnostic1.end|
+                    // ---|diagnostic1.start...diagnostic1.end|
                     // --------|diagnostic1.start...diagnostic2.end|
                     // 
                     // If start < current.Start, and current is not enclosed by [start, end], end must be smaller

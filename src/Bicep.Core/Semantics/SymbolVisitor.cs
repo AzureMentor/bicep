@@ -1,5 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+
 using Bicep.Core.TypeSystem;
 
 namespace Bicep.Core.Semantics
@@ -41,6 +42,11 @@ namespace Bicep.Core.Semantics
             VisitDescendants(symbol);
         }
 
+        public virtual void VisitDeclaredFunctionSymbol(DeclaredFunctionSymbol symbol)
+        {
+            VisitDescendants(symbol);
+        }
+
         public virtual void VisitResourceSymbol(ResourceSymbol symbol)
         {
             VisitDescendants(symbol);
@@ -51,7 +57,17 @@ namespace Bicep.Core.Semantics
             VisitDescendants(symbol);
         }
 
+        public virtual void VisitTestSymbol(TestSymbol symbol)
+        {
+            VisitDescendants(symbol);
+        }
+
         public virtual void VisitOutputSymbol(OutputSymbol symbol)
+        {
+            VisitDescendants(symbol);
+        }
+
+        public virtual void VisitAssertSymbol(AssertSymbol symbol)
         {
             VisitDescendants(symbol);
         }
@@ -76,7 +92,12 @@ namespace Bicep.Core.Semantics
             VisitDescendants(symbol);
         }
 
-        public virtual void VisitImportedNamespaceSymbol(ImportedNamespaceSymbol symbol)
+        public virtual void VisitExtensionNamespaceSymbol(ExtensionNamespaceSymbol symbol)
+        {
+            VisitDescendants(symbol);
+        }
+
+        public virtual void VisitExtensionConfigAssignmentSymbol(ExtensionConfigAssignmentSymbol symbol)
         {
             VisitDescendants(symbol);
         }
@@ -101,7 +122,42 @@ namespace Bicep.Core.Semantics
             VisitDescendants(symbol);
         }
 
+        public virtual void VisitLocalThisNamespaceSymbol(LocalThisNamespaceSymbol symbol)
+        {
+            VisitDescendants(symbol);
+        }
+
         public virtual void VisitErrorSymbol(ErrorSymbol symbol)
+        {
+            VisitDescendants(symbol);
+        }
+
+        public virtual void VisitWildcardImportSymbol(WildcardImportSymbol symbol)
+        {
+            VisitDescendants(symbol);
+        }
+
+        public virtual void VisitImportedTypeSymbol(ImportedTypeSymbol symbol)
+        {
+            VisitDescendants(symbol);
+        }
+
+        public virtual void VisitImportedVariableSymbol(ImportedVariableSymbol symbol)
+        {
+            VisitDescendants(symbol);
+        }
+
+        public virtual void VisitImportedFunctionSymbol(ImportedFunctionSymbol symbol)
+        {
+            VisitDescendants(symbol);
+        }
+
+        public virtual void VisitErroredImportSymbol(ErroredImportSymbol symbol)
+        {
+            VisitDescendants(symbol);
+        }
+
+        public virtual void VisitWildcardImportInstanceFunctionSymbol(WildcardImportInstanceFunctionSymbol symbol)
         {
             VisitDescendants(symbol);
         }

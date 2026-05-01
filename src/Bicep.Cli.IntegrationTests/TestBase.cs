@@ -3,65 +3,120 @@
 
 using Bicep.Cli.UnitTests;
 using Bicep.Core;
-using Bicep.Core.Features;
+using Bicep.Core.Configuration;
+using Bicep.Core.Extensions;
 using Bicep.Core.FileSystem;
 using Bicep.Core.Registry;
-using Bicep.Core.Semantics;
+using Bicep.Core.Registry.Catalog.Implementation;
+using Bicep.Core.Registry.Catalog.Implementation.PublicRegistries;
+using Bicep.Core.Samples;
 using Bicep.Core.Text;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Features;
+using Bicep.Core.UnitTests.Mock;
 using Bicep.Core.UnitTests.Utils;
-using Bicep.Core.Workspaces;
+using Bicep.Core.Utils;
+using Bicep.TextFixtures.Utils;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+using Spectre.Console;
+using TestEnvironment = Bicep.Core.UnitTests.Utils.TestEnvironment;
 
 namespace Bicep.Cli.IntegrationTests
 {
-    public abstract class TestBase
+    public abstract class TestBase : Bicep.Core.UnitTests.TestBase
     {
-        private static BicepCompiler CreateCompiler(IContainerRegistryClientFactory clientFactory, ITemplateSpecRepositoryFactory templateSpecRepositoryFactory)
+        private static BicepCompiler CreateCompiler(IContainerRegistryClientFactory clientFactory, ITemplateSpecRepositoryFactory templateSpecRepositoryFactory, IPublicModuleIndexHttpClient? moduleMetadataClient)
             => ServiceBuilder.Create(
-                x => x.WithEmptyAzResources().AddSingleton(clientFactory).AddSingleton(templateSpecRepositoryFactory)).GetCompiler();
+                services =>
+                {
+                    services
+                        .AddSingleton(clientFactory)
+                        .AddSingleton(templateSpecRepositoryFactory);
+
+                    IServiceCollectionExtensions.AddMockHttpClientIfNotNull(services, moduleMetadataClient);
+                }
+                ).GetCompiler();
 
         protected const string BuildSummaryFailedRegex = @"Build failed: (\d*) Warning\(s\), ([1-9][0-9]*) Error\(s\)";
         protected const string BuildSummarySucceededRegex = @"Build succeeded: (\d*) Warning\(s\), 0 Error\(s\)";
 
         protected static readonly MockRepository Repository = new(MockBehavior.Strict);
 
-        protected record InvocationSettings(FeatureProviderOverrides FeatureOverrides, IContainerRegistryClientFactory ClientFactory, ITemplateSpecRepositoryFactory TemplateSpecRepositoryFactory);
+        protected record InvocationSettings
+        {
+            public static readonly InvocationSettings Default = new();
 
-        protected static Task<(string output, string error, int result)> Bicep(params string[] args) => Bicep(CreateDefaultSettings(), args);
+            public FeatureProviderOverrides? FeatureOverrides { get; init; }
+            public IContainerRegistryClientFactory ClientFactory { get; init; }
+            public ITemplateSpecRepositoryFactory TemplateSpecRepositoryFactory { get; init; }
+            public IEnvironment? Environment { get; init; }
+            public IPublicModuleIndexHttpClient ModuleMetadataClient { get; init; }
+            /// <summary>
+            /// Additional registries to trust for OCI artifact restore in this test invocation.
+            /// Use this when the test writes files that reference non-built-in registries.
+            /// </summary>
+            public IEnumerable<string>? TrustedRegistries { get; init; }
 
-        protected static InvocationSettings CreateDefaultSettings() => new(
-            FeatureOverrides: BicepTestConstants.FeatureOverrides,
-            ClientFactory: Repository.Create<IContainerRegistryClientFactory>().Object,
-            TemplateSpecRepositoryFactory: Repository.Create<ITemplateSpecRepositoryFactory>().Object);
+            public InvocationSettings(
+                FeatureProviderOverrides? FeatureOverrides = null,
+                IContainerRegistryClientFactory? ClientFactory = null,
+                ITemplateSpecRepositoryFactory? TemplateSpecRepositoryFactory = null,
+                IEnvironment? Environment = null,
+                IPublicModuleIndexHttpClient? ModuleMetadataClient = null,
+                IEnumerable<string>? TrustedRegistries = null)
+            {
+                this.FeatureOverrides = FeatureOverrides;
+                this.ClientFactory = ClientFactory ?? Repository.Create<IContainerRegistryClientFactory>().Object;
+                this.TemplateSpecRepositoryFactory = TemplateSpecRepositoryFactory ?? Repository.Create<ITemplateSpecRepositoryFactory>().Object;
+                this.Environment = Environment;
+                this.TrustedRegistries = TrustedRegistries;
+                this.ModuleMetadataClient = ModuleMetadataClient ?? new MockPublicModuleIndexHttpClient(new());
+            }
 
-        protected static Task<(string output, string error, int result)> Bicep(InvocationSettings settings, params string[] args)
-            => TextWriterHelper.InvokeWriterAction((@out, err)
-                => new Program(new(Output: @out, Error: err), services
-                    => services
-                        .WithEmptyAzResources()
-                        .WithFeatureOverrides(settings.FeatureOverrides)
-                        .AddSingleton(settings.ClientFactory)
-                        .AddSingleton(settings.TemplateSpecRepositoryFactory))
-                    .RunAsync(args));
+            public InvocationSettings WithArtifactManager(TestExternalArtifactManager artifactManager, TestContext testContext) =>
+                this with
+                {
+                    FeatureOverrides = (this.FeatureOverrides ?? new(testContext)) with { RegistryEnabled = true },
+                    ClientFactory = artifactManager.ContainerRegistryClientFactory,
+                    TemplateSpecRepositoryFactory = artifactManager.TemplateSpecRepositoryFactory
+                };
+
+            public InvocationSettings TrustingRegistries(params string[] registries) =>
+                this with { TrustedRegistries = (TrustedRegistries ?? []).Concat(registries) };
+        }
+
+        protected static Task<CliResult> Bicep(InvocationSettings settings, Action<IServiceCollection>? registerAction, CancellationToken cancellationToken, params string?[] args /*null args are ignored*/)
+            => BicepInternal(settings, registerAction, null, cancellationToken, args);
+
+        protected static Task<CliResult> Bicep(params string[] args) => Bicep(InvocationSettings.Default, args);
+
+        protected static Task<CliResult> Bicep(Action<IServiceCollection> registerAction, params string[] args)
+            => Bicep(InvocationSettings.Default, registerAction, CancellationToken.None, args);
+
+        protected static Task<CliResult> Bicep(Action<IServiceCollection> registerAction, CancellationToken cancellationToken, params string[] args)
+            => Bicep(InvocationSettings.Default, registerAction, cancellationToken, args);
+
+        protected static Task<CliResult> Bicep(InvocationSettings settings, params string?[] args /*null args are ignored*/)
+            => Bicep(settings, null, CancellationToken.None, args);
+
+        protected static Task<CliResult> Bicep(
+            Func<TextWriter, TextWriter, IOContext> ioContextFactory, params string[] args)
+            => BicepInternal(InvocationSettings.Default, null, ioContextFactory, CancellationToken.None, args);
 
         protected static void AssertNoErrors(string error)
         {
-            foreach (var line in error.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
+            foreach (var line in error.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries))
             {
                 line.Should().NotContain(") : Error ");
             }
         }
 
-        protected static async Task<IEnumerable<string>> GetAllDiagnostics(string bicepFilePath, IContainerRegistryClientFactory clientFactory, ITemplateSpecRepositoryFactory templateSpecRepositoryFactory)
+        protected static async Task<IEnumerable<string>> GetAllDiagnostics(string bicepFilePath, IContainerRegistryClientFactory clientFactory, ITemplateSpecRepositoryFactory templateSpecRepositoryFactory, IPublicModuleIndexHttpClient? moduleMetadataClient = null)
         {
-            var compilation = await CreateCompiler(clientFactory, templateSpecRepositoryFactory).CreateCompilation(PathHelper.FilePathToFileUrl(bicepFilePath));
+            var compilation = await CreateCompiler(clientFactory, templateSpecRepositoryFactory, moduleMetadataClient).CreateCompilation(PathHelper.FilePathToFileUrl(bicepFilePath).ToIOUri());
 
             var output = new List<string>();
             foreach (var (bicepFile, diagnostics) in compilation.GetAllDiagnosticsByBicepFile())
@@ -70,23 +125,23 @@ namespace Bicep.Cli.IntegrationTests
                 {
                     var (line, character) = TextCoordinateConverter.GetPosition(bicepFile.LineStarts, diagnostic.Span.Position);
                     var codeDescription = diagnostic.Uri == null ? string.Empty : $" [{diagnostic.Uri.AbsoluteUri}]";
-                    output.Add($"{bicepFile.FileUri.LocalPath}({line + 1},{character + 1}) : {diagnostic.Level} {diagnostic.Code}: {diagnostic.Message}{codeDescription}");
+                    output.Add($"{bicepFile.FileHandle.Uri}({line + 1},{character + 1}) : {diagnostic.Level} {diagnostic.Code}: {diagnostic.Message}{codeDescription}");
                 }
             }
 
             return output;
         }
 
-        protected static async Task<IEnumerable<string>> GetAllParamDiagnostics(string paramFilePath)
+        protected static async Task<IEnumerable<string>> GetAllParamDiagnostics(ServiceBuilder serviceBuilder, string paramFilePath)
         {
-            var compiler = new ServiceBuilder().WithEmptyAzResources().WithFeatureOverrides(new(ParamsFilesEnabled: true)).Build().GetCompiler();
+            var compiler = serviceBuilder.Build().GetCompiler();
 
-            var compilation = await compiler.CreateCompilation(PathHelper.FilePathToFileUrl(paramFilePath));
+            var compilation = await compiler.CreateCompilation(PathHelper.FilePathToFileUrl(paramFilePath).ToIOUri());
 
             var semanticModel = compilation.GetEntrypointSemanticModel();
 
             var output = new List<string>();
-            foreach(var diagnostic in semanticModel.GetAllDiagnostics())
+            foreach (var diagnostic in semanticModel.GetAllDiagnostics())
             {
                 var (line, character) = TextCoordinateConverter.GetPosition(semanticModel.SourceFile.LineStarts, diagnostic.Span.Position);
                 var codeDescription = diagnostic.Uri == null ? string.Empty : $" [{diagnostic.Uri.AbsoluteUri}]";
@@ -95,5 +150,77 @@ namespace Bicep.Cli.IntegrationTests
 
             return output;
         }
+
+        protected async Task<InvocationSettings> CreateDefaultSettingsWithDefaultMockRegistry()
+            => CreateDefaultSettings().WithArtifactManager(await CreateDefaultExternalArtifactManager(), TestContext)
+                .TrustingRegistries("mockregistry.io");
+
+        protected InvocationSettings CreateDefaultSettings(Func<FeatureProviderOverrides, FeatureProviderOverrides>? featureOverrides = null) =>
+            new()
+            {
+                FeatureOverrides = featureOverrides?.Invoke(CreateDefaultFeatureProviderOverrides()) ?? CreateDefaultFeatureProviderOverrides(),
+                Environment = CreateDefaultEnvironment()
+            };
+
+        protected FeatureProviderOverrides CreateDefaultFeatureProviderOverrides() => new(TestContext);
+
+        protected async Task<TestExternalArtifactManager> CreateDefaultExternalArtifactManager()
+        {
+            FileHelper.GetCacheRootDirectory(TestContext).EnsureExists();
+
+            return await MockRegistry.CreateDefaultExternalArtifactManager(TestContext);
+        }
+
+        protected static IEnvironment CreateDefaultEnvironment() => TestEnvironment.Default.WithVariables(
+            ("stringEnvVariableName", "test"),
+            ("intEnvVariableName", "100"),
+            ("boolEnvironmentVariable", "true")
+        );
+
+        private static Task<CliResult> BicepInternal(
+            InvocationSettings settings,
+            Action<IServiceCollection>? registerAction,
+            Func<TextWriter, TextWriter, IOContext>? ioContextFactory,
+            CancellationToken cancellationToken, params string?[] args /*null args are ignored*/)
+            => TextWriterHelper.InvokeWriterAction((@out, err) =>
+            {
+                var ioContext = ioContextFactory?.Invoke(@out, err) ?? new IOContext(
+                    Input: new(new StringReader(string.Empty), false),
+                    Output: new(@out, false),
+                    Error: new(err, false));
+                return new Program(ioContext,
+                    services =>
+                    {
+                        if (settings.FeatureOverrides is { })
+                        {
+                            services.WithFeatureOverrides(settings.FeatureOverrides);
+                        }
+
+                        if (settings.TrustedRegistries is { } trustedRegistries)
+                        {
+                            var trustedList = trustedRegistries.ToArray();
+                            var securityJson = System.Text.Json.JsonDocument.Parse(
+                                $"{{\"trustedRegistries\":[{string.Join(",", trustedList.Select(r => $"\"{r}\""))}]}}").RootElement;
+                            services.WithConfigurationPatch(c => c.With(security: SecurityConfiguration.Bind(securityJson)));
+                        }
+
+                        IServiceCollectionExtensions.AddMockHttpClientIfNotNull(services, settings.ModuleMetadataClient);
+
+                        services
+                            .AddSingletonIfNotNull(settings.Environment ?? BicepTestConstants.EmptyEnvironment)
+                            .AddSingletonIfNotNull(settings.ClientFactory)
+                            .AddSingletonIfNotNull(settings.TemplateSpecRepositoryFactory)
+                            .AddSingleton(AnsiConsole.Create(new()
+                            {
+                                Ansi = AnsiSupport.Yes,
+                                ColorSystem = ColorSystemSupport.Standard,
+                                Interactive = InteractionSupport.No,
+                                Out = new AnsiConsoleOutput(@out),
+                            }));
+
+                        registerAction?.Invoke(services);
+                    }
+                ).RunAsync(args.ToArrayExcludingNull(), cancellationToken);
+            });
     }
 }

@@ -5,18 +5,22 @@
     <RootNamespace>Bicep.LanguageServer</RootNamespace>
     <!-- generates a NOTICE file in the publish output using our custom targets -->
     <EnableNoticeInPublishOutput>true</EnableNoticeInPublishOutput>
+    <!-- Disable CS1591 Missing XML comment for publicly visible type or member for generated code -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Bicep.Core\Bicep.Core.csproj" />
     <ProjectReference Include="..\Bicep.Decompiler\Bicep.Decompiler.csproj" />
+    <ProjectReference Include="../Bicep.Local.Deploy/Bicep.Local.Deploy.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.ResourceManager.ResourceGraph" Version="1.0.1" />
-    <PackageReference Include="OmniSharp.Extensions.LanguageServer" Version="0.19.7" />
-    <PackageReference Include="CommandLineParser" Version="2.9.1" />
-    <PackageReference Include="SharpYaml" Version="2.1.0" />
+    <PackageReference Include="Azure.ResourceManager.ResourceGraph" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="OmniSharp.Extensions.LanguageServer" />
+    <PackageReference Include="CommandLineParser" />
+    <PackageReference Include="SharpYaml" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,5 +41,9 @@
       <LastGenOutput>LangServerResources.Designer.cs</LastGenOutput>
       <Generator>PublicResXFileCodeGenerator</Generator>
     </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Nerdbank.GitVersioning" />
   </ItemGroup>
 </Project>

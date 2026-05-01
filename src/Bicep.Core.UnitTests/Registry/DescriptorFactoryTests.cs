@@ -4,19 +4,16 @@
 using Bicep.Core.Registry.Oci;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
-using System.IO;
-using System.Text;
 
 namespace Bicep.Core.UnitTests.Registry
 {
     [TestClass]
-    public class DescriptorFactoryTests
+    public class OciDescriptorTests
     {
         [TestMethod]
         public void UnknownAlgorithmShouldThrow()
         {
-            Action fail = () => DescriptorFactory.ComputeDigest("fake", Stream.Null);
+            Action fail = () => OciDescriptor.ComputeDigest("fake", BinaryData.FromBytes([]));
             fail.Should().Throw<NotImplementedException>().WithMessage("Unknown hash algorithm 'fake'.");
         }
 
@@ -27,19 +24,7 @@ namespace Bicep.Core.UnitTests.Registry
         [DataTestMethod]
         public void ShouldComputeCorrectDigest(string algorithmIdentifier, string content, string expectedDigest)
         {
-            using var stream = new MemoryStream();
-
-            // make sure we write without BOM
-            using var writer = new StreamWriter(stream, encoding: new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), leaveOpen: true);
-            writer.Write(content);
-
-            // the write is buffered, so we actually see it
-            writer.Flush();
-
-            // reset for reading
-            stream.Position = 0;
-
-            var actual = DescriptorFactory.ComputeDigest(algorithmIdentifier, stream);
+            var actual = OciDescriptor.ComputeDigest(algorithmIdentifier, BinaryData.FromString(content));
             actual.Should().Be(expectedDigest);
         }
     }

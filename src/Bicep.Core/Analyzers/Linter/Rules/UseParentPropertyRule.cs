@@ -3,16 +3,12 @@
 
 using Bicep.Core.CodeAction;
 using Bicep.Core.Diagnostics;
-using Bicep.Core.Navigation;
 using Bicep.Core.Semantics;
 using Bicep.Core.Semantics.Metadata;
 using Bicep.Core.Syntax;
 using Bicep.Core.Syntax.Comparers;
 using Bicep.Core.TypeSystem;
 using Microsoft.WindowsAzure.ResourceStack.Common.Extensions;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Bicep.Core.Analyzers.Linter.Rules;
 
@@ -23,8 +19,7 @@ public sealed class UseParentPropertyRule : LinterRuleBase
     public UseParentPropertyRule() : base(
         code: Code,
         description: CoreResources.UseParentPropertyRule_Description,
-        docUri: new Uri($"https://aka.ms/bicep/linter/{Code}"),
-        diagnosticLevel: DiagnosticLevel.Warning)
+        LinterRuleCategory.BestPractice)
     { }
 
     public override string FormatMessage(params object[] values)
@@ -44,8 +39,8 @@ public sealed class UseParentPropertyRule : LinterRuleBase
                 continue;
             }
 
-            if (TryGetReplacementChildName(model, childName) is {} info &&
-                TryCreateDiagnostic(model, diagnosticLevel, info.parent, resource, info.name) is {} nameDiagnostic)
+            if (TryGetReplacementChildName(model, resource, childName) is { } info &&
+                TryCreateDiagnostic(model, diagnosticLevel, info.parent, resource, info.name) is { } nameDiagnostic)
             {
                 yield return nameDiagnostic;
                 continue;
@@ -58,9 +53,9 @@ public sealed class UseParentPropertyRule : LinterRuleBase
             foreach (var parentResource in typeLookup[parentType])
             {
                 if (!parentResource.Symbol.IsCollection &&
-                    parentResource.TryGetNameSyntax() is {} parentNameSyntax &&
-                    TryGetReplacementChildName(model, parentNameSyntax, childName) is {} replacement &&
-                    TryCreateDiagnostic(model, diagnosticLevel, parentResource, resource, replacement) is {} diagnostic)
+                    parentResource.TryGetNameSyntax() is { } parentNameSyntax &&
+                    TryGetReplacementChildName(model, parentNameSyntax, childName) is { } replacement &&
+                    TryCreateDiagnostic(model, diagnosticLevel, parentResource, resource, replacement) is { } diagnostic)
                 {
                     yield return diagnostic;
                     break;
@@ -125,11 +120,11 @@ public sealed class UseParentPropertyRule : LinterRuleBase
         }
 
         var newString = SyntaxFactory.CreateString(
-            new [] { newFirstChildSegment }.Concat(childName.SegmentValues.Skip(parentName.SegmentValues.Length)),
+            new[] { newFirstChildSegment }.Concat(childName.SegmentValues.Skip(parentName.SegmentValues.Length)),
             childName.Expressions.Skip(parentName.Expressions.Length));
 
-        if (SimplifyInterpolationRule.TrySimplify(newString) is {} simplfied &&
-            model.GetTypeInfo(simplfied) is {} simplfiedType &&
+        if (SimplifyInterpolationRule.TrySimplify(newString) is { } simplfied &&
+            model.GetTypeInfo(simplfied) is { } simplfiedType &&
             TypeValidator.AreTypesAssignable(simplfiedType, LanguageConstants.String))
         {
             // Check if we can simplify "name: '${expr}'" to "name: expr"
@@ -145,7 +140,7 @@ public sealed class UseParentPropertyRule : LinterRuleBase
         {
             if (childName.SegmentValues.Length > 1 &&
                 childName.SegmentValues.Skip(1).First().StartsWith('/') &&
-                childName.Expressions.First() is {} firstExpr &&
+                childName.Expressions.First() is { } firstExpr &&
                 SyntaxIgnoringTriviaComparer.Instance.Equals(firstExpr, parentName))
             {
                 return SyntaxFactory.CreateString(
@@ -159,13 +154,14 @@ public sealed class UseParentPropertyRule : LinterRuleBase
         return TryGetReplacementChildName(model, parentNameString, childName);
     }
 
-    private  (SyntaxBase name, DeclaredResourceMetadata parent)? TryGetReplacementChildName(SemanticModel model, StringSyntax childName)
+    private (SyntaxBase name, DeclaredResourceMetadata parent)? TryGetReplacementChildName(SemanticModel model, DeclaredResourceMetadata child, StringSyntax childName)
     {
         if (childName.SegmentValues.Length > 1 &&
             childName.SegmentValues[1].StartsWith('/') &&
             childName.Expressions[0] is PropertyAccessSyntax nameProp &&
             nameProp.PropertyName.NameEquals("name") &&
-            model.ResourceMetadata.TryLookup(nameProp.BaseExpression) is DeclaredResourceMetadata nameResource)
+            model.ResourceMetadata.TryLookup(nameProp.BaseExpression) is DeclaredResourceMetadata nameResource &&
+            nameResource.TypeReference.IsParentOf(child.TypeReference))
         {
             var name = SyntaxFactory.CreateString(
                 RemoveFirstLeadingSlash(childName.SegmentValues.Skip(1)),
@@ -179,8 +175,8 @@ public sealed class UseParentPropertyRule : LinterRuleBase
 
     private IDiagnostic? TryCreateDiagnostic(SemanticModel model, DiagnosticLevel diagnosticLevel, DeclaredResourceMetadata parentResource, DeclaredResourceMetadata childResource, SyntaxBase replacementName)
     {
-        if (childResource.Symbol.DeclaringResource.TryGetBody() is not {} body ||
-            body.TryGetPropertyByName("name") is not {} nameProp)
+        if (childResource.Symbol.DeclaringResource.TryGetBody() is not { } body ||
+            body.TryGetPropertyByName("name") is not { } nameProp)
         {
             return null;
         }
@@ -203,7 +199,7 @@ public sealed class UseParentPropertyRule : LinterRuleBase
             return null;
         }
 
-        var codeReplacement = new CodeReplacement(body.Span, updatedBody.ToTextPreserveFormatting());
+        var codeReplacement = new CodeReplacement(body.Span, updatedBody.ToString());
 
         return CreateFixableDiagnosticForSpan(
             diagnosticLevel,

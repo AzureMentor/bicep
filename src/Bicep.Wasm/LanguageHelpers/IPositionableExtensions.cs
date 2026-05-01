@@ -1,26 +1,15 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using Bicep.Core.Extensions;
-using Bicep.Core.Parsing;
+using Bicep.Core.Text;
 
 namespace Bicep.Wasm.LanguageHelpers
 {
     public static class IPositionableExtensions
     {
-        public static TextSpan GetSpanSlice(this IPositionable positionable, int start, int length)
-            => new TextSpan(positionable.Span.Position + start, length);
-
-        public static TextSpan TryGetSpanSlice(this IPositionable positionable, int start, int length)
-            => GetSpanSlice(
-                positionable,
-                Math.Min(start, positionable.Span.Length),
-                Math.Min(length, positionable.Span.Length - start));
-
         public static Range ToRange(this IPositionable positionable, ImmutableArray<int> lineStarts) =>
-            new Range
+            new()
             {
                 Start = PositionHelper.GetPosition(lineStarts, positionable.Span.Position),
                 End = PositionHelper.GetPosition(lineStarts, positionable.GetEndPosition())

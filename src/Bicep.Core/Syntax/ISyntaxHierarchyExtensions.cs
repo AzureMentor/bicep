@@ -1,9 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 
 namespace Bicep.Core.Syntax
 {
@@ -32,10 +30,9 @@ namespace Bicep.Core.Syntax
         /// <returns>The list of ancestors.</returns>
         public static ImmutableArray<TSyntax> GetAllAncestors<TSyntax>(this ISyntaxHierarchy hierarchy, SyntaxBase syntax)
             where TSyntax : SyntaxBase
-            => EnumerateAncestorsUpwards(hierarchy, syntax)
+            => [.. EnumerateAncestorsUpwards(hierarchy, syntax)
                 .OfType<TSyntax>()
-                .Reverse()
-                .ToImmutableArray();
+                .Reverse()];
 
         /// <summary>
         /// Gets the nearest ancestor assignable to <typeparamref name="TSyntax" /> above <paramref name="syntax" />
@@ -52,5 +49,12 @@ namespace Bicep.Core.Syntax
 
         public static bool IsEqualOrDescendent(this ISyntaxHierarchy hierarchy, SyntaxBase node, SyntaxBase potentialAncestor)
             => object.ReferenceEquals(node, potentialAncestor) || hierarchy.IsDescendant(node, potentialAncestor);
+
+        public static SyntaxBase? GetParentIgnoringParentheses(this ISyntaxHierarchy hierarchy, SyntaxBase syntax)
+            => hierarchy.EnumerateAncestorsUpwards(syntax).Where(x => x switch
+            {
+                ParenthesizedExpressionSyntax => false,
+                _ => true,
+            }).FirstOrDefault();
     }
 }

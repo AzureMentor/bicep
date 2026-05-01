@@ -4,8 +4,6 @@
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
-using System;
-using System.Collections.Generic;
 
 namespace Bicep.Core.Analyzers.Linter.Rules
 {
@@ -17,8 +15,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
 
         public NoLocationExprOutsideParamsRule() : base(
             code: Code,
-            description: CoreResources.NoLocExprOutsideParamsRuleDescription,
-            docUri: new Uri($"https://aka.ms/bicep/linter/{Code}"))
+            description: CoreResources.NoLocExprOutsideParamsRuleDescription)
         {
         }
 

@@ -2,41 +2,35 @@
 // Licensed under the MIT License.
 
 using System.Diagnostics.CodeAnalysis;
-using System.Threading.Tasks;
-using Bicep.Core.UnitTests.Utils;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using OmniSharp.Extensions.LanguageServer.Protocol.Document;
-using OmniSharp.Extensions.LanguageServer.Protocol.Window;
-using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
-using OmniSharp.Extensions.LanguageServer.Protocol.Models;
-using Newtonsoft.Json.Linq;
-using Bicep.LangServer.IntegrationTests.Helpers;
-using FluentAssertions;
+using System.Text.Json;
+using Azure.Deployments.Core.Definitions.Identifiers;
+using Bicep.Core;
+using Bicep.Core.Configuration;
+using Bicep.Core.Extensions;
+using Bicep.Core.SourceGraph;
+using Bicep.Core.Text;
+using Bicep.Core.TypeSystem;
+using Bicep.Core.TypeSystem.Providers;
+using Bicep.Core.TypeSystem.Types;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
-using Moq;
-using Bicep.LanguageServer.Providers;
-using OmniSharp.Extensions.LanguageServer.Protocol;
-using Bicep.LanguageServer.Handlers;
-using Bicep.LanguageServer.Utils;
-using Bicep.Core.Text;
-using Azure.Deployments.Core.Definitions.Identifiers;
-using Bicep.Core.Configuration;
-using System.Threading;
-using System.Text.Json;
-using Bicep.Core.TypeSystem.Az;
-using Bicep.Core.TypeSystem;
-using Bicep.Core;
-using Bicep.Core.Extensions;
-using System.Linq;
-using System;
+using Bicep.Core.UnitTests.Utils;
 using Bicep.LangServer.IntegrationTests.Assertions;
+using Bicep.LangServer.IntegrationTests.Helpers;
+using Bicep.LanguageServer.Handlers;
+using Bicep.LanguageServer.Providers;
+using Bicep.LanguageServer.Utils;
+using FluentAssertions;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.WindowsAzure.ResourceStack.Common.Json;
-using Bicep.Core.Navigation;
-using Bicep.Core.Workspaces;
+using Moq;
+using Newtonsoft.Json.Linq;
+using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client;
-using System.Collections.Immutable;
+using OmniSharp.Extensions.LanguageServer.Protocol.Document;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using OmniSharp.Extensions.LanguageServer.Protocol.Window;
+using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
 
 namespace Bicep.LangServer.IntegrationTests
 {
@@ -58,7 +52,7 @@ namespace Bicep.LangServer.IntegrationTests
         private async Task<LanguageServerHelper> StartLanguageServer(
             Listeners listeners,
             IAzResourceProvider azResourceProvider,
-            IAzResourceTypeLoader azResourceTypeLoader)
+            IResourceTypeLoader azResourceTypeLoader)
         {
             return await LanguageServerHelper.StartServer(
                 this.TestContext,
@@ -73,10 +67,13 @@ namespace Bicep.LangServer.IntegrationTests
                         return new();
                     })
                     .OnTelemetryEvent(listeners.Telemetry.AddMessage),
-                services => services.WithAzResourceTypeLoader(azResourceTypeLoader).WithAzResourceProvider(azResourceProvider));
+                services => services
+                    .WithAzResourceTypeLoaderFactory(azResourceTypeLoader)
+                    .WithAzResourceProvider(azResourceProvider)
+            );
         }
 
-        private static async Task<string> ApplyWorkspaceEdit(Listeners listeners, Uri fileUri, string fileContents)
+        private static async Task<string> ApplyWorkspaceEdit(Listeners listeners, DocumentUri fileUri, string fileContents)
         {
             var edit = await listeners.ApplyWorkspaceEdit.WaitNext();
 
@@ -91,17 +88,17 @@ namespace Bicep.LangServer.IntegrationTests
             return fileContents.Substring(0, startOffset) + test.NewText + fileContents.Substring(endOffset);
         }
 
-        private async Task<string> InvokeInsertResource(ILanguageClient client, Listeners listeners, Uri fileUri, string fileWithCursor, string resourceId)
+        private async Task<string> InvokeInsertResource(ILanguageClient client, Listeners listeners, DocumentUri fileUri, string fileWithCursor, string resourceId)
         {
             var (fileContents, cursor) = ParserHelper.GetFileWithSingleCursor(fileWithCursor, '|');
-            var file = SourceFileFactory.CreateBicepFile(fileUri, fileContents);
+            var file = new LanguageClientFile(fileUri, fileContents);
 
-            client.TextDocument.DidOpenTextDocument(TextDocumentParamHelper.CreateDidOpenDocumentParams(file.FileUri, fileContents, 0));
+            client.TextDocument.DidOpenTextDocument(TextDocumentParamHelper.CreateDidOpenDocumentParams(file.Uri, fileContents, 0));
             await listeners.Diagnostics.WaitNext();
 
             var result = await client.SendRequest(new InsertResourceParams
             {
-                TextDocument = DocumentUri.From(file.FileUri),
+                TextDocument = file.Uri,
                 Position = PositionHelper.GetPosition(file.LineStarts, cursor),
                 ResourceId = resourceId,
             }, default);
@@ -116,12 +113,12 @@ namespace Bicep.LangServer.IntegrationTests
             var mockAzResourceProvider = new Mock<IAzResourceProvider>(MockBehavior.Strict);
 
             var typeDefinition = TestTypeHelper.CreateCustomResourceType("My.Rp/myTypes", "2020-01-01", TypeSymbolValidationFlags.WarnOnTypeMismatch,
-                new TypeProperty("readOnlyProp", LanguageConstants.String, TypePropertyFlags.ReadOnly),
-                new TypeProperty("readWriteProp", LanguageConstants.String, TypePropertyFlags.None),
-                new TypeProperty("writeOnlyProp", LanguageConstants.String, TypePropertyFlags.WriteOnly),
-                new TypeProperty("floatProp", LanguageConstants.Int, TypePropertyFlags.None),
-                new TypeProperty("bigIntProp", LanguageConstants.Int, TypePropertyFlags.None));
-            var typeLoader = TestTypeHelper.CreateAzResourceTypeLoaderWithTypes(typeDefinition.AsEnumerable());
+                new NamedTypeProperty("readOnlyProp", LanguageConstants.String, TypePropertyFlags.ReadOnly),
+                new NamedTypeProperty("readWriteProp", LanguageConstants.String, TypePropertyFlags.None),
+                new NamedTypeProperty("writeOnlyProp", LanguageConstants.String, TypePropertyFlags.WriteOnly),
+                new NamedTypeProperty("floatProp", LanguageConstants.Int, TypePropertyFlags.None),
+                new NamedTypeProperty("bigIntProp", LanguageConstants.Int, TypePropertyFlags.None));
+            var typeLoader = TestTypeHelper.CreateResourceTypeLoaderWithTypes(typeDefinition.AsEnumerable());
 
             using var helper = await StartLanguageServer(listeners, mockAzResourceProvider.Object, typeLoader);
             var client = helper.Client;
@@ -146,47 +143,49 @@ namespace Bicep.LangServer.IntegrationTests
             mockAzResourceProvider.Setup(x => x.GetGenericResource(It.IsAny<RootConfiguration>(), It.Is<IAzResourceProvider.AzResourceIdentifier>(x => x.FullyQualifiedId == resourceId.FullyQualifiedId), "2020-01-01", It.IsAny<CancellationToken>()))
                 .Returns(async () => await JsonSerializer.DeserializeAsync<JsonElement>(mockResource.ToJsonStream()));
 
-            var fileUri = new Uri("file:///template.bicep");
-            var fileContents = await InvokeInsertResource(client, listeners, fileUri, @"
-param myParam string = 'test'
-resource myRes 'myRp/provider@2019-01-01' = {
-  name: 'te|st'
-}
-module myMod './module.bicep' = {
-  name: 'test'
-}
-output myOutput string = 'myOutput'
-", resourceId.FullyQualifiedId);
+            var fileUri = "template.bicep";
+            var fileContents = await InvokeInsertResource(client, listeners, fileUri, """
+                param myParam string = 'test'
+                resource myRes 'myRp/provider@2019-01-01' = {
+                  name: 'te|st'
+                }
+                module myMod './module.bicep' = {
+                  name: 'test'
+                }
+                output myOutput string = 'myOutput'
+
+                """, resourceId.FullyQualifiedId);
 
             var replacedFile = await ApplyWorkspaceEdit(listeners, fileUri, fileContents);
-            replacedFile.Should().Be(@"
-param myParam string = 'test'
-resource myRes 'myRp/provider@2019-01-01' = {
-  name: 'test'
-}
-@description('Generated from /subscriptions/23775d31-d753-4290-805b-e5bde53eba6e/resourceGroups/myRg/providers/My.Rp/myTypes/myName')
-resource myName 'My.Rp/myTypes@2020-01-01' = {
-  name: 'myName'
-  properties: {
-    readWriteProp: 'def'
-    writeOnlyProp: 'ghi'
-    int64Prop: 9223372036854775807
-    floatProp: json('0.5')
-    bigIntProp: json('3456789871234786124871623847612837461287436')
-  }
-}
-module myMod './module.bicep' = {
-  name: 'test'
-}
-output myOutput string = 'myOutput'
-");
+            replacedFile.Should().BeEquivalentToIgnoringNewlines("""
+                param myParam string = 'test'
+                resource myRes 'myRp/provider@2019-01-01' = {
+                  name: 'test'
+                }
+                @description('Generated from /subscriptions/23775d31-d753-4290-805b-e5bde53eba6e/resourceGroups/myRg/providers/My.Rp/myTypes/myName')
+                resource myName 'My.Rp/myTypes@2020-01-01' = {
+                  name: 'myName'
+                  properties: {
+                    readWriteProp: 'def'
+                    writeOnlyProp: 'ghi'
+                    int64Prop: 9223372036854775807
+                    floatProp: json('0.5')
+                    bigIntProp: json('3456789871234786124871623847612837461287436')
+                  }
+                }
+                module myMod './module.bicep' = {
+                  name: 'test'
+                }
+                output myOutput string = 'myOutput'
+
+                """);
 
             var telemetry = await listeners.Telemetry.WaitForAll();
             telemetry.Should().ContainEvent("InsertResource/success", new JObject
-                {
-                    ["resourceType"] = "My.Rp/myTypes",
-                    ["apiVersion"] = "2020-01-01",
-                });
+            {
+                ["resourceType"] = "My.Rp/myTypes",
+                ["apiVersion"] = "2020-01-01",
+            });
         }
 
         [TestMethod]
@@ -196,7 +195,7 @@ output myOutput string = 'myOutput'
             var mockAzResourceProvider = new Mock<IAzResourceProvider>(MockBehavior.Strict);
 
             var typeDefinition = TestTypeHelper.CreateCustomResourceType("My.Rp/myTypes", "2020-01-01", TypeSymbolValidationFlags.WarnOnTypeMismatch);
-            var typeLoader = TestTypeHelper.CreateAzResourceTypeLoaderWithTypes(typeDefinition.AsEnumerable());
+            var typeLoader = TestTypeHelper.CreateResourceTypeLoaderWithTypes(typeDefinition.AsEnumerable());
 
             using var helper = await StartLanguageServer(listeners, mockAzResourceProvider.Object, typeLoader);
             var client = helper.Client;
@@ -213,16 +212,18 @@ output myOutput string = 'myOutput'
             mockAzResourceProvider.Setup(x => x.GetGenericResource(It.IsAny<RootConfiguration>(), It.Is<IAzResourceProvider.AzResourceIdentifier>(x => x.FullyQualifiedId == resourceId.FullyQualifiedId), "2020-01-01", It.IsAny<CancellationToken>()))
                 .Returns(async () => await JsonSerializer.DeserializeAsync<JsonElement>(mockResource.ToJsonStream()));
 
-            var fileUri = new Uri("file:///template.bicep");
+            var fileUri = "template.bicep";
             var fileContents = await InvokeInsertResource(client, listeners, fileUri, @"|", resourceId.FullyQualifiedId);
 
             var replacedFile = await ApplyWorkspaceEdit(listeners, fileUri, fileContents);
-            replacedFile.Should().Be(@"
-@description('Generated from /subscriptions/23775d31-d753-4290-805b-e5bde53eba6e/resourceGroups/myRg/providers/My.Rp/myTypes/myName')
-resource myName 'My.Rp/myTypes@2020-01-01' = {
-  name: 'myName'
-  properties: {}
-}");
+            replacedFile.Should().BeEquivalentToIgnoringNewlines("""
+
+                @description('Generated from /subscriptions/23775d31-d753-4290-805b-e5bde53eba6e/resourceGroups/myRg/providers/My.Rp/myTypes/myName')
+                resource myName 'My.Rp/myTypes@2020-01-01' = {
+                  name: 'myName'
+                  properties: {}
+                }
+                """);
         }
 
         [TestMethod]
@@ -232,10 +233,10 @@ resource myName 'My.Rp/myTypes@2020-01-01' = {
             var mockAzResourceProvider = new Mock<IAzResourceProvider>(MockBehavior.Strict);
 
             var typeDefinition = TestTypeHelper.CreateCustomResourceType("Microsoft.Resources/resourceGroups", "2020-01-01", TypeSymbolValidationFlags.WarnOnTypeMismatch,
-                new TypeProperty("readOnlyProp", LanguageConstants.String, TypePropertyFlags.ReadOnly),
-                new TypeProperty("readWriteProp", LanguageConstants.String, TypePropertyFlags.None),
-                new TypeProperty("writeOnlyProp", LanguageConstants.String, TypePropertyFlags.WriteOnly));
-            var typeLoader = TestTypeHelper.CreateAzResourceTypeLoaderWithTypes(typeDefinition.AsEnumerable());
+                new NamedTypeProperty("readOnlyProp", LanguageConstants.String, TypePropertyFlags.ReadOnly),
+                new NamedTypeProperty("readWriteProp", LanguageConstants.String, TypePropertyFlags.None),
+                new NamedTypeProperty("writeOnlyProp", LanguageConstants.String, TypePropertyFlags.WriteOnly));
+            var typeLoader = TestTypeHelper.CreateResourceTypeLoaderWithTypes(typeDefinition.AsEnumerable());
 
             using var helper = await StartLanguageServer(listeners, mockAzResourceProvider.Object, typeLoader);
             var client = helper.Client;
@@ -262,44 +263,44 @@ resource myName 'My.Rp/myTypes@2020-01-01' = {
             mockAzResourceProvider.Setup(x => x.GetGenericResource(It.IsAny<RootConfiguration>(), It.Is<IAzResourceProvider.AzResourceIdentifier>(x => x.FullyQualifiedId == resourceId.FullyQualifiedId), "2020-01-01", It.IsAny<CancellationToken>()))
                 .Returns(async () => await JsonSerializer.DeserializeAsync<JsonElement>(mockResource.ToJsonStream()));
 
-            var fileUri = new Uri("file:///template.bicep");
-            var fileContents = await InvokeInsertResource(client, listeners, fileUri, @"
-param myParam string = 'test'
-resource myRes 'myRp/provider@2019-01-01' = {
-  name: 'te|st'
-}
-module myMod './module.bicep' = {
-  name: 'test'
-}
-output myOutput string = 'myOutput'
-", resourceId.FullyQualifiedId);
+            var fileUri = "template.bicep";
+            var fileContents = await InvokeInsertResource(client, listeners, fileUri, """
+                param myParam string = 'test'
+                resource myRes 'myRp/provider@2019-01-01' = {
+                  name: 'te|st'
+                }
+                module myMod './module.bicep' = {
+                  name: 'test'
+                }
+                output myOutput string = 'myOutput'
+                """, resourceId.FullyQualifiedId);
 
             var replacedFile = await ApplyWorkspaceEdit(listeners, fileUri, fileContents);
-            replacedFile.Should().Be(@"
-param myParam string = 'test'
-resource myRes 'myRp/provider@2019-01-01' = {
-  name: 'test'
-}
-@description('Generated from /subscriptions/23775d31-d753-4290-805b-e5bde53eba6e/resourceGroups/myRg')
-resource myRg 'Microsoft.Resources/resourceGroups@2020-01-01' = {
-  name: 'myRg'
-  properties: {
-    readWriteProp: 'def'
-    writeOnlyProp: 'ghi'
-  }
-}
-module myMod './module.bicep' = {
-  name: 'test'
-}
-output myOutput string = 'myOutput'
-");
+            replacedFile.Should().BeEquivalentToIgnoringNewlines("""
+                param myParam string = 'test'
+                resource myRes 'myRp/provider@2019-01-01' = {
+                  name: 'test'
+                }
+                @description('Generated from /subscriptions/23775d31-d753-4290-805b-e5bde53eba6e/resourceGroups/myRg')
+                resource myRg 'Microsoft.Resources/resourceGroups@2020-01-01' = {
+                  name: 'myRg'
+                  properties: {
+                    readWriteProp: 'def'
+                    writeOnlyProp: 'ghi'
+                  }
+                }
+                module myMod './module.bicep' = {
+                  name: 'test'
+                }
+                output myOutput string = 'myOutput'
+                """);
 
             var telemetry = await listeners.Telemetry.WaitForAll();
             telemetry.Should().ContainEvent("InsertResource/success", new JObject
-                {
-                    ["resourceType"] = "Microsoft.Resources/resourceGroups",
-                    ["apiVersion"] = "2020-01-01",
-                });
+            {
+                ["resourceType"] = "Microsoft.Resources/resourceGroups",
+                ["apiVersion"] = "2020-01-01",
+            });
         }
 
         [TestMethod]
@@ -309,10 +310,10 @@ output myOutput string = 'myOutput'
             var mockAzResourceProvider = new Mock<IAzResourceProvider>(MockBehavior.Strict);
 
             var typeDefinition = TestTypeHelper.CreateCustomResourceType("My.Rp/myTypes/childType", "2020-01-01", TypeSymbolValidationFlags.WarnOnTypeMismatch,
-                new TypeProperty("readOnlyProp", LanguageConstants.String, TypePropertyFlags.ReadOnly),
-                new TypeProperty("readWriteProp", LanguageConstants.String, TypePropertyFlags.None),
-                new TypeProperty("writeOnlyProp", LanguageConstants.String, TypePropertyFlags.WriteOnly));
-            var typeLoader = TestTypeHelper.CreateAzResourceTypeLoaderWithTypes(typeDefinition.AsEnumerable());
+                new NamedTypeProperty("readOnlyProp", LanguageConstants.String, TypePropertyFlags.ReadOnly),
+                new NamedTypeProperty("readWriteProp", LanguageConstants.String, TypePropertyFlags.None),
+                new NamedTypeProperty("writeOnlyProp", LanguageConstants.String, TypePropertyFlags.WriteOnly));
+            var typeLoader = TestTypeHelper.CreateResourceTypeLoaderWithTypes(typeDefinition.AsEnumerable());
 
             using var helper = await StartLanguageServer(listeners, mockAzResourceProvider.Object, typeLoader);
             var client = helper.Client;
@@ -334,44 +335,44 @@ output myOutput string = 'myOutput'
             mockAzResourceProvider.Setup(x => x.GetGenericResource(It.IsAny<RootConfiguration>(), It.Is<IAzResourceProvider.AzResourceIdentifier>(x => x.FullyQualifiedId == resourceId.FullyQualifiedId), "2020-01-01", It.IsAny<CancellationToken>()))
                 .Returns(async () => await JsonSerializer.DeserializeAsync<JsonElement>(mockResource.ToJsonStream()));
 
-            var fileUri = new Uri("file:///template.bicep");
-            var fileContents = await InvokeInsertResource(client, listeners, fileUri, @"
-param myParam string = 'test'
-resource myRes 'myRp/provider@2019-01-01' = {
-  name: 'te|st'
-}
-module myMod './module.bicep' = {
-  name: 'test'
-}
-output myOutput string = 'myOutput'
-", resourceId.FullyQualifiedId);
+            var fileUri = "template.bicep";
+            var fileContents = await InvokeInsertResource(client, listeners, fileUri, """
+                param myParam string = 'test'
+                resource myRes 'myRp/provider@2019-01-01' = {
+                  name: 'te|st'
+                }
+                module myMod './module.bicep' = {
+                  name: 'test'
+                }
+                output myOutput string = 'myOutput'
+                """, resourceId.FullyQualifiedId);
 
             var replacedFile = await ApplyWorkspaceEdit(listeners, fileUri, fileContents);
-            replacedFile.Should().Be(@"
-param myParam string = 'test'
-resource myRes 'myRp/provider@2019-01-01' = {
-  name: 'test'
-}
-@description('Generated from /subscriptions/23775d31-d753-4290-805b-e5bde53eba6e/resourceGroups/myRg/providers/My.Rp/myTypes/myName/childType/childName')
-resource childName 'My.Rp/myTypes/childType@2020-01-01' = {
-  name: 'myName/childName'
-  properties: {
-    readWriteProp: 'def'
-    writeOnlyProp: 'ghi'
-  }
-}
-module myMod './module.bicep' = {
-  name: 'test'
-}
-output myOutput string = 'myOutput'
-");
+            replacedFile.Should().BeEquivalentToIgnoringNewlines("""
+                param myParam string = 'test'
+                resource myRes 'myRp/provider@2019-01-01' = {
+                  name: 'test'
+                }
+                @description('Generated from /subscriptions/23775d31-d753-4290-805b-e5bde53eba6e/resourceGroups/myRg/providers/My.Rp/myTypes/myName/childType/childName')
+                resource childName 'My.Rp/myTypes/childType@2020-01-01' = {
+                  name: 'myName/childName'
+                  properties: {
+                    readWriteProp: 'def'
+                    writeOnlyProp: 'ghi'
+                  }
+                }
+                module myMod './module.bicep' = {
+                  name: 'test'
+                }
+                output myOutput string = 'myOutput'
+                """);
 
             var telemetry = await listeners.Telemetry.WaitForAll();
             telemetry.Should().ContainEvent("InsertResource/success", new JObject
-                {
-                    ["resourceType"] = "My.Rp/myTypes/childType",
-                    ["apiVersion"] = "2020-01-01",
-                });
+            {
+                ["resourceType"] = "My.Rp/myTypes/childType",
+                ["apiVersion"] = "2020-01-01",
+            });
         }
 
         [TestMethod]
@@ -381,25 +382,25 @@ output myOutput string = 'myOutput'
             var mockAzResourceProvider = new Mock<IAzResourceProvider>(MockBehavior.Strict);
 
             var typeDefinition = TestTypeHelper.CreateCustomResourceType("My.Rp/myTypes", "2020-01-01", TypeSymbolValidationFlags.WarnOnTypeMismatch,
-                new TypeProperty("readOnlyProp", LanguageConstants.String, TypePropertyFlags.ReadOnly),
-                new TypeProperty("readWriteProp", LanguageConstants.String, TypePropertyFlags.None),
-                new TypeProperty("writeOnlyProp", LanguageConstants.String, TypePropertyFlags.WriteOnly));
-            var typeLoader = TestTypeHelper.CreateAzResourceTypeLoaderWithTypes(typeDefinition.AsEnumerable());
+                new NamedTypeProperty("readOnlyProp", LanguageConstants.String, TypePropertyFlags.ReadOnly),
+                new NamedTypeProperty("readWriteProp", LanguageConstants.String, TypePropertyFlags.None),
+                new NamedTypeProperty("writeOnlyProp", LanguageConstants.String, TypePropertyFlags.WriteOnly));
+            var typeLoader = TestTypeHelper.CreateResourceTypeLoaderWithTypes(typeDefinition.AsEnumerable());
 
             using var helper = await StartLanguageServer(listeners, mockAzResourceProvider.Object, typeLoader);
             var client = helper.Client;
 
-            var fileUri = new Uri("file:///template.bicep");
-            var fileContents = await InvokeInsertResource(client, listeners, fileUri, @"
-param myParam string = 'test'
-resource myRes 'myRp/provider@2019-01-01' = {
-  name: 'te|st'
-}
-module myMod './module.bicep' = {
-  name: 'test'
-}
-output myOutput string = 'myOutput'
-", "this isn't a resource id!");
+            var fileUri = "template.bicep";
+            var fileContents = await InvokeInsertResource(client, listeners, fileUri, """
+                param myParam string = 'test'
+                resource myRes 'myRp/provider@2019-01-01' = {
+                  name: 'te|st'
+                }
+                module myMod './module.bicep' = {
+                  name: 'test'
+                }
+                output myOutput string = 'myOutput'
+                """, "this isn't a resource id!");
 
             var message = await listeners.ShowMessage.WaitNext();
             message.Should().HaveMessageAndType(
@@ -408,9 +409,9 @@ output myOutput string = 'myOutput'
 
             var telemetry = await listeners.Telemetry.WaitForAll();
             telemetry.Should().ContainEvent("InsertResource/failure", new JObject
-                {
-                    ["failureType"] = "ParseResourceIdFailed"
-                });
+            {
+                ["failureType"] = "ParseResourceIdFailed"
+            });
         }
 
         [TestMethod]
@@ -419,14 +420,14 @@ output myOutput string = 'myOutput'
             var listeners = CreateListeners();
             var mockAzResourceProvider = new Mock<IAzResourceProvider>(MockBehavior.Strict);
 
-            var typeLoader = TestTypeHelper.CreateEmptyAzResourceTypeLoader();
+            var typeLoader = TestTypeHelper.CreateEmptyResourceTypeLoader();
 
             using var helper = await StartLanguageServer(listeners, mockAzResourceProvider.Object, typeLoader);
             var client = helper.Client;
 
             var resourceId = ResourceGroupLevelResourceId.Create("23775d31-d753-4290-805b-e5bde53eba6e", "myRg", "MadeUp.Rp", new[] { "madeUpTypes" }, new[] { "myName" });
 
-            var fileUri = new Uri("file:///template.bicep");
+            var fileUri = "template.bicep";
             var fileContents = await InvokeInsertResource(client, listeners, fileUri, @"
 param myParam string = 'test'
 resource myRes 'myRp/provider@2019-01-01' = {
@@ -445,9 +446,9 @@ output myOutput string = 'myOutput'
 
             var telemetry = await listeners.Telemetry.WaitForAll();
             telemetry.Should().ContainEvent("InsertResource/failure", new JObject
-                {
-                    ["failureType"] = "MissingType(MadeUp.Rp/madeUpTypes)",
-                });
+            {
+                ["failureType"] = "MissingType(MadeUp.Rp/madeUpTypes)",
+            });
         }
 
         [TestMethod]
@@ -457,10 +458,10 @@ output myOutput string = 'myOutput'
             var mockAzResourceProvider = new Mock<IAzResourceProvider>(MockBehavior.Strict);
 
             var typeDefinition = TestTypeHelper.CreateCustomResourceType("My.Rp/myTypes", "2020-01-01", TypeSymbolValidationFlags.WarnOnTypeMismatch,
-                new TypeProperty("readOnlyProp", LanguageConstants.String, TypePropertyFlags.ReadOnly),
-                new TypeProperty("readWriteProp", LanguageConstants.String, TypePropertyFlags.None),
-                new TypeProperty("writeOnlyProp", LanguageConstants.String, TypePropertyFlags.WriteOnly));
-            var typeLoader = TestTypeHelper.CreateAzResourceTypeLoaderWithTypes(typeDefinition.AsEnumerable());
+                new NamedTypeProperty("readOnlyProp", LanguageConstants.String, TypePropertyFlags.ReadOnly),
+                new NamedTypeProperty("readWriteProp", LanguageConstants.String, TypePropertyFlags.None),
+                new NamedTypeProperty("writeOnlyProp", LanguageConstants.String, TypePropertyFlags.WriteOnly));
+            var typeLoader = TestTypeHelper.CreateResourceTypeLoaderWithTypes(typeDefinition.AsEnumerable());
 
             using var helper = await StartLanguageServer(listeners, mockAzResourceProvider.Object, typeLoader);
             var client = helper.Client;
@@ -486,44 +487,44 @@ output myOutput string = 'myOutput'
             mockAzResourceProvider.Setup(x => x.GetGenericResource(It.IsAny<RootConfiguration>(), It.Is<IAzResourceProvider.AzResourceIdentifier>(x => x.FullyQualifiedId == resourceId.FullyQualifiedId), null, It.IsAny<CancellationToken>()))
                 .Returns(async () => await JsonSerializer.DeserializeAsync<JsonElement>(mockResource.ToJsonStream()));
 
-            var fileUri = new Uri("file:///template.bicep");
-            var fileContents = await InvokeInsertResource(client, listeners, fileUri, @"
-param myParam string = 'test'
-resource myRes 'myRp/provider@2019-01-01' = {
-  name: 'te|st'
-}
-module myMod './module.bicep' = {
-  name: 'test'
-}
-output myOutput string = 'myOutput'
-", resourceId.FullyQualifiedId);
+            var fileUri = "template.bicep";
+            var fileContents = await InvokeInsertResource(client, listeners, fileUri, """
+                param myParam string = 'test'
+                resource myRes 'myRp/provider@2019-01-01' = {
+                  name: 'te|st'
+                }
+                module myMod './module.bicep' = {
+                  name: 'test'
+                }
+                output myOutput string = 'myOutput'
+                """, resourceId.FullyQualifiedId);
 
             var replacedFile = await ApplyWorkspaceEdit(listeners, fileUri, fileContents);
-            replacedFile.Should().Be(@"
-param myParam string = 'test'
-resource myRes 'myRp/provider@2019-01-01' = {
-  name: 'test'
-}
-@description('Generated from /subscriptions/23775d31-d753-4290-805b-e5bde53eba6e/resourceGroups/myRg/providers/My.Rp/myTypes/myName')
-resource myName 'My.Rp/myTypes@2020-01-01' = {
-  name: 'myName'
-  properties: {
-    readWriteProp: 'def'
-    writeOnlyProp: 'ghi'
-  }
-}
-module myMod './module.bicep' = {
-  name: 'test'
-}
-output myOutput string = 'myOutput'
-");
+            replacedFile.Should().Be("""
+                param myParam string = 'test'
+                resource myRes 'myRp/provider@2019-01-01' = {
+                  name: 'test'
+                }
+                @description('Generated from /subscriptions/23775d31-d753-4290-805b-e5bde53eba6e/resourceGroups/myRg/providers/My.Rp/myTypes/myName')
+                resource myName 'My.Rp/myTypes@2020-01-01' = {
+                  name: 'myName'
+                  properties: {
+                    readWriteProp: 'def'
+                    writeOnlyProp: 'ghi'
+                  }
+                }
+                module myMod './module.bicep' = {
+                  name: 'test'
+                }
+                output myOutput string = 'myOutput'
+                """);
 
             var telemetry = await listeners.Telemetry.WaitForAll();
             telemetry.Should().ContainEvent("InsertResource/success", new JObject
-                {
-                    ["resourceType"] = "My.Rp/myTypes",
-                    ["apiVersion"] = "2020-01-01",
-                });
+            {
+                ["resourceType"] = "My.Rp/myTypes",
+                ["apiVersion"] = "2020-01-01",
+            });
         }
 
         [TestMethod]
@@ -533,10 +534,10 @@ output myOutput string = 'myOutput'
             var mockAzResourceProvider = new Mock<IAzResourceProvider>(MockBehavior.Strict);
 
             var typeDefinition = TestTypeHelper.CreateCustomResourceType("My.Rp/myTypes", "2020-01-01", TypeSymbolValidationFlags.WarnOnTypeMismatch,
-                new TypeProperty("readOnlyProp", LanguageConstants.String, TypePropertyFlags.ReadOnly),
-                new TypeProperty("readWriteProp", LanguageConstants.String, TypePropertyFlags.None),
-                new TypeProperty("writeOnlyProp", LanguageConstants.String, TypePropertyFlags.WriteOnly));
-            var typeLoader = TestTypeHelper.CreateAzResourceTypeLoaderWithTypes(typeDefinition.AsEnumerable());
+                new NamedTypeProperty("readOnlyProp", LanguageConstants.String, TypePropertyFlags.ReadOnly),
+                new NamedTypeProperty("readWriteProp", LanguageConstants.String, TypePropertyFlags.None),
+                new NamedTypeProperty("writeOnlyProp", LanguageConstants.String, TypePropertyFlags.WriteOnly));
+            var typeLoader = TestTypeHelper.CreateResourceTypeLoaderWithTypes(typeDefinition.AsEnumerable());
 
             using var helper = await StartLanguageServer(listeners, mockAzResourceProvider.Object, typeLoader);
             var client = helper.Client;
@@ -549,17 +550,17 @@ output myOutput string = 'myOutput'
             mockAzResourceProvider.Setup(x => x.GetGenericResource(It.IsAny<RootConfiguration>(), It.Is<IAzResourceProvider.AzResourceIdentifier>(x => x.FullyQualifiedId == resourceId.FullyQualifiedId), null, It.IsAny<CancellationToken>()))
                 .Throws(new InvalidOperationException("And something went wrong again!"));
 
-            var fileUri = new Uri("file:///template.bicep");
-            var fileContents = await InvokeInsertResource(client, listeners, fileUri, @"
-param myParam string = 'test'
-resource myRes 'myRp/provider@2019-01-01' = {
-  name: 'te|st'
-}
-module myMod './module.bicep' = {
-  name: 'test'
-}
-output myOutput string = 'myOutput'
-", resourceId.FullyQualifiedId);
+            var fileUri = "template.bicep";
+            var fileContents = await InvokeInsertResource(client, listeners, fileUri, """
+                param myParam string = 'test'
+                resource myRes 'myRp/provider@2019-01-01' = {
+                  name: 'te|st'
+                }
+                module myMod './module.bicep' = {
+                  name: 'test'
+                }
+                output myOutput string = 'myOutput'
+                """, resourceId.FullyQualifiedId);
 
             var message = await listeners.ShowMessage.WaitNext();
             message.Should().HaveMessageAndType(
@@ -568,9 +569,9 @@ output myOutput string = 'myOutput'
 
             var telemetry = await listeners.Telemetry.WaitForAll();
             telemetry.Should().ContainEvent("InsertResource/failure", new JObject
-                {
-                    ["failureType"] = "FetchResourceFailure",
-                });
+            {
+                ["failureType"] = "FetchResourceFailure",
+            });
         }
     }
 }

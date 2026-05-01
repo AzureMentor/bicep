@@ -1,0 +1,12 @@
+{
+  "experimentalFeaturesEnabled": {
+    "localDeploy": true
+  },
+  "extensions": {
+    "mock": "$TARGET_REFERENCE"
+  },
+  "cloud": {
+    "currentProfile": "AzureCloud",
+    "credentialPrecedence": ["AzureCLI"]
+  }
+}

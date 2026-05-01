@@ -1,9 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 
 namespace Bicep.Core.Extensions
 {
@@ -16,24 +13,24 @@ namespace Bicep.Core.Extensions
         public static IEnumerable<TSource> Concat<TSource>(this IEnumerable<TSource> first, params TSource[] second)
             => first.Concat((IEnumerable<TSource>)second);
 
-        public static IEnumerable<IGrouping<TKey, TSource>> GroupByExcludingNull<TKey, TSource>(this IEnumerable<TSource> source, Func<TSource, TKey?> keySelector, IEqualityComparer<TKey> comparer)
+        public static IEnumerable<IGrouping<TKey, TSource>> GroupByExcludingNull<TKey, TSource>(this IEnumerable<TSource> source, Func<TSource, TKey?> keySelector, IEqualityComparer<TKey>? comparer = null)
             where TKey : class
             => source.Where(x => keySelector(x) != null).GroupBy(x => keySelector(x)!, comparer);
 
-        public static ImmutableDictionary<TKey, TSource> ToImmutableDictionaryExcludingNull<TSource, TKey>(this IEnumerable<TSource> source, Func<TSource, TKey?> keySelector, IEqualityComparer<TKey> keyComparer)
+        public static ImmutableDictionary<TKey, TSource> ToImmutableDictionaryExcludingNull<TSource, TKey>(this IEnumerable<TSource> source, Func<TSource, TKey?> keySelector, IEqualityComparer<TKey>? keyComparer = null)
             where TKey : class
             => source.Where(x => keySelector(x) != null).ToImmutableDictionary(x => keySelector(x)!, keyComparer);
 
-        public static ImmutableDictionary<TKey, TValue> ToImmutableDictionaryExcludingNull<TSource, TKey, TValue>(this IEnumerable<TSource> source, Func<TSource, TKey?> keySelector, Func<TSource, TValue> elementSelector, IEqualityComparer<TKey> keyComparer)
+        public static ImmutableDictionary<TKey, TValue> ToImmutableDictionaryExcludingNull<TSource, TKey, TValue>(this IEnumerable<TSource> source, Func<TSource, TKey?> keySelector, Func<TSource, TValue> elementSelector, IEqualityComparer<TKey>? keyComparer = null)
             where TKey : class
             => source.Where(x => keySelector(x) != null).ToImmutableDictionary(x => keySelector(x)!, elementSelector, keyComparer);
 
-        public static ImmutableDictionary<TKey, TSource> ToImmutableDictionaryExcludingNullValues<TSource, TKey>(this IEnumerable<TSource?> source, Func<TSource, TKey> keySelector, IEqualityComparer<TKey> keyComparer)
+        public static ImmutableDictionary<TKey, TSource> ToImmutableDictionaryExcludingNullValues<TSource, TKey>(this IEnumerable<TSource?> source, Func<TSource, TKey> keySelector, IEqualityComparer<TKey>? keyComparer = null)
             where TKey : notnull
             where TSource : class
             => source.WhereNotNull().ToImmutableDictionary(x => keySelector(x), x => x, keyComparer);
 
-        public static ImmutableDictionary<TKey, TValue> ToImmutableDictionaryExcludingNullValues<TSource, TKey, TValue>(this IEnumerable<TSource> source, Func<TSource, TKey> keySelector, Func<TSource, TValue?> elementSelector, IEqualityComparer<TKey> keyComparer)
+        public static ImmutableDictionary<TKey, TValue> ToImmutableDictionaryExcludingNullValues<TSource, TKey, TValue>(this IEnumerable<TSource> source, Func<TSource, TKey> keySelector, Func<TSource, TValue?> elementSelector, IEqualityComparer<TKey>? keyComparer = null)
             where TKey : notnull
             where TValue : class
             => source.Select(x => (key: keySelector(x), value: elementSelector(x))).Where(x => x.value != null).ToImmutableDictionary(
@@ -70,6 +67,17 @@ namespace Bicep.Core.Extensions
             }
         }
 
+        public static IEnumerable<T> TakeWhileNotNull<T>(this IEnumerable<T?> source)
+            where T : class
+        {
+            return source.TakeWhile(x => x is not null)
+                .Cast<T>();
+        }
+
+        public static T[] ToArrayExcludingNull<T>(this IEnumerable<T?> source)
+            where T : class
+            => [.. source.WhereNotNull()];
+
         public static ILookup<T, T> InvertLookup<T>(this ILookup<T, T> source)
             => source.SelectMany(group => group.Select(val => (group.Key, val)))
                 .ToLookup(x => x.val, x => x.Key);
@@ -90,6 +98,33 @@ namespace Bicep.Core.Extensions
 
                 next = getNextElement(next);
             }
+        }
+
+        // Enables this usage:
+        // var (first) = new[] { 1, 2, 3 };
+        public static void Deconstruct<T>(this IEnumerable<T> items, out T t1)
+        {
+            using var enumerator = items.GetEnumerator();
+            t1 = enumerator.MoveNext() ? enumerator.Current : throw new InvalidOperationException("Sequence contains no elements");
+        }
+
+        // Enables this usage:
+        // var (first, second) = new[] { 1, 2, 3 };
+        public static void Deconstruct<T>(this IEnumerable<T> items, out T t1, out T t2)
+        {
+            using var enumerator = items.GetEnumerator();
+            t1 = enumerator.MoveNext() ? enumerator.Current : throw new InvalidOperationException("Sequence contains no elements");
+            t2 = enumerator.MoveNext() ? enumerator.Current : throw new InvalidOperationException("Sequence contains no more elements");
+        }
+
+        // Enables this usage:
+        // var (first, second, third) = new[] { 1, 2, 3 };
+        public static void Deconstruct<T>(this IEnumerable<T> items, out T t1, out T t2, out T t3)
+        {
+            using var enumerator = items.GetEnumerator();
+            t1 = enumerator.MoveNext() ? enumerator.Current : throw new InvalidOperationException("Sequence contains no elements");
+            t2 = enumerator.MoveNext() ? enumerator.Current : throw new InvalidOperationException("Sequence contains no more elements");
+            t3 = enumerator.MoveNext() ? enumerator.Current : throw new InvalidOperationException("Sequence contains no more elements");
         }
     }
 }

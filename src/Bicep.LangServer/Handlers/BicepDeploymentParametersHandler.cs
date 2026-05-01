@@ -1,12 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Bicep.Core;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
@@ -27,7 +21,7 @@ namespace Bicep.LanguageServer.Handlers
     /// <summary>
     /// Handles getDeploymentParameters LSP request.
     /// The BicepDeploymentParametersHandler returns information about deployment parameters, parameters file name and error message, if any.
-    /// List of <see cref="BicepDeploymentParameter"/>, included in the response has informtion about the parameter e.g. name , value, if the parameter has
+    /// List of <see cref="BicepDeploymentParameter"/>, included in the response has information about the parameter e.g. name , value, if the parameter has
     /// @secure() decorator, if it's missing default value/is not present in parameters file, is an expression etc
     /// The above information will be used to display appropriate controls in UI.
     /// </summary>
@@ -201,7 +195,7 @@ namespace Bicep.LanguageServer.Handlers
 
                 return JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(parametersFileContents);
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 throw new Exception(string.Format(LangServerResources.InvalidParameterFile, parametersFilePath, e.Message));
             }
@@ -216,7 +210,7 @@ namespace Bicep.LanguageServer.Handlers
 
             if (compilation is null)
             {
-                return Enumerable.Empty<ParameterSymbol>();
+                return [];
             }
 
             var semanticModel = compilation.GetEntrypointSemanticModel();

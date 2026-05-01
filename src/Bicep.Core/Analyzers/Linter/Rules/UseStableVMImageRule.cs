@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Semantics;
@@ -18,14 +16,15 @@ namespace Bicep.Core.Analyzers.Linter.Rules
     {
         public new const string Code = "use-stable-vm-image";
 
-        private readonly ImmutableHashSet<string> imageReferenceProperties = ImmutableHashSet.Create<string>("offer", "sku", "version");
+        private readonly ImmutableHashSet<string> imageReferenceProperties = ["offer", "sku", "version"];
 
         public UseStableVMImageRule() : base(
             code: Code,
             description: CoreResources.UseStableVMImage,
-            docUri: new Uri($"https://aka.ms/bicep/linter/{Code}"))
+            LinterRuleCategory.BestPractice)
         {
         }
+
         public override string FormatMessage(params object[] values)
         {
             return string.Format(CoreResources.UseStableVMImageRuleFixMessageFormat, values);
@@ -48,7 +47,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
                     }
                     else if (imageReferenceValue is VariableAccessSyntax &&
                              model.GetSymbolInfo(imageReferenceValue) is VariableSymbol variableSymbol &&
-                             variableSymbol.Value is ObjectSyntax variableValueSyntax)
+                             variableSymbol.DeclaringVariable.Value is ObjectSyntax variableValueSyntax)
                     {
                         AddDiagnosticsIfImageReferencePropertiesContainPreview(diagnosticLevel, variableValueSyntax, diagnostics);
                     }

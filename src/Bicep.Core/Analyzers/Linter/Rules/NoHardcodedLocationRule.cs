@@ -1,17 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Collections.Immutable;
 using Bicep.Core.CodeAction;
 using Bicep.Core.Diagnostics;
-using Bicep.Core.Navigation;
-using Bicep.Core.Parsing;
 using Bicep.Core.Semantics;
+using Bicep.Core.SourceGraph;
 using Bicep.Core.Syntax;
-using Bicep.Core.Workspaces;
-using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
+using Bicep.Core.Text;
 
 namespace Bicep.Core.Analyzers.Linter.Rules
 {
@@ -25,8 +21,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
 
         public NoHardcodedLocationRule() : base(
             code: Code,
-            description: CoreResources.NoHardcodedLocationRuleDescription,
-            docUri: new Uri($"https://aka.ms/bicep/linter/{Code}"))
+            description: CoreResources.NoHardcodedLocationRuleDescription)
         {
         }
 
@@ -107,7 +102,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
                     CodeFixKind.QuickFix,
                     new CodeReplacement(
                         definingVariable.DeclaringSyntax.Span,
-                        $"param {definingVariable.Name} string = {definingVariable.Value.ToTextPreserveFormatting()}"));
+                        $"param {definingVariable.Name} string = {definingVariable.DeclaringVariable.Value.ToString()}"));
                 diagnostics.Add(this.CreateFixableDiagnosticForSpan(diagnosticLevel, errorSpan, fix, msg));
             }
             else
@@ -119,7 +114,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
 
                 // Fix: Create a new parameter
                 string newParamName = GetUnusedTopLevelName("location", model);
-                string newDefaultValue = locationValueSyntax.ToTextPreserveFormatting();
+                string newDefaultValue = locationValueSyntax.ToString();
                 CodeReplacement insertNewParamDefinition = new(
                         TextSpan.TextDocumentStart,
                         $"@description('Specifies the location for resources.')\n"

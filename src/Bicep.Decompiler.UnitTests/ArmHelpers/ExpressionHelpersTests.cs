@@ -2,21 +2,20 @@
 // Licensed under the MIT License.
 
 using Azure.Deployments.Expression.Configuration;
+using Azure.Deployments.Expression.Expressions;
 using Azure.Deployments.Expression.Serializers;
+using Bicep.Core.UnitTests.Assertions;
 using Bicep.Decompiler.ArmHelpers;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json.Linq;
-using Bicep.Core.UnitTests.Assertions;
-using Azure.Deployments.Expression.Expressions;
-using System;
 
 namespace Bicep.Core.IntegrationTests.ArmHelpers
 {
     [TestClass]
     public class ExpressionHelpersTests
     {
-        private static readonly ExpressionSerializer ExpressionSerializer = new ExpressionSerializer(new ExpressionSerializerSettings
+        private static readonly ExpressionSerializer ExpressionSerializer = new(new ExpressionSerializerSettings
         {
             IncludeOuterSquareBrackets = true,
 
@@ -111,7 +110,7 @@ namespace Bicep.Core.IntegrationTests.ArmHelpers
             {
                 if (expression is FunctionExpression function && function.Function == "replaceMe")
                 {
-                    return new FunctionExpression("replaced", Array.Empty<LanguageExpression>(), Array.Empty<LanguageExpression>());
+                    return new FunctionExpression("replaced", [], []);
                 }
 
                 return expression;

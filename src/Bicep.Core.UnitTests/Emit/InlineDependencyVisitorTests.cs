@@ -7,8 +7,6 @@ using Bicep.Core.Syntax;
 using Bicep.Core.UnitTests.Utils;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Bicep.Core.UnitTests.Emit
 {
@@ -30,7 +28,7 @@ var runtimeLoop2 = [for (item, index) in indirection.keys: 's']
         {
             var compilation = Services.BuildCompilation(Text);
 
-            var inlineVariables = InlineDependencyVisitor.GetVariablesToInline(compilation.GetEntrypointSemanticModel());
+            var inlineVariables = InlineDependencyVisitor.GetSymbolsToInline(compilation.GetEntrypointSemanticModel()).VariablesToInline;
 
             inlineVariables.Should().Contain(new[]
             {

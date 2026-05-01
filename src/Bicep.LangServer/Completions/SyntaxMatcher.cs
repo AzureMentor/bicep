@@ -1,14 +1,12 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 using Bicep.Core.Extensions;
 using Bicep.Core.Navigation;
 using Bicep.Core.Parsing;
 using Bicep.Core.Syntax;
+using Bicep.Core.Text;
 
 namespace Bicep.LanguageServer.Completions
 {
@@ -25,7 +23,7 @@ namespace Bicep.LanguageServer.Completions
         public static bool IsTailMatch<T1>(IList<SyntaxBase> nodes, Func<T1, bool>? predicate = null)
             where T1 : SyntaxBase
         {
-            return GetTailMatch(nodes, predicate) is {};
+            return GetTailMatch(nodes, predicate) is { };
         }
 
         public static (T1 one, T2 two)? GetTailMatch<T1, T2>(IList<SyntaxBase> nodes, Func<T1, T2, bool>? predicate = null)
@@ -42,7 +40,7 @@ namespace Bicep.LanguageServer.Completions
             where T1 : SyntaxBase
             where T2 : SyntaxBase
         {
-            return GetTailMatch(nodes, predicate) is {};
+            return GetTailMatch(nodes, predicate) is { };
         }
 
         public static (T1 one, T2 two, T3 three)? GetTailMatch<T1, T2, T3>(IList<SyntaxBase> nodes, Func<T1, T2, T3, bool>? predicate = null)
@@ -62,10 +60,10 @@ namespace Bicep.LanguageServer.Completions
             where T2 : SyntaxBase
             where T3 : SyntaxBase
         {
-            return GetTailMatch(nodes, predicate) is {};
+            return GetTailMatch(nodes, predicate) is { };
         }
 
-        public static bool IsTailMatch<T1, T2, T3, T4>(IList<SyntaxBase> nodes, Func<T1, T2, T3, T4, bool> predicate, Action<T1, T2, T3, T4>? actionOnMatch = null)
+        public static bool IsTailMatch<T1, T2, T3, T4>(IList<SyntaxBase> nodes, Func<T1, T2, T3, T4, bool>? predicate = null, Action<T1, T2, T3, T4>? actionOnMatch = null)
             where T1 : SyntaxBase
             where T2 : SyntaxBase
             where T3 : SyntaxBase
@@ -76,7 +74,7 @@ namespace Bicep.LanguageServer.Completions
                    nodes[^3] is T2 two &&
                    nodes[^2] is T3 three &&
                    nodes[^1] is T4 four &&
-                   predicate(one, two, three, four))
+                   (predicate is null || predicate(one, two, three, four)))
             {
                 actionOnMatch?.Invoke(one, two, three, four);
                 return true;
@@ -177,16 +175,17 @@ namespace Bicep.LanguageServer.Completions
             return nodes;
         }
 
-        public static ImmutableArray<SyntaxBase> FindNodesInRange(ProgramSyntax syntax, int startOffset, int endOffset)
+        // Finds syntax nodes that encompass the entire range (i.e. are found at both the start and end of
+        //   the range)
+        public static List<SyntaxBase> FindNodesSpanningRange(ProgramSyntax syntax, int startOffset, int endOffset)
         {
-            var startNodes = FindNodesMatchingOffset(syntax, startOffset);
+            var startNodes = FindNodesMatchingOffset(syntax, startOffset); // in order of least specific (ProgramSyntax) to most specific
             var endNodes = FindNodesMatchingOffset(syntax, endOffset);
 
             return startNodes
                 .Zip(endNodes, (x, y) => object.ReferenceEquals(x, y) ? x : null)
-                .TakeWhile(x => x is not null)
-                .WhereNotNull()
-                .ToImmutableArray();
+                .TakeWhileNotNull()
+                .ToList();
         }
 
         public static List<SyntaxBase> FindNodesMatchingOffsetExclusive(ProgramSyntax syntax, int offset)
@@ -208,5 +207,8 @@ namespace Bicep.LanguageServer.Completions
 
             return (node, index);
         }
+
+        public static (TPredicate? node, int index) FindLastNodeOfType<TPredicate>(List<SyntaxBase> matchingNodes) where TPredicate : SyntaxBase
+            => FindLastNodeOfType<TPredicate, TPredicate>(matchingNodes);
     }
 }

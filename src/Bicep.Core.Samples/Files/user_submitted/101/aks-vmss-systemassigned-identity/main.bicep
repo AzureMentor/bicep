@@ -36,9 +36,7 @@ resource vn 'Microsoft.Network/virtualNetworks@2020-06-01' = {
   tags: tags
   properties: {
     addressSpace: {
-      addressPrefixes: [
-        addressPrefix
-      ]
+      addressPrefixes: [addressPrefix]
     }
     subnets: [
       {

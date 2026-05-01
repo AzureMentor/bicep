@@ -11,6 +11,8 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
     [TestClass]
     public class UseResourceIdFunctionsRuleTests : LinterRuleTestsBase
     {
+        private const string allowedFunctions = "extensionResourceId, guid, if, managementGroupResourceId, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId";
+
         private static void CompileAndTest(string bicep, params string[] expectedMessages)
         {
             AssertLinterRuleDiagnostics(UseResourceIdFunctionsRule.Code, bicep, expectedMessages, new Options(OnCompileErrors.IncludeErrors, IncludePosition.LineNumberAndColumn));
@@ -71,7 +73,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 // TTK result:
                 // Property: "id" must use one of the following expressions for an resourceId property:
                 //  extensionResourceId,resourceId,subscriptionResourceId,tenantResourceId.,if,parameters,reference,variables,subscription,guid
-                "[39:25] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                $"[39:25] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}."
             },
             DisplayName = "virtualNetworkName fail"
         )]
@@ -110,7 +112,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             }",
             new string[]
             {
-                "[24:31] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                $"[24:31] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}."
             },
             DisplayName = "'id' should be analyzed anywhere in the resource tree"
         )]
@@ -132,8 +134,8 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 }",
             new string[]
             {
-                "[7:21] If property \"firstId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId.",
-                "[13:23] If property \"secondId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId.",
+                $"[7:21] If property \"firstId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}.",
+                $"[13:23] If property \"secondId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}.",
             },
             DisplayName = "'id' should be analyzed in nested resources"
         )]
@@ -194,7 +196,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 }",
             new string[]
             {
-                "[7:21] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                $"[7:21] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}."
             },
             DisplayName = "Quoted property keys"
         )]
@@ -286,7 +288,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 // TTK result:
                 // Property: "resourceId" must use one of the following expressions for an resourceId property:
                 // extensionResourceId,resourceId,subscriptionResourceId,tenantResourceId.,if,parameters,reference,variables,subscription,guid
-                "[8:23] If property \"resourceId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                $"[8:23] If property \"resourceId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}."
             },
             DisplayName = "Fail/concat.json")]
         // from https://github.com/Azure/arm-ttk/blob/master/unit-tests/IDs-Should-Be-Derived-From-ResourceIDs/Fail/documentdb-sqldatabases-that-contains-invalid-id-property-should-fail.json
@@ -309,7 +311,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 // TTK result:
                 // Property: "id" must use one of the following expressions for an resourceId property:
                 //   extensionResourceId,resourceId,subscriptionResourceId,tenantResourceId.,if,parameters,reference,variables,subscription,guid
-                "[11:21] If property \"failId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId.",
+                $"[11:21] If property \"failId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}.",
             },
             DisplayName = "Fail/documentdb-sqldatabases-that-contains-invalid-id-property-should-fail.json")]
         // from https://github.com/Azure/arm-ttk/blob/master/unit-tests/IDs-Should-Be-Derived-From-ResourceIDs/Fail/empty-string.json
@@ -351,7 +353,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 }",
             new string[]
             {
-                "[6:23] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                $"[6:23] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}."
             },
             DisplayName = "Fail/literal.json")]
         [DataRow(
@@ -366,7 +368,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 }",
             new string[]
             {
-                "[6:23] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                $"[6:23] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}."
             },
             DisplayName = "literal without any forward slashes - pass - if it doesn't look like an ID, probably not intended to be, so reduce likelihood of false positives")]
         [DataRow(
@@ -394,7 +396,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 }",
             new string[]
             {
-                "[19:23] If property \"slashesFailId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId. Found nonconforming expression at slashesFailId -> slashes2 -> slashes"
+                $"[19:23] If property \"slashesFailId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}. Found nonconforming expression at slashesFailId -> slashes2 -> slashes"
             },
             DisplayName = "literal in variable")]
         [DataRow(
@@ -474,7 +476,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             ",
             new string[]
             {
-                "[20:17] If property \"keyVaultShouldFailId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId. Found nonconforming expression at keyVaultShouldFailId -> existingKeyVaultId",
+                "[8:21] Resources: \"certificateOrderName\", \"certificateOrderName2\" are defined with this same name in a file. Rename them or split into different modules.",
+                "[17:21] Resources: \"certificateOrderName\", \"certificateOrderName2\" are defined with this same name in a file. Rename them or split into different modules.",
+                $"[20:17] If property \"keyVaultShouldFailId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}. Found nonconforming expression at keyVaultShouldFailId -> existingKeyVaultId",
             },
             DisplayName = "pass/IDs-In-KeyVault.json")]
         // from https://github.com/Azure/arm-ttk/blob/master/unit-tests/IDs-Should-Be-Derived-From-ResourceIDs/Pass/IDs-In-Metadata.json
@@ -899,7 +903,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             new string[]
             {
                 // guId: 'abc/def'   // not considered "guid", fail
-                "[9:17] If property \"guId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                $"[9:17] If property \"guId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}."
             },
             DisplayName = "Ignore properties like \"UID\" and \"guid\" (but not 'guId')")]
         [DataRow(
@@ -914,7 +918,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             }",
             new string[]
             {
-                "[7:17] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId. Found nonconforming expression at id -> idValue",
+                $"[7:17] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}. Found nonconforming expression at id -> idValue",
             },
             DisplayName = "resolved variable simple")]
         [DataRow(
@@ -930,7 +934,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             }",
             new string[]
             {
-                "[8:17] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId. Found nonconforming expression at id -> idValue2 -> idValue",
+                $"[8:17] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}. Found nonconforming expression at id -> idValue2 -> idValue",
             },
         DisplayName = "resolved variable double")]
         [DataRow(
@@ -1028,7 +1032,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             }",
             new string[]
             {
-                "[16:19] If property \"fail2id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId. Found nonconforming expression at fail2id -> appGatewayBackendPool",
+                $"[16:19] If property \"fail2id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}. Found nonconforming expression at fail2id -> appGatewayBackendPool",
             },
             DisplayName = "Resolved variables with string literals")]
         [DataRow(@"
@@ -1104,7 +1108,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             ,
             new string[]
             {
-                "[5:21] If property \"resourceId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                $"[5:21] If property \"resourceId\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}."
             },
             DisplayName = "resourceId has to be outermost function")]
         [DataRow(@"
@@ -1271,7 +1275,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 // [-] IDs Should Be Derived From ResourceIDs
                 // Property: "id" must use one of the following expressions for an resourceId property:
                 //   extensionResourceId,resourceId,subscriptionResourceId,tenantResourceId,if,parameters,reference,variables,subscription,guid
-                "[86:23] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId.",
+                $"[86:23] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}.",
             },
             DisplayName = "https://github.com/Azure/arm-ttk/issues/497")]
         [DataRow(@"
@@ -1289,7 +1293,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             ",
             new string[]
             {
-                "[5:21] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                $"[5:21] If property \"id\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}."
             },
             DisplayName = "concat")]
         [DataRow(@"
@@ -1302,7 +1306,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             ",
             new string[]
             {
-                "[5:21] If property \"failid\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: extensionResourceId, guid, if, reference, resourceId, subscription, subscriptionResourceId, tenantResourceId."
+                $"[5:21] If property \"failid\" represents a resource ID, it must use a symbolic resource reference, be a parameter or start with one of these functions: {allowedFunctions}."
             },
             DisplayName = "loops")]
         [DataRow(@"
@@ -1478,147 +1482,6 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             },
             DisplayName = "subnets")]
         [DataRow(@"
-            param location string = resourceGroup().location
-            param vnetIPPrefix string = '10.0.0.0/16'
-            param containerInstancesSubnetIPPrefix string = '10.0.0.0/24'
-            param applicationGatewaySubnetIPPrefix string = '10.0.1.0/24'
-
-            var containerGroupNetworkProfileName = 'aci-networkprofile'
-            var containerGroupNetworkProfileInterfaceName = 'eth0'
-            var containerGroupNetworkProfileInterfaceIPConfigurationName = 'ipconfigprofile1'
-            var vnetName = 'VNet'
-            var containerGroupSubnetName = 'Containers'
-            var applicationGatewaySubnetName = 'ApplicationGateway'
-            var nsgName = 'MyNSG'
-
-            resource containerGroupNetworkProfile 'Microsoft.Network/networkProfiles@2021-02-01' = {
-              name: containerGroupNetworkProfileName
-              location: location
-              properties: {
-                containerNetworkInterfaceConfigurations: [
-                  {
-                    name: containerGroupNetworkProfileInterfaceName
-                    properties: {
-                      ipConfigurations: [
-                        {
-                          name: containerGroupNetworkProfileInterfaceIPConfigurationName
-                          properties: {
-                            subnet: {
-                              id: vnet::containerGroupSubnet.id
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  }
-                ]
-              }
-            }
-
-            resource vnet 'Microsoft.Network/virtualNetworks@2020-06-01' = {
-              name: vnetName
-              location: location
-              properties: {
-                addressSpace: {
-                  addressPrefixes: [
-                    vnetIPPrefix
-                  ]
-                }
-                subnets: [
-                  {
-                    name: containerGroupSubnetName
-                    properties: {
-                      addressPrefix: containerInstancesSubnetIPPrefix
-                      delegations: [
-                        {
-                          name: 'DelegationService'
-                          properties: {
-                            serviceName: 'Microsoft.ContainerInstance/containerGroups'
-                          }
-                        }
-                      ]
-                    }
-                  }
-                  {
-                    name: applicationGatewaySubnetName
-                    properties: {
-                      addressPrefix: applicationGatewaySubnetIPPrefix
-                      networkSecurityGroup: {
-                        id: nsg.id
-                      }
-                    }
-                  }
-                ]
-              }
-
-              resource containerGroupSubnet 'subnets' existing = {
-                name: containerGroupSubnetName
-              }
-
-              resource applicationGatewaySubnet 'subnets' existing = {
-                name: applicationGatewaySubnetName
-              }
-            }
-
-            resource nsg 'Microsoft.Network/networkSecurityGroups@2020-05-01' = {
-              name: nsgName
-              location: location
-              properties: {
-                securityRules: [
-                  {
-                    name: 'Allow_Front_Door_to_send_HTTP_traffic'
-                    properties: {
-                      protocol: 'Tcp'
-                      sourcePortRange: '*'
-                      destinationPortRanges: [
-                        '80'
-                        '443'
-                      ]
-                      sourceAddressPrefix: 'AzureFrontDoor.Backend'
-                      destinationAddressPrefix: 'VirtualNetwork'
-                      access: 'Allow'
-                      priority: 120
-                      direction: 'Inbound'
-                    }
-                  }
-
-                  // Rules for Application Gateway as documented here: https://docs.microsoft.com/en-us/azure/application-gateway/application-gateway-faq
-                  {
-                    name: 'Allow_GWM'
-                    properties: {
-                      protocol: '*'
-                      sourcePortRange: '*'
-                      destinationPortRange: '65200-65535'
-                      sourceAddressPrefix: 'GatewayManager'
-                      destinationAddressPrefix: '*'
-                      access: 'Allow'
-                      priority: 100
-                      direction: 'Inbound'
-                    }
-                  }
-                  {
-                    name: 'Allow_AzureLoadBalancer'
-                    properties: {
-                      protocol: '*'
-                      sourcePortRange: '*'
-                      destinationPortRange: '*'
-                      sourceAddressPrefix: 'AzureLoadBalancer'
-                      destinationAddressPrefix: '*'
-                      access: 'Allow'
-                      priority: 110
-                      direction: 'Inbound'
-                    }
-                  }
-                ]
-              }
-            }
-            ",
-            new string[]
-            {
-                // pass
-            },
-            DisplayName = "subnets")]
-        [DataRow(@"
                 param cosmosName string
                 param cosmosAccountDatabaseScope string
 
@@ -1642,6 +1505,169 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 // pass
             },
             DisplayName = "Regress #8424"
+        )]
+        [DataRow("""
+            param location string = resourceGroup().location
+
+            param webSiteName string
+
+            param appServicePlanId string
+
+            param acrPullMI {
+              clientId: string
+              id: string
+            }
+
+            resource appService 'Microsoft.Web/sites@2022-09-01' = {
+              name: webSiteName
+              location: location
+              properties: {
+                serverFarmId: appServicePlanId
+                siteConfig: {
+                  acrUseManagedIdentityCreds: true
+                  acrUserManagedIdentityID: acrPullMI.clientId
+                }
+              }
+              identity: {
+                type: 'UserAssigned'
+                userAssignedIdentities: {
+                  '${acrPullMI.id}': {}
+                }
+              }
+            }
+            """,
+            new string[]
+            {
+                // pass
+            },
+            DisplayName = "Parameter properties"
+        )]
+        [DataRow("""
+            param location string = resourceGroup().location
+
+            param webSiteName string
+
+            param appServicePlanId string
+
+            param acrPullMI {
+              clientId: string?
+              id: string
+            }
+
+            resource appService 'Microsoft.Web/sites@2022-09-01' = {
+              name: webSiteName
+              location: location
+              properties: {
+                serverFarmId: appServicePlanId
+                siteConfig: {
+                  acrUseManagedIdentityCreds: true
+                  acrUserManagedIdentityID: (acrPullMI.clientId!)
+                }
+              }
+              identity: {
+                type: 'UserAssigned'
+                userAssignedIdentities: {
+                  '${acrPullMI.id}': {}
+                }
+              }
+            }
+            """,
+            new string[]
+            {
+                // pass
+            },
+            DisplayName = "Nullable parameter properties"
+        )]
+        [DataRow("""
+            param location string = resourceGroup().location
+
+            param webSiteName string
+
+            param appServicePlanId string
+
+            param acrPullMIId string
+
+            param acrPullMIClientId string?
+
+            resource appService 'Microsoft.Web/sites@2022-09-01' = {
+              name: webSiteName
+              location: location
+              properties: {
+                serverFarmId: appServicePlanId
+                siteConfig: {
+                  acrUseManagedIdentityCreds: true
+                  acrUserManagedIdentityID: acrPullMIClientId!
+                }
+              }
+              identity: {
+                type: 'UserAssigned'
+                userAssignedIdentities: {
+                  '${acrPullMIId}': {}
+                }
+              }
+            }
+            """,
+            new string[]
+            {
+                // pass
+            },
+            DisplayName = "Nullable parameters"
+        )]
+        [DataRow("""
+            param location string = resourceGroup().location
+
+            param webSiteName string
+
+            param appServicePlanId string
+
+            param acrPullMIId string
+
+            @minLength(1)
+            param acrPullMIClientIds string[]
+
+            resource appService 'Microsoft.Web/sites@2022-09-01' = {
+              name: webSiteName
+              location: location
+              properties: {
+                serverFarmId: appServicePlanId
+                siteConfig: {
+                  acrUseManagedIdentityCreds: true
+                  acrUserManagedIdentityID: acrPullMIClientIds[0]
+                }
+              }
+              identity: {
+                type: 'UserAssigned'
+                userAssignedIdentities: {
+                  '${acrPullMIId}': {}
+                }
+              }
+            }
+            """,
+            new string[]
+            {
+                // pass
+            },
+            DisplayName = "Array parameter elements"
+        )]
+        [DataRow("""
+            targetScope = 'managementGroup'
+
+            resource symbolicname 'Microsoft.Authorization/policySetDefinitions@2021-06-01' = {
+              name: 'string'
+              properties: {
+                policyDefinitions: [
+                  {
+                    policyDefinitionId: managementGroupResourceId('a', 'b')
+                  }
+                ]
+              }
+            }
+            """,
+            new string[]
+            {
+                // pass
+            },
+            DisplayName = "managementGroupResourceId"
         )]
         [DataTestMethod]
         public void Test(string text, string[] expectedMessages)
@@ -1902,8 +1928,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             CompileAndTest(
                 bicep,
                 new Options(
-                    AdditionalFiles: new[]
-                    {
+                    AdditionalFiles: [
                         (
                         "nestedtemplates/virtualNetworks.bicep",
                         @"
@@ -1918,11 +1943,8 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                             output nsgID string = 'name'
                         "
                         )
-                    }),
-                expectedMessages: new string[]
-                {
-                    // pass
-                });
+                    ]),
+                expectedMessages: []);
         }
 
         [TestMethod]
@@ -1952,10 +1974,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                       }
                     }
 ",
-                expectedMessages: new string[]
-                {
-                    // pass
-                });
+                expectedMessages: []);
         }
     }
 }

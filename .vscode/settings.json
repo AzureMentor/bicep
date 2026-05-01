@@ -1,10 +1,19 @@
 {
-    "eslint.format.enable": true,
     "eslint.lintTask.enable": true,
-    "[typescript]": {
-        "editor.defaultFormatter": "vscode.typescript-language-features"
-    },
     "yaml.schemas": {
         "https://json.schemastore.org/github-workflow.json": "/.github/workflows/*.yml"
-    }
+    },
+    "dotnet.defaultSolution": "Bicep.sln",
+    "cSpell.words": [
+        "azureacr",
+        "bicepconfig",
+        "contoso",
+        "Decorable",
+        "Interpolable",
+        "Newtonsoft",
+        "outdir",
+        "outfile",
+        "outputdir",
+        "sarif"
+    ]
 }

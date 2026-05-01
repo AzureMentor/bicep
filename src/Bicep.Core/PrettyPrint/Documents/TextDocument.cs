@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 using System.Collections.Immutable;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Bicep.Core.Parsing;
@@ -15,7 +14,7 @@ namespace Bicep.Core.PrettyPrint.Documents
         private readonly ImmutableArray<ILinkedDocument> successors;
 
         public TextDocument(string text)
-            : this(text, ImmutableArray<ILinkedDocument>.Empty)
+            : this(text, [])
         {
         }
 
@@ -34,7 +33,7 @@ namespace Bicep.Core.PrettyPrint.Documents
         {
             RuntimeHelpers.EnsureSufficientExecutionStack();
 
-            return new TextDocument(this.text, successors.Select(s => s.Nest()).ToImmutableArray());
+            return new TextDocument(this.text, [.. successors.Select(s => s.Nest())]);
         }
 
         public void Layout(StringBuilder sb, string indent, string newline)

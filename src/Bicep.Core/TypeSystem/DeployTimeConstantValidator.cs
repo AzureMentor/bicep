@@ -1,14 +1,12 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
+
 using System.Collections.Immutable;
-using System.Linq;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Extensions;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
-using Bicep.Core.TypeSystem.Az;
+using Bicep.Core.TypeSystem.Providers;
 
 namespace Bicep.Core.TypeSystem
 {
@@ -34,7 +32,7 @@ namespace Bicep.Core.TypeSystem
             }
         }
 
-        private static void CheckDeployTimeConstantViolations(SyntaxBase container, SyntaxBase childContainer, SemanticModel semanticModel, IDiagnosticWriter diagnosticWriter, ResourceTypeResolver resourceTypeResolver)
+        public static void CheckDeployTimeConstantViolations(SyntaxBase container, SyntaxBase childContainer, SemanticModel semanticModel, IDiagnosticWriter diagnosticWriter, ResourceTypeResolver resourceTypeResolver)
         {
             // Validate property accesses, array accesses, resource accesses and function calls.
             new DeployTimeConstantDirectViolationVisitor(container, semanticModel, diagnosticWriter, resourceTypeResolver)
@@ -53,14 +51,17 @@ namespace Bicep.Core.TypeSystem
             ObjectPropertySyntax objectPropertySyntax => objectPropertySyntax.Key.AsEnumerable().Concat(objectPropertySyntax.Value),
             IfConditionSyntax ifConditionSyntax => ifConditionSyntax.ConditionExpression.AsEnumerable(),
 
-            // If the ForSyntax is a child of a variable declartion, we should validate both the for-expression and the for-body.
+            // If the ForSyntax is a child of a variable declaration, we should validate both the for-expression and the for-body.
             ForSyntax forSyntax when semanticModel.Binder.GetParent(forSyntax) is VariableDeclarationSyntax => forSyntax.Expression.AsEnumerable().Concat(forSyntax.Body),
 
             // Only validate the for-expression in other cases.
             ForSyntax forSyntax => forSyntax.Expression.AsEnumerable(),
 
             FunctionCallSyntaxBase functionCallSyntaxBase => functionCallSyntaxBase.Arguments,
-            _ => throw new ArgumentOutOfRangeException(nameof(deployTimeConstantContainer), "Expected an ObjectPropertySyntax, a IfConditionSyntax, a ForSyntax, or a FunctionCallSyntaxBase."),
+            FunctionDeclarationSyntax functionDeclaration => functionDeclaration.AsEnumerable(),
+            FunctionArgumentSyntax functionArgument => functionArgument.AsEnumerable(),
+            ExtensionWithClauseSyntax extensionWithClause => (extensionWithClause.Config as ObjectSyntax)?.Properties ?? [],
+            _ => throw new ArgumentOutOfRangeException(nameof(deployTimeConstantContainer), $@"Unexpected syntax type '{deployTimeConstantContainer.GetType().Name}'.")
         };
 
 
@@ -81,7 +82,7 @@ namespace Bicep.Core.TypeSystem
 
                 visitor.Visit(syntax);
 
-                return visitor.variableDependencies.ToImmutableHashSet();
+                return [.. visitor.variableDependencies];
             }
 
             public override void VisitVariableAccessSyntax(VariableAccessSyntax syntax)

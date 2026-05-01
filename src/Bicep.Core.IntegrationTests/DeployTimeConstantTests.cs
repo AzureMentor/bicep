@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
 using System.Text;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.UnitTests;
@@ -14,7 +13,7 @@ namespace Bicep.Core.IntegrationTests
     [TestClass]
     public class DeployTimeConstantTests
     {
-        private static ServiceBuilder Services => new ServiceBuilder();
+        private static ServiceBuilder Services => new();
 
         private static string GetDtcValidationResourceBaseline()
         {
@@ -94,17 +93,17 @@ resource storageAccounts 'Microsoft.Storage/storageAccounts@2021-02-01' = [for i
 }]
 
 resource vnet 'Microsoft.Network/virtualNetworks@2022-07-01' existing = {
-  name: uniqueString(appPlan.properties.workerTierName)
+  name: uniqueString(appPlan!.properties.workerTierName)
 
   resource subnet0 'subnets' = {
-    name: uniqueString(appPlan.properties.workerTierName)
+    name: uniqueString(appPlan!.properties.workerTierName)
     properties: {
       addressPrefix: '10.0.2.0/24'
     }
   }
 
   resource subnet1 'subnets' existing = {
-    name: uniqueString(appPlan.properties.workerTierName)
+    name: uniqueString(appPlan!.properties.workerTierName)
   }
 }
 
@@ -138,8 +137,8 @@ resource assignment 'Microsoft.Authorization/roleAssignments@2020-04-01-preview'
                 ("BCP182", DiagnosticLevel.Error, "This expression is being used in the for-body of the variable \"foo\", which requires values that can be calculated at the start of the deployment. You are referencing a variable which cannot be calculated at the start (\"bar\" -> \"aRecord\"). Properties of aRecord which can be calculated at the start include \"apiVersion\", \"id\", \"name\", \"type\"."),
                 ("BCP177", DiagnosticLevel.Error, "This expression is being used in the if-condition expression, which requires a value that can be calculated at the start of the deployment. Properties of aRecord which can be calculated at the start include \"apiVersion\", \"id\", \"name\", \"type\"."),
                 ("BCP120", DiagnosticLevel.Error, @"This expression is being used in an assignment to the ""name"" property of the ""Microsoft.Network/virtualNetworks/subnets"" type, which requires a value that can be calculated at the start of the deployment. Properties of appPlan which can be calculated at the start include ""apiVersion"", ""id"", ""name"", ""type""."),
-                ("BCP120", DiagnosticLevel.Error, @"This expression is being used in an assignment to the ""parent"" property of the ""Microsoft.Network/virtualNetworks/subnets"" type, which requires a value that can be calculated at the start of the deployment. Properties of vnet which can be calculated at the start include ""apiVersion"", ""id"", ""type""."),
-                ("BCP120", DiagnosticLevel.Error, @"This expression is being used in an assignment to the ""scope"" property of the ""Microsoft.Insights/diagnosticSettings"" type, which requires a value that can be calculated at the start of the deployment. Properties of subnet1 which can be calculated at the start include ""apiVersion"", ""id"", ""type""."),
+                ("BCP120", DiagnosticLevel.Error, @"This expression is being used in an assignment to the ""parent"" property of the ""Microsoft.Network/virtualNetworks/subnets"" type, which requires a value that can be calculated at the start of the deployment. Properties of vnet which can be calculated at the start include ""apiVersion"", ""type""."),
+                ("BCP120", DiagnosticLevel.Error, @"This expression is being used in an assignment to the ""scope"" property of the ""Microsoft.Insights/diagnosticSettings"" type, which requires a value that can be calculated at the start of the deployment. Properties of subnet1 which can be calculated at the start include ""apiVersion"", ""type""."),
                 ("BCP120", DiagnosticLevel.Error, @"This expression is being used in an assignment to the ""name"" property of the ""Microsoft.Authorization/roleAssignments"" type, which requires a value that can be calculated at the start of the deployment. Properties of ident which can be calculated at the start include ""apiVersion"", ""id"", ""name"", ""type""."),
             });
         }
@@ -210,7 +209,7 @@ var okVarForBody10 = [for i in range(0, 2): indirect.prop]
             var finalText = textSb.ToString();
             var result = CompilationHelper.Compile(finalText);
 
-            var filteredDiagnostics = result.WithFilteredDiagnostics(d => d.Level == DiagnosticLevel.Error);
+            var filteredDiagnostics = result.WithFilteredDiagnostics(d => d.IsError());
             filteredDiagnostics.Should().NotHaveAnyDiagnostics();
         }
 
@@ -280,8 +279,44 @@ var indirect = {
             var finalText = textSb.ToString();
             var result = CompilationHelper.Compile(finalText);
 
-            var filteredDiagnostics = result.WithFilteredDiagnostics(d => d.Level == DiagnosticLevel.Error);
+            var filteredDiagnostics = result.WithFilteredDiagnostics(d => d.IsError());
             filteredDiagnostics.Should().HaveDiagnostics(expectedDiagnostics);
+        }
+
+        [TestMethod]
+        public void DtcValidation_DirectResourceAccessInTopLevelProperties_NotAllowed()
+        {
+            var result = CompilationHelper.Compile("""
+                param location string
+
+                resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+                  name: 'myIdentity'
+                  location: location
+                }
+
+                resource storage 'Microsoft.Storage/storageAccounts@2022-09-01' = {
+                  name: 'myStorage'
+                  kind: 'StorageV2'
+                  location: userAssignedIdentity
+                  sku: {
+                    name: 'Standard_LRS'
+                  }
+                  identity: {
+                    type: 'UserAssigned'
+                    userAssignedIdentities: userAssignedIdentity
+                  }
+                  properties: {
+                    accessTier: 'Hot'
+                  }
+                }
+                """);
+
+            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new[]
+            {
+                ("BCP036", DiagnosticLevel.Warning, @"The property ""location"" expected a value of type ""string"" but the provided value is of type ""Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31"". If this is a resource type definition inaccuracy, report it using https://aka.ms/bicep-type-issues."),
+                ("BCP120", DiagnosticLevel.Error, @"This expression is being used in an assignment to the ""location"" property of the ""Microsoft.Storage/storageAccounts"" type, which requires a value that can be calculated at the start of the deployment. Properties of userAssignedIdentity which can be calculated at the start include ""apiVersion"", ""id"", ""name"", ""type""."),
+                ("BCP120", DiagnosticLevel.Error, @"This expression is being used in an assignment to the ""identity"" property of the ""Microsoft.Storage/storageAccounts"" type, which requires a value that can be calculated at the start of the deployment. Properties of userAssignedIdentity which can be calculated at the start include ""apiVersion"", ""id"", ""name"", ""type""."),
+            });
         }
     }
 }

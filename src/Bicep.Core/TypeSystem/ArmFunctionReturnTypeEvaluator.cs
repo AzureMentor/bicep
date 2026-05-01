@@ -1,14 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using Azure.Deployments.Expression.Expressions;
+using Azure.Deployments.Templates.Expressions;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Extensions;
+using Bicep.Core.TypeSystem.Types;
 using Newtonsoft.Json.Linq;
 
 namespace Bicep.Core.TypeSystem;
@@ -22,7 +21,7 @@ public static class ArmFunctionReturnTypeEvaluator
         IEnumerable<FunctionArgument>? prefixArgs = default)
     {
         var operandTypesArray = operandTypes.ToImmutableArray();
-        var prefixArgsArray = prefixArgs?.ToImmutableArray() ?? ImmutableArray<FunctionArgument>.Empty;
+        var prefixArgsArray = prefixArgs?.ToImmutableArray() ?? [];
 
         List<DiagnosticBuilder.DiagnosticBuilderDelegate> builderDelegates = new();
         diagnosticBuilders = builderDelegates;
@@ -44,12 +43,14 @@ public static class ArmFunctionReturnTypeEvaluator
             args[i + prefixArgsArray.Length] = new(converted);
         }
 
-        if (EvaluateOperatorAsArmFunction(armFunctionName, out var result, out var builderFunc, args))
+        if (EvaluateOperatorAsArmFunction(armFunctionName, args).IsSuccess(out var result, out var builderFunc))
         {
-            if (TypeHelper.TryCreateTypeLiteral(result) is {} literalType) {
+            if (TypeHelper.TryCreateTypeLiteral(result) is { } literalType)
+            {
                 return literalType;
             }
-        } else
+        }
+        else
         {
             builderDelegates.Add(builderFunc);
         }
@@ -57,7 +58,8 @@ public static class ArmFunctionReturnTypeEvaluator
         return null;
     }
 
-    private static JToken? ToJToken(TypeSymbol typeSymbol) => typeSymbol switch {
+    private static JToken? ToJToken(TypeSymbol typeSymbol) => typeSymbol switch
+    {
         BooleanLiteralType booleanLiteral => booleanLiteral.Value,
         IntegerLiteralType integerLiteral => integerLiteral.Value,
         StringLiteralType stringLiteral => stringLiteral.RawStringValue,
@@ -76,7 +78,7 @@ public static class ArmFunctionReturnTypeEvaluator
     private static JToken? ToJToken(ObjectType objectType)
     {
         // If an object allows additional properties, then it cannot be cast to a literal
-        if (objectType.AdditionalPropertiesType is not null)
+        if (objectType.AdditionalProperties is not null)
         {
             return null;
         }
@@ -111,27 +113,22 @@ public static class ArmFunctionReturnTypeEvaluator
         return target;
     }
 
-    private static bool EvaluateOperatorAsArmFunction(string armFunctionName,
-        [NotNullWhen(true)] out JToken? result,
-        [NotNullWhen(false)] out DiagnosticBuilder.DiagnosticBuilderDelegate? builderFunc,
-        params FunctionArgument[] arguments)
+    private static ResultWithDiagnosticBuilder<JToken> EvaluateOperatorAsArmFunction(string armFunctionName, params FunctionArgument[] arguments)
     {
-        try {
-            result = ExpressionBuiltInFunctions.Functions.EvaluateFunction(armFunctionName, arguments, new());
-            builderFunc = default;
-            return true;
+        try
+        {
+            var result = ExpressionBuiltInFunctions.Functions.EvaluateFunction(armFunctionName, arguments, new TemplateExpressionEvaluationHelper().EvaluationContext);
+            return new(result);
         }
         catch (Exception e)
         {
             // The ARM function invoked will almost certainly fail at runtime, but there's a chance a fix has been
             // deployed to ARM since this version of Bicep was released. Given that context, this failure will only
             // be reported as a warning, and the fallback type will be used.
-            builderFunc = b => b.ArmFunctionLiteralTypeConversionFailedWithMessage(
-                string.Join(", ", arguments.Select(a => a.Token.ToString())),
+            return new(b => b.ArmFunctionLiteralTypeConversionFailedWithMessage(
+                string.Join(", ", arguments.Select(a => a.TryGetToken()?.ToString())),
                 armFunctionName,
-                e.Message);
-            result = default;
-            return false;
+                e.Message));
         }
     }
 }

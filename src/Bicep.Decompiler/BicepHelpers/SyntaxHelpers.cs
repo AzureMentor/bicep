@@ -1,11 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using Bicep.Core.Extensions;
 using Bicep.Core.Parsing;
 using Bicep.Core.Syntax;
+using Bicep.Core.Text;
 
 namespace Bicep.Decompiler.BicepHelpers
 {
@@ -78,6 +75,7 @@ namespace Bicep.Decompiler.BicepHelpers
             "subscription",
             "resourceGroup",
             "deployment",
+            "deployer",
             "environment",
             "managementGroupResourceId",
             "resourceId",
@@ -97,9 +95,9 @@ namespace Bicep.Decompiler.BicepHelpers
             ["mul"] = TokenType.Asterisk,
             ["div"] = TokenType.Slash,
             ["mod"] = TokenType.Modulo,
-            ["less"] = TokenType.LessThan,
+            ["less"] = TokenType.LeftChevron,
             ["lessOrEquals"] = TokenType.LessThanOrEqual,
-            ["greater"] = TokenType.GreaterThan,
+            ["greater"] = TokenType.RightChevron,
             ["greaterOrEquals"] = TokenType.GreaterThanOrEqual,
             ["equals"] = TokenType.Equals,
             ["and"] = TokenType.LogicalAnd,
@@ -136,7 +134,7 @@ namespace Bicep.Decompiler.BicepHelpers
         {
             var trailingTrivia = new SyntaxTrivia(SyntaxTriviaType.MultiLineComment, TextSpan.Nil, $"/* {trailingComment} */");
 
-            return SyntaxFactory.CreateFreeformToken(tokenType, "?", SyntaxFactory.EmptyTrivia, trailingTrivia.AsEnumerable());
+            return SyntaxFactory.CreateFreeformToken(tokenType, "?", SyntaxFactory.EmptyTrivia, SyntaxFactory.SingleSpaceTrivia.Append(trailingTrivia));
         }
     }
 }

@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 using System.Diagnostics.CodeAnalysis;
-using System.Threading.Tasks;
-using Bicep.Core.UnitTests;
 using Bicep.LangServer.IntegrationTests.Helpers;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -73,46 +71,52 @@ output myOutput string = 'value'", 0));
         [TestMethod]
         public async Task Formatting_is_supported_for_params_files()
         {
-            using var server = await MultiFileLanguageServerHelper.StartLanguageServer(TestContext, services => services.WithFeatureOverrides(new(ParamsFilesEnabled: true)));
+            using var server = await MultiFileLanguageServerHelper.StartLanguageServer(TestContext);
             var helper = new ServerRequestHelper(TestContext, server);
 
-            await helper.OpenFile("/main.bicep", @"
-param foo string
-param bar object
-param baz array
-");
-            var file = await helper.OpenFile("/main.bicepparam", @"
-using      'main.bicep'
+            await helper.OpenFile("/main.bicep", """
+                param foo string
+                param bar object
+                param baz array
+                """);
 
-     param foo =      'test'
+            var file = await helper.OpenFile("/main.bicepparam", """
 
-param bar = {
-          abc    : { }
-    def: [1,2,3]
-}
+                using      'main.bicep'
 
-param baz = [
-    'abc',{def:'ghi'}
-  'test'
-]
-            
-            ");
+                     param foo =      'test'
+
+                param bar = {
+                          abc    : { }
+                    def: [1,2,3]
+                }
+
+                param baz = [
+                    'abc',{def:'ghi'}
+                  'test'
+                ]
+                            
+                            
+                """);
 
             var textEdit = await file.Format();
-            textEdit.NewText.Should().Be(@"using 'main.bicep'
+            textEdit.NewText.Should().Be("""
+                using 'main.bicep'
 
-param foo = 'test'
+                param foo = 'test'
 
-param bar = {
-  abc: {}
-  def: [ 1, 2, 3 ]
-}
+                param bar = {
+                  abc: {}
+                  def: [1, 2, 3]
+                }
 
-param baz = [
-  'abc', { def: 'ghi' }
-  'test'
-]
-");
+                param baz = [
+                  'abc'
+                  { def: 'ghi' }
+                  'test'
+                ]
+
+                """);
         }
     }
 }

@@ -1,12 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
+using Bicep.Core.TypeSystem.Providers;
+using Bicep.Core.TypeSystem.Types;
 
 namespace Bicep.Core.TypeSystem
 {
@@ -41,7 +40,8 @@ namespace Bicep.Core.TypeSystem
 
         public override void VisitArrayAccessSyntax(ArrayAccessSyntax syntax)
         {
-            if (this.ResourceTypeResolver.TryResolveResourceOrModuleSymbolAndBodyType(syntax.BaseExpression) is ({ } accessedSymbol, { } accessedBodyType))
+            if (this.ResourceTypeResolver.TryResolveResourceOrModuleSymbolAndBodyType(
+                SyntaxHelper.UnwrapNonNullAssertion(syntax.BaseExpression)) is ({ } accessedSymbol, { } accessedBodyType))
             {
                 var indexExprTypeInfo = SemanticModel.GetTypeInfo(syntax.IndexExpression);
                 if (indexExprTypeInfo is StringLiteralType { RawStringValue: var propertyName })
@@ -76,7 +76,8 @@ namespace Bicep.Core.TypeSystem
 
         public override void VisitPropertyAccessSyntax(PropertyAccessSyntax syntax)
         {
-            if (this.ResourceTypeResolver.TryResolveResourceOrModuleSymbolAndBodyType(syntax.BaseExpression) is ({ } accessedSymbol, { } accessedBodyType))
+            if (this.ResourceTypeResolver.TryResolveResourceOrModuleSymbolAndBodyType(
+                SyntaxHelper.UnwrapNonNullAssertion(syntax.BaseExpression)) is ({ } accessedSymbol, { } accessedBodyType))
             {
                 this.FlagIfPropertyNotReadableAtDeployTime(syntax.PropertyName.IdentifierName, accessedSymbol, accessedBodyType);
             }
@@ -104,16 +105,24 @@ namespace Bicep.Core.TypeSystem
 
         public override void VisitFunctionCallSyntax(FunctionCallSyntax syntax)
         {
-            this.FlagIfFunctionRequiresInlining(syntax);
+            var functionSymbol = this.SemanticModel.GetSymbolInfo(syntax) as FunctionSymbol;
 
-            base.VisitFunctionCallSyntax(syntax);
+            FlagIfFunctionRequiresInlining(functionSymbol);
+            if (ShouldVisitFunctionArguments(functionSymbol))
+            {
+                base.VisitFunctionCallSyntax(syntax);
+            }
         }
 
         public override void VisitInstanceFunctionCallSyntax(InstanceFunctionCallSyntax syntax)
         {
-            this.FlagIfFunctionRequiresInlining(syntax);
+            var functionSymbol = this.SemanticModel.GetSymbolInfo(syntax) as FunctionSymbol;
 
-            base.VisitInstanceFunctionCallSyntax(syntax);
+            FlagIfFunctionRequiresInlining(functionSymbol);
+            if (ShouldVisitFunctionArguments(functionSymbol))
+            {
+                base.VisitInstanceFunctionCallSyntax(syntax);
+            }
         }
 
         protected override void VisitInternal(SyntaxBase node)
@@ -137,13 +146,14 @@ namespace Bicep.Core.TypeSystem
 
         private void FlagIfAccessingEntireResourceOrModule(SyntaxBase syntax)
         {
-            switch (this.SemanticModel.Binder.GetParent(syntax))
+            var (parent, immediateChild) = GetParentAndChildIgnoringNonNullAssertions(syntax);
+            switch (parent)
             {
                 // var foo = [for x in [...]: {
                 //   bar: myVM <-- accessing an entire resource/module.
                 // }]
                 case not PropertyAccessSyntax and not ArrayAccessSyntax when
-                    this.ResourceTypeResolver.TryResolveResourceOrModuleSymbolAndBodyType(syntax) is ({ } accessedSymbol, { } accessedBodyType):
+                    this.ResourceTypeResolver.TryResolveResourceOrModuleSymbolAndBodyType(immediateChild) is ({ } accessedSymbol, { } accessedBodyType):
                     {
                         this.FlagDeployTimeConstantViolationWithVariableDependencies(accessedSymbol, accessedBodyType);
                         break;
@@ -152,19 +162,19 @@ namespace Bicep.Core.TypeSystem
                 //   bar: myVNets[1] <-- accessing an entire resource/module via an array index.
                 // }]
                 case ArrayAccessSyntax arrayAccessSyntax when
-                    arrayAccessSyntax.BaseExpression == syntax &&
+                    arrayAccessSyntax.BaseExpression == immediateChild &&
                     this.SemanticModel.Binder.GetParent(arrayAccessSyntax) is not PropertyAccessSyntax and not ArrayAccessSyntax &&
                     this.ResourceTypeResolver.TryResolveResourceOrModuleSymbolAndBodyType(arrayAccessSyntax) is ({ } resourceSymbol, { } resourceType):
-                {
-                    var arrayIndexExprType = this.SemanticModel.GetTypeInfo(arrayAccessSyntax.IndexExpression);
-                    if (arrayIndexExprType.IsIntegerOrIntegerLiteral()
-                        || arrayIndexExprType.TypeKind == TypeKind.Any
-                        || (arrayIndexExprType is UnionType indexUnionType && indexUnionType.Members.All(m => m.Type.IsIntegerOrIntegerLiteral())))
                     {
-                        this.FlagDeployTimeConstantViolationWithVariableDependencies(resourceSymbol, resourceType);
+                        var arrayIndexExprType = this.SemanticModel.GetTypeInfo(arrayAccessSyntax.IndexExpression);
+                        if (arrayIndexExprType.IsIntegerOrIntegerLiteral()
+                            || arrayIndexExprType.TypeKind == TypeKind.Any
+                            || (arrayIndexExprType is UnionType indexUnionType && indexUnionType.Members.All(m => m.Type.IsIntegerOrIntegerLiteral())))
+                        {
+                            this.FlagDeployTimeConstantViolationWithVariableDependencies(resourceSymbol, resourceType);
+                        }
+                        return;
                     }
-                    return;
-                }
 
                 default:
                     break;
@@ -186,10 +196,12 @@ namespace Bicep.Core.TypeSystem
             }
         }
 
-        protected void FlagIfFunctionRequiresInlining(FunctionCallSyntaxBase syntax)
+        protected bool ShouldVisitFunctionArguments(FunctionSymbol? functionSymbol)
+            => functionSymbol is null || !functionSymbol.FunctionFlags.HasFlag(FunctionFlags.IsArgumentValueIndependent);
+
+        protected void FlagIfFunctionRequiresInlining(FunctionSymbol? functionSymbol)
         {
-            if (this.SemanticModel.GetSymbolInfo(syntax) is FunctionSymbol functionSymbol &&
-                functionSymbol.FunctionFlags.HasFlag(FunctionFlags.RequiresInlining))
+            if (functionSymbol is { } && functionSymbol.FunctionFlags.HasFlag(FunctionFlags.RequiresInlining))
             {
                 var variableDependencyChain = this.BuildVariableDependencyChain(functionSymbol.Name);
                 FlagDeployTimeConstantViolation(variableDependencyChain: variableDependencyChain);

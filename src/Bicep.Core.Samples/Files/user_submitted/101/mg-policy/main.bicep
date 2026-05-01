@@ -4,11 +4,7 @@ targetScope = 'managementGroup'
 param targetMG string
 
 @description('An array of the allowed locations, all other locations will be denied by the created policy.')
-param allowedLocations array = [
-  'australiaeast'
-  'australiasoutheast'
-  'australiacentral'
-]
+param allowedLocations array = ['australiaeast', 'australiasoutheast', 'australiacentral']
 
 var mgScope = tenantResourceId('Microsoft.Management/managementGroups', targetMG)
 var policyDefinitionName = 'LocationRestriction'

@@ -3,7 +3,6 @@
 
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Semantics;
-using System.Collections.Generic;
 
 namespace Bicep.Core.Analyzers.Interfaces
 {

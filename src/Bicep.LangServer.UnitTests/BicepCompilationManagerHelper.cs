@@ -1,15 +1,15 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
+using System.IO.Abstractions;
+using System.IO.Abstractions.TestingHelpers;
 using Bicep.Core;
-using Bicep.Core.Analyzers.Linter;
 using Bicep.Core.Configuration;
-using Bicep.Core.TypeSystem.Az;
+using Bicep.Core.Registry;
+using Bicep.Core.SourceGraph;
 using Bicep.Core.UnitTests;
+using Bicep.Core.UnitTests.Features;
 using Bicep.Core.UnitTests.Utils;
-using Bicep.Core.Workspaces;
 using Bicep.LanguageServer;
 using Bicep.LanguageServer.CompilationManager;
 using Bicep.LanguageServer.Providers;
@@ -26,14 +26,14 @@ namespace Bicep.LangServer.UnitTests
     {
         private static readonly MockRepository Repository = new(MockBehavior.Strict);
 
-        public static BicepCompilationManager CreateCompilationManager(DocumentUri documentUri, string fileContents, bool upsertCompilation = false, IWorkspace? workspace = null)
+        public static BicepCompilationManager CreateCompilationManager(DocumentUri documentUri, string fileContents, bool upsertCompilation = false, IActiveSourceFileSet? workspace = null, IConfigurationManager? configurationManager = null)
         {
-            workspace ??= new Workspace();
+            workspace ??= new ActiveSourceFileSet();
             PublishDiagnosticsParams? receivedParams = null;
             var document = CreateMockDocument(p => receivedParams = p);
             var server = CreateMockServer(document);
 
-            var bicepCompilationManager = CreateCompilationManager(server.Object, workspace);
+            var bicepCompilationManager = CreateCompilationManager(server.Object, workspace, configurationManager ?? BicepTestConstants.ConfigurationManager);
 
             if (upsertCompilation)
             {
@@ -43,17 +43,19 @@ namespace Bicep.LangServer.UnitTests
             return bicepCompilationManager;
         }
 
-        public static BicepCompilationManager CreateCompilationManager(ILanguageServerFacade server, IWorkspace workspace)
+        public static BicepCompilationManager CreateCompilationManager(ILanguageServerFacade server, IActiveSourceFileSet workspace, IConfigurationManager configurationManager)
         {
             var helper = ServiceBuilder.Create(services => services
                 .AddSingleton<ILanguageServerFacade>(server)
-                .AddSingleton<IAzResourceTypeLoader>(TestTypeHelper.CreateEmptyAzResourceTypeLoader())
+                .WithAzResourceTypeLoaderFactory(TestTypeHelper.CreateEmptyResourceTypeLoader())
                 .AddSingleton(CreateMockScheduler().Object)
                 .AddSingleton(BicepTestConstants.CreateMockTelemetryProvider().Object)
                 .AddSingleton<ICompilationProvider, BicepCompilationProvider>()
-                .AddSingleton<IWorkspace>(workspace)
-                // This is necessary to avoid hard-coding a particular version number into a compiled template
-                .WithFeatureOverrides(new(AssemblyVersion: BicepTestConstants.DevAssemblyFileVersion))
+                .AddSingleton<IActiveSourceFileSet>(workspace)
+                .WithConfigurationManager(configurationManager)
+                .WithFeatureOverrides(new FeatureProviderOverrides(
+                    // This is necessary to avoid hard-coding a particular version number into a compiled template
+                    AssemblyVersion: BicepTestConstants.DevAssemblyFileVersion))
                 .AddSingleton<BicepCompilationManager>());
 
             return helper.Construct<BicepCompilationManager>();
@@ -91,8 +93,8 @@ namespace Bicep.LangServer.UnitTests
         public static ICompilationProvider CreateEmptyCompilationProvider(IConfigurationManager? configurationManager = null)
         {
             var helper = ServiceBuilder.Create(services => services
-                .AddSingleton<IAzResourceTypeLoader>(TestTypeHelper.CreateEmptyAzResourceTypeLoader())
-                .AddSingletonIfNonNull<IConfigurationManager>(configurationManager)
+                .AddSingleton(TestTypeHelper.CreateEmptyResourceTypeLoader())
+                .AddSingletonIfNotNull<IConfigurationManager>(configurationManager)
                 .AddSingleton<BicepCompilationProvider>());
 
             return helper.Construct<BicepCompilationProvider>();
@@ -101,7 +103,7 @@ namespace Bicep.LangServer.UnitTests
         public static Mock<IModuleRestoreScheduler> CreateMockScheduler()
         {
             var scheduler = Repository.Create<IModuleRestoreScheduler>();
-            scheduler.Setup(m => m.RequestModuleRestore(It.IsAny<ICompilationManager>(), It.IsAny<DocumentUri>(), It.IsAny<IEnumerable<ModuleSourceResolutionInfo>>()));
+            scheduler.Setup(m => m.RequestModuleRestore(It.IsAny<ICompilationManager>(), It.IsAny<DocumentUri>(), It.IsAny<IEnumerable<ArtifactReference>>()));
 
             return scheduler;
         }

@@ -1,13 +1,12 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 using Azure;
+using Azure.Core;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Resources;
+using Azure.ResourceManager.Resources.Mocking;
 using Bicep.Core.Registry;
 using Bicep.Core.UnitTests.Mock;
 using FluentAssertions;
@@ -58,7 +57,7 @@ namespace Bicep.Core.UnitTests.Registry
         }
 
         [TestMethod]
-        public async Task FindTemplateSpecByIdAsync_TemlateSpecFound_ReturnsTemplateSpec()
+        public async Task FindTemplateSpecByIdAsync_TemplateSpecFound_ReturnsTemplateSpec()
         {
             var data = new TemplateSpecVersionData("westus");
             var content = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
@@ -111,8 +110,11 @@ namespace Bicep.Core.UnitTests.Registry
         {
             var clientMock = StrictMock.Of<ArmClient>();
 
-            clientMock.Setup(x => x.GetResourceClient(It.IsAny<Func<TemplateSpecVersionResource>>()))
-                .Returns(resource);
+            var mockableArmClientMock = StrictMock.Of<MockableResourcesArmClient>();
+            mockableArmClientMock.Setup(x => x.GetTemplateSpecVersionResource(It.IsAny<ResourceIdentifier>())).Returns(resource);
+
+            clientMock.Setup(x => x.GetCachedClient(It.IsAny<Func<ArmClient, MockableResourcesArmClient>>()))
+                .Returns(mockableArmClientMock.Object);
 
             return clientMock.Object;
         }

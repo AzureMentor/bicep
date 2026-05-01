@@ -1,8 +1,9 @@
 <Project>
   <PropertyGroup>
     <Deterministic>true</Deterministic>
-    <LangVersion>11.0</LangVersion>
+    <LangVersion>default</LangVersion>
     <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- NU5104: A stable release of a package should not have a prerelease dependency -->
     <NoWarn>$(NoWarn);NU5104</NoWarn>
@@ -10,30 +11,37 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <!-- Bubble up all unused usings https://github.com/dotnet/roslyn/issues/41640#issuecomment-985780130 -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
     <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
     <Copyright>© Microsoft Corporation. All rights reserved.</Copyright>
     <!-- disable nuget packing on all projects by default -->
     <IsPackable>false</IsPackable>
-    <!-- WASM projects don't need runtime identifiers and the mono runtime package is missing for win-arm64 -->
-    <RuntimeIdentifiers Condition=" $(UsingMicrosoftNETSdkBlazorWebAssembly) != 'true' ">win-x64;linux-x64;linux-musl-x64;osx-x64;win-arm64;linux-arm64;osx-arm64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Testing">
+    <EnableMSTestRunner>true</EnableMSTestRunner>
+
+    <!-- More info about dotnet test integration https://learn.microsoft.com/dotnet/core/testing/unit-testing-platform-integration-dotnet-test -->
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <TestingPlatformShowTestsFailure>true</TestingPlatformShowTestsFailure>
+
+    <!-- The way CI is setup is to run dotnet test multiple times with a filter. -->
+    <!-- Most projects will have zero tests from that filter, so we ignore the "zero tests ran" exit code -->
+    <!-- It seems that most filter usages is using FullyQualifiedName with the intent to run a specific assembly -->
+    <!-- The CI should be refactored to run dotnet test for the specific assembly directly rather than using a filter -->
+    <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) --ignore-exit-code 8</TestingPlatformCommandLineArguments>
   </PropertyGroup>
 
   <!-- set default framework - each project can still override -->
   <PropertyGroup Condition=" '$(MSBuildProjectExtension)' == '.csproj' ">
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
 
   <PropertyGroup>
-    <!-- different projects include the GenerateNotice package via different targets - this allows us to centrally manage the upgrades -->
-    <GenerateNoticePackageVersion>0.1.32</GenerateNoticePackageVersion>
-    
     <!-- settings of the GenerateNotice tool -->
     <GenerateNoticeRetryCount>9</GenerateNoticeRetryCount>
     <GenerateNoticeBatchSize>100</GenerateNoticeBatchSize>
 
-    <!-- 
+    <!--
       use local file for local and GH builds
       the ADO builds will set this to false via the environment variables to generate TPN files using the API
      -->
@@ -45,10 +53,4 @@
     -->
     <GenerateNoticeUpdateLocalFile Condition="'$(GenerateNoticeUpdateLocalFile)'==''">false</GenerateNoticeUpdateLocalFile>
   </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Nerdbank.GitVersioning" Version="3.5.119" PrivateAssets="All" />
-    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="3.3.4"  PrivateAssets="All" />
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All"/>
-  </ItemGroup>
 </Project>

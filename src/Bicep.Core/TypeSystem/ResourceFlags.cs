@@ -1,7 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-
 namespace Bicep.Core.TypeSystem
 {
     [Flags]
@@ -16,5 +14,10 @@ namespace Bicep.Core.TypeSystem
         /// The resource must be used with the 'existing' keyword.
         /// </summary>
         ReadOnly = 1 << 0,
+
+        /// <summary>
+        /// The resource cannot be used with the 'existing' keyword.
+        /// </summary>
+        WriteOnly = 1 << 1,
     }
 }

@@ -2,12 +2,8 @@
 // Licensed under the MIT License.
 
 using Bicep.Core.Diagnostics;
-using Bicep.Core.Extensions;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Bicep.Core.Analyzers.Linter.Rules
 {
@@ -18,7 +14,6 @@ namespace Bicep.Core.Analyzers.Linter.Rules
         public NoUnusedVariablesRule() : base(
             code: Code,
             description: CoreResources.UnusedVariableRuleDescription,
-            docUri: new Uri($"https://aka.ms/bicep/linter/{Code}"),
             diagnosticStyling: Diagnostics.DiagnosticStyling.ShowCodeAsUnused)
         { }
 
@@ -34,6 +29,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
 
             // variables must have a reference of type VariableAccessSyntax
             var unreferencedVariables = model.Root.VariableDeclarations
+                .Where(sym => !IsExported(model, sym.DeclaringVariable))
                 .Where(sym => sym.NameSource.IsValid)
                 .Where(sym => !invertedBindings[sym].Any(x => x != sym.DeclaringSyntax));
 
@@ -56,7 +52,7 @@ namespace Bicep.Core.Analyzers.Linter.Rules
             }
         }
 
-        override protected string  GetCodeFixDescription(string name)
+        override protected string GetCodeFixDescription(string name)
         {
             return $"Remove unused variable {name}";
         }

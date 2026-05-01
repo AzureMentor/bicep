@@ -1,12 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using Bicep.Core.Resources;
-using System.Linq;
+using Bicep.Core.TypeSystem;
+using Bicep.Core.TypeSystem.Providers;
+using Bicep.Core.TypeSystem.Types;
+using Moq;
 
-namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
+namespace Bicep.Core.UnitTests.Mock
 {
     internal static class FakeResourceTypes
     {
@@ -4592,8 +4593,8 @@ Fake.ServiceBus/namespaces@2417-04-01
 Fake.ServiceBus/namespaces@2418-01-01-preview
 Fake.ServiceBus/namespaces@2421-01-01-preview
 Fake.ServiceBus/namespaces@2421-06-01-preview
-Fake.ServiceBus/namespaces@2021-11-01
-Fake.ServiceBus/namespaces@2022-01-01-preview
+Fake.ServiceBus/namespaces@2321-11-01
+Fake.ServiceBus/namespaces@2322-01-01-preview
 Fake.ServiceBus/namespaces/AuthorizationRules@2415-08-01
 Fake.ServiceBus/namespaces/AuthorizationRules@2417-04-01
 Fake.ServiceBus/namespaces/AuthorizationRules@2418-01-01-preview
@@ -6181,6 +6182,7 @@ Fake.Authorization/policydefinitions@2419-09-01
 Fake.Authorization/policydefinitions@2420-03-01
 Fake.Authorization/policydefinitions@2420-09-01
 Fake.Authorization/policydefinitions@2421-06-01
+Fake.Authorization/policydefinitions@2423-04-01
 Fake.Authorization/policyassignments@2415-10-01-preview
 Fake.Authorization/policyassignments@2416-04-01
 Fake.Authorization/policyassignments@2416-12-01
@@ -6333,5 +6335,23 @@ Fake.Support/supportTickets@2420-04-01
 Fake.Support/supportTickets/communications@2419-05-01-preview
 Fake.Support/supportTickets/communications@2420-04-01
 Fake.Web/publishingCredentials@2415-08-01";
+
+        public static Mock<IResourceTypeLoader> GetAzResourceTypeLoaderWithInjectedTypes(string[] resourceTypes)
+        {
+            var fakeResourceTypeReferences = FakeResourceTypes.GetFakeResourceTypeReferences(resourceTypes);
+            var typesLoader = StrictMock.Of<IResourceTypeLoader>();
+            typesLoader.Setup(m => m.LoadType(It.IsAny<ResourceTypeReference>()))
+                .Returns<ResourceTypeReference>((tr) => new ResourceTypeComponents(
+                    tr,
+                    ResourceScope.Tenant | ResourceScope.ManagementGroup | ResourceScope.Subscription | ResourceScope.ResourceGroup | ResourceScope.Resource,
+                    ResourceScope.None,
+                    ResourceFlags.None,
+                    new ObjectType(tr.FormatName(), TypeSymbolValidationFlags.Default, [], new TypeProperty(LanguageConstants.Any))));
+
+            typesLoader.Setup(m => m.GetAvailableTypes()).Returns(fakeResourceTypeReferences);
+            return typesLoader;
+        }
+
+
     }
 }

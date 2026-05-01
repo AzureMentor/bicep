@@ -1,25 +1,19 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 // import cytoscape from "cytoscape";
-import { useEffect, useState, VFC } from "react";
 import { ElementDefinition } from "cytoscape";
+import { FC, useEffect, useState } from "react";
 import { DefaultTheme, ThemeProvider } from "styled-components";
-
-import { StatusBar } from "./StatusBar";
-import {
-  Graph,
-  createContainerNodeBackgroundUri,
-  createChildlessNodeBackgroundUri,
-} from "./Graph";
-
-import { DeploymentGraphMessage, Message, READY_MESSAGE } from "../../messages";
 import { DeploymentGraph } from "../../../language";
-import { darkTheme, lightTheme, highContrastTheme } from "../themes";
+import { DeploymentGraphMessage, Message, READY_MESSAGE } from "../../messages";
+import { darkTheme, highContrastTheme, lightTheme } from "../themes";
 import { vscode } from "../vscode";
+import { createChildlessNodeBackgroundUri, createContainerNodeBackgroundUri, Graph } from "./Graph";
+import { StatusBar } from "./StatusBar";
 
 async function mapToElements(
   graph: DeploymentGraphMessage["deploymentGraph"],
-  theme: DefaultTheme
+  theme: DefaultTheme,
 ): Promise<ElementDefinition[]> {
   if (!graph) {
     return [];
@@ -40,15 +34,10 @@ async function mapToElements(
           range: node.range,
           backgroundDataUri: node.hasChildren
             ? createContainerNodeBackgroundUri(symbol, node.isCollection, theme)
-            : await createChildlessNodeBackgroundUri(
-                symbol,
-                node.type,
-                node.isCollection,
-                theme
-              ),
+            : await createChildlessNodeBackgroundUri(symbol, node.type, node.isCollection, theme),
         },
       };
-    })
+    }),
   );
 
   const edges = graph.edges.map(({ sourceId, targetId }) => ({
@@ -62,7 +51,7 @@ async function mapToElements(
   return [...nodes, ...edges];
 }
 
-export const App: VFC = () => {
+export const App: FC = () => {
   const [elements, setElements] = useState<ElementDefinition[]>([]);
   const [graph, setGraph] = useState<DeploymentGraph | null>(null);
   const [theme, setTheme] = useState<DefaultTheme>(darkTheme);
@@ -90,7 +79,7 @@ export const App: VFC = () => {
   };
 
   useEffect(() => {
-    mapToElements(graph, theme).then(setElements);
+    void mapToElements(graph, theme).then(setElements);
   }, [graph, theme]);
 
   useEffect(() => {
@@ -103,9 +92,7 @@ export const App: VFC = () => {
     applyTheme(document.body.className);
 
     const observer = new MutationObserver((mutationRecords) =>
-      mutationRecords.forEach((mutationRecord) =>
-        applyTheme((mutationRecord.target as HTMLElement).className)
-      )
+      mutationRecords.forEach((mutationRecord) => applyTheme((mutationRecord.target as HTMLElement).className)),
     );
 
     observer.observe(document.body, {
@@ -118,11 +105,8 @@ export const App: VFC = () => {
 
   return (
     <ThemeProvider theme={theme}>
-      <Graph theme={theme} elements={elements} />
-      <StatusBar
-        errorCount={graph?.errorCount ?? 0}
-        hasNodes={elements.length > 0}
-      />
+      <Graph elements={elements} />
+      <StatusBar errorCount={graph?.errorCount ?? 0} hasNodes={elements.length > 0} />
     </ThemeProvider>
   );
 };

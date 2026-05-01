@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
-using System.Linq;
+
 using Bicep.Core.Diagnostics;
 using FluentAssertions;
 using FluentAssertions.Primitives;
@@ -26,11 +24,27 @@ namespace Bicep.Core.UnitTests.Assertions
                 result.Compilation);
         }
 
+        public static CompilationResult ExcludingDiagnostics(this CompilationResult result, params string[] codes)
+        {
+            return new CompilationResult(
+                result.Template,
+                result.Diagnostics.Where(d => !codes.Contains(d.Code)),
+                result.Compilation);
+        }
+
         public static CompilationResult WithFilteredDiagnostics(this CompilationResult result, Func<IDiagnostic, bool> filterFunc)
         {
             return new CompilationResult(
                 result.Template,
                 result.Diagnostics.Where(filterFunc),
+                result.Compilation);
+        }
+
+        public static CompilationResult WithErrorDiagnosticsOnly(this CompilationResult result)
+        {
+            return new CompilationResult(
+                result.Template,
+                result.Diagnostics.OnlyIncludingErrorDiagnostics(),
                 result.Compilation);
         }
     }
@@ -87,7 +101,7 @@ namespace Bicep.Core.UnitTests.Assertions
         public AndConstraint<CompilationResultAssertions> NotHaveAnyCompilationBlockingDiagnostics(string because = "", params object[] becauseArgs)
             => DoWithDiagnosticAnnotations(diags =>
             {
-                diags.Where(x => x.Level == DiagnosticLevel.Error).Should().BeEmpty(because, becauseArgs);
+                diags.Where(x => x.IsError()).Should().BeEmpty(because, becauseArgs);
             });
 
         public AndConstraint<CompilationResultAssertions> NotGenerateATemplate(string because = "", params object[] becauseArgs)

@@ -1,7 +1,7 @@
 @secure()
 param kubeConfig string
 
-import 'kubernetes@1.0.0' with {
+extension kubernetes with {
   kubeConfig: kubeConfig
   namespace: 'default'
 }

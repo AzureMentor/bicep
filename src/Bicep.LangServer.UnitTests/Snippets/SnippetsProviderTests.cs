@@ -1,14 +1,17 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
-using System.Linq;
 using Bicep.Core;
+using Bicep.Core.Features;
 using Bicep.Core.Resources;
 using Bicep.Core.TypeSystem;
-using Bicep.Core.TypeSystem.Az;
+using Bicep.Core.TypeSystem.Providers.Az;
+using Bicep.Core.TypeSystem.Types;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
+using Bicep.Core.UnitTests.Features;
+using Bicep.Core.UnitTests.Utils;
+using Bicep.IO.Abstraction;
 using Bicep.LanguageServer.Completions;
 using Bicep.LanguageServer.Snippets;
 using FluentAssertions;
@@ -23,7 +26,7 @@ namespace Bicep.LangServer.UnitTests.Snippets
         private ISnippetsProvider CreateSnippetsProvider()
             => ServiceBuilder.Create(s => s.AddSingleton<SnippetsProvider>()).Construct<SnippetsProvider>();
 
-        private readonly NamespaceType azNamespaceType = BicepTestConstants.NamespaceProvider.TryGetNamespace("az", "az", ResourceScope.ResourceGroup, BicepTestConstants.Features)!;
+        private readonly NamespaceType azNamespaceType = TestTypeHelper.GetBuiltInNamespaceType("az");
 
         [TestMethod]
         public void CompletionPriorityOfResourceSnippets_ShouldBeHigh()
@@ -53,7 +56,7 @@ namespace Bicep.LangServer.UnitTests.Snippets
         [TestMethod]
         public void GetResourceBodyCompletionSnippets_WithStaticTemplateAndNoResourceDependencies_ShouldReturnSnippets()
         {
-            ResourceType resourceType = new ResourceType(
+            ResourceType resourceType = new(
                 azNamespaceType,
                 ResourceTypeReference.Parse("Microsoft.DataLakeStore/accounts@2016-11-01"),
                 ResourceScope.ResourceGroup,
@@ -105,7 +108,7 @@ namespace Bicep.LangServer.UnitTests.Snippets
         [TestMethod]
         public void GetResourceBodyCompletionSnippets_WithStaticTemplateAndResourceDependencies_ShouldReturnSnippets()
         {
-            ResourceType resourceType = new ResourceType(
+            ResourceType resourceType = new(
                 azNamespaceType,
                 ResourceTypeReference.Parse("Microsoft.Automation/automationAccounts/modules@2019-06-01"),
                 ResourceScope.ResourceGroup,
@@ -161,7 +164,7 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2019-06-01' 
         [TestMethod]
         public void GetResourceBodyCompletionSnippets_WithNestedResource_ShouldReturnSnippets()
         {
-            ResourceType resourceType = new ResourceType(
+            ResourceType resourceType = new(
                 azNamespaceType,
                 ResourceTypeReference.Parse("Microsoft.Automation/automationAccounts/certificates@2019-06-01"),
                 ResourceScope.ResourceGroup,
@@ -213,7 +216,7 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2019-06-01' 
         [TestMethod]
         public void GetResourceBodyCompletionSnippets_WithNoStaticTemplate_ShouldReturnSnippets()
         {
-            ResourceType resourceType = new ResourceType(
+            ResourceType resourceType = new(
                 azNamespaceType,
                 ResourceTypeReference.Parse("microsoft.aadiam/azureADMetrics@2020-07-01-preview"),
                 ResourceScope.ResourceGroup,
@@ -269,7 +272,7 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2019-06-01' 
         [TestMethod]
         public void GetResourceBodyCompletionSnippets_WithNoRequiredProperties_ShouldReturnEmptySnippet()
         {
-            ResourceType resourceType = new ResourceType(
+            ResourceType resourceType = new(
                 azNamespaceType,
                 ResourceTypeReference.Parse("microsoft.aadiam/azureADMetrics@2020-07-01-preview"),
                 ResourceScope.ResourceGroup,
@@ -359,19 +362,19 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2019-06-01' 
         {
             var objectTypeA = new ObjectType("objA", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("discKey", TypeFactory.CreateStringLiteralType("keyA")),
-                new TypeProperty("keyAProp", LanguageConstants.String),
+                new NamedTypeProperty("discKey", TypeFactory.CreateStringLiteralType("keyA")),
+                new NamedTypeProperty("keyAProp", LanguageConstants.String),
             }, null);
 
             var objectTypeB = new ObjectType("objB", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("discKey", TypeFactory.CreateStringLiteralType("keyB")),
-                new TypeProperty("keyBProp", LanguageConstants.String),
+                new NamedTypeProperty("discKey", TypeFactory.CreateStringLiteralType("keyB")),
+                new NamedTypeProperty("keyBProp", LanguageConstants.String),
             }, null);
 
             var discriminatedObjectType = new DiscriminatedObjectType("discObj", TypeSymbolValidationFlags.Default, "discKey", new[] { objectTypeA, objectTypeB });
 
-            ResourceType resourceType = new ResourceType(
+            ResourceType resourceType = new(
                 azNamespaceType,
                 ResourceTypeReference.Parse("microsoft.aadiam/azureADMetrics@2020-07-01-preview"),
                 ResourceScope.ResourceGroup,
@@ -397,23 +400,23 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2019-06-01' 
         {
             var objectTypeA = new ObjectType("objA", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("discKey", TypeFactory.CreateStringLiteralType("keyA")),
-                new TypeProperty("name", TypeFactory.CreateStringLiteralType("keyA"), TypePropertyFlags.Required),
-                new TypeProperty("location", LanguageConstants.String, TypePropertyFlags.Required),
-                new TypeProperty("id", LanguageConstants.String)
+                new NamedTypeProperty("discKey", TypeFactory.CreateStringLiteralType("keyA")),
+                new NamedTypeProperty("name", TypeFactory.CreateStringLiteralType("keyA"), TypePropertyFlags.Required),
+                new NamedTypeProperty("location", LanguageConstants.String, TypePropertyFlags.Required),
+                new NamedTypeProperty("id", LanguageConstants.String)
             }, null);
 
             var objectTypeB = new ObjectType("objB", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("discKey", TypeFactory.CreateStringLiteralType("keyB")),
-                new TypeProperty("name", LanguageConstants.String, TypePropertyFlags.Required),
-                new TypeProperty("kind", TypeFactory.CreateStringLiteralType("discKey"), TypePropertyFlags.ReadOnly),
-                new TypeProperty("hostPoolType", LanguageConstants.String)
+                new NamedTypeProperty("discKey", TypeFactory.CreateStringLiteralType("keyB")),
+                new NamedTypeProperty("name", LanguageConstants.String, TypePropertyFlags.Required),
+                new NamedTypeProperty("kind", TypeFactory.CreateStringLiteralType("discKey"), TypePropertyFlags.ReadOnly),
+                new NamedTypeProperty("hostPoolType", LanguageConstants.String)
             }, null);
 
             var discriminatedObjectType = new DiscriminatedObjectType("discObj", TypeSymbolValidationFlags.Default, "discKey", new[] { objectTypeA, objectTypeB });
 
-            ResourceType resourceType = new ResourceType(
+            ResourceType resourceType = new(
                 azNamespaceType,
                 ResourceTypeReference.Parse("microsoft.aadiam/azureADMetrics@2020-07-01-preview"),
                 ResourceScope.ResourceGroup,
@@ -458,9 +461,9 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2019-06-01' 
         {
             var objectType = new ObjectType("objA", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("name", LanguageConstants.String, TypePropertyFlags.ReadOnly),
-                new TypeProperty("location", LanguageConstants.String, TypePropertyFlags.WriteOnly),
-                new TypeProperty("id", LanguageConstants.String)
+                new NamedTypeProperty("name", LanguageConstants.String, TypePropertyFlags.ReadOnly),
+                new NamedTypeProperty("location", LanguageConstants.String, TypePropertyFlags.WriteOnly),
+                new NamedTypeProperty("id", LanguageConstants.String)
             }, null);
             TypeSymbol typeSymbol = new ModuleType("module", ResourceScope.Module, objectType);
 
@@ -481,9 +484,9 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2019-06-01' 
         {
             var objectType = new ObjectType("objA", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("name", LanguageConstants.String, TypePropertyFlags.Required),
-                new TypeProperty("location", LanguageConstants.String, TypePropertyFlags.Required),
-                new TypeProperty("id", LanguageConstants.String)
+                new NamedTypeProperty("name", LanguageConstants.String, TypePropertyFlags.Required),
+                new NamedTypeProperty("location", LanguageConstants.String, TypePropertyFlags.Required),
+                new NamedTypeProperty("id", LanguageConstants.String)
             }, null);
             TypeSymbol typeSymbol = new ModuleType("module", ResourceScope.Module, objectType);
 
@@ -510,13 +513,126 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2019-06-01' 
         }
 
         [TestMethod]
+        public void GetIdentitySnippets_ForModule_ShouldReturnAllModuleIdentitySnippets()
+        {
+            var provider = CreateSnippetsProvider();
+
+            // isResource: false for module
+            var identitySnippets = provider.GetIdentitySnippets(isResource: false);
+
+            identitySnippets.Should().SatisfyRespectively(
+                x =>
+                {
+                    x.Prefix.Should().Be("user-assigned-identity");
+                    x.Detail.Should().Be("User assigned identity");
+                    x.CompletionPriority.Should().Be(CompletionPriority.High);
+                    x.Text.Should().Be(
+        @"{
+  type: 'UserAssigned'
+  userAssignedIdentities: {
+    '${${0:identityId}}': {}
+  }
+}");
+                },
+                x =>
+                {
+                    x.Prefix.Should().Be("user-assigned-identity-array");
+                    x.Detail.Should().Be("User assigned identity array");
+                    x.CompletionPriority.Should().Be(CompletionPriority.High);
+                    x.Text.Should().Be(
+        @"{
+  type: 'UserAssigned'
+  userAssignedIdentities: toObject(${0:identityIdArray}, x => x, x => {})
+}");
+                },
+                x =>
+                {
+                    x.Prefix.Should().Be("none-identity");
+                    x.Detail.Should().Be("None identity");
+                    x.CompletionPriority.Should().Be(CompletionPriority.High);
+                    x.Text.Should().Be(
+        @"{
+  type: 'None'
+}");
+                });
+        }
+
+        [TestMethod]
+        public void GetIdentitySnippets_ForResource_ShouldReturnAllResourceIdentitySnippets()
+        {
+            var provider = CreateSnippetsProvider();
+
+            // isResource: true for resource
+            var identitySnippets = provider.GetIdentitySnippets(isResource: true);
+
+            identitySnippets.Should().SatisfyRespectively(
+                x =>
+                {
+                    x.Prefix.Should().Be("user-assigned-identity");
+                    x.Detail.Should().Be("User assigned identity");
+                    x.CompletionPriority.Should().Be(CompletionPriority.High);
+                    x.Text.Should().Be(
+        @"{
+  type: 'UserAssigned'
+  userAssignedIdentities: {
+    '${${0:identityId}}': {}
+  }
+}");
+                },
+                x =>
+                {
+                    x.Prefix.Should().Be("user-assigned-identity-array");
+                    x.Detail.Should().Be("User assigned identity array");
+                    x.CompletionPriority.Should().Be(CompletionPriority.High);
+                    x.Text.Should().Be(
+        @"{
+  type: 'UserAssigned'
+  userAssignedIdentities: toObject(${0:identityIdArray}, x => x, x => {})
+}");
+                },
+                x =>
+                {
+                    x.Prefix.Should().Be("none-identity");
+                    x.Detail.Should().Be("None identity");
+                    x.CompletionPriority.Should().Be(CompletionPriority.High);
+                    x.Text.Should().Be(
+        @"{
+  type: 'None'
+}");
+                },
+                x =>
+                {
+                    x.Prefix.Should().Be("system-assigned-identity");
+                    x.Detail.Should().Be("System assigned identity");
+                    x.CompletionPriority.Should().Be(CompletionPriority.High);
+                    x.Text.Should().Be(
+        @"{
+  type: 'SystemAssigned'
+}");
+                },
+                x =>
+                {
+                    x.Prefix.Should().Be("user-and-system-assigned-identity");
+                    x.Detail.Should().Be("User and system assigned identity");
+                    x.CompletionPriority.Should().Be(CompletionPriority.High);
+                    x.Text.Should().Be(
+        @"{
+  type: 'SystemAssigned,UserAssigned'
+  userAssignedIdentities: {
+    '${${0:identityId}}': {}
+  }
+}");
+                });
+        }
+
+        [TestMethod]
         public void GetObjectBodyCompletionSnippets_WithNoRequiredProperties_ShouldReturnEmptySnippet()
         {
             var objectType = new ObjectType("objA", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("name", LanguageConstants.String, TypePropertyFlags.ReadOnly),
-                new TypeProperty("location", LanguageConstants.String, TypePropertyFlags.WriteOnly),
-                new TypeProperty("id", LanguageConstants.String)
+                new NamedTypeProperty("name", LanguageConstants.String, TypePropertyFlags.ReadOnly),
+                new NamedTypeProperty("location", LanguageConstants.String, TypePropertyFlags.WriteOnly),
+                new NamedTypeProperty("id", LanguageConstants.String)
             }, null);
 
             IEnumerable<Snippet> snippets = CreateSnippetsProvider().GetObjectBodyCompletionSnippets(objectType);
@@ -536,9 +652,9 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2019-06-01' 
         {
             var objectType = new ObjectType("objA", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("name", LanguageConstants.String, TypePropertyFlags.Required),
-                new TypeProperty("location", LanguageConstants.String, TypePropertyFlags.Required),
-                new TypeProperty("id", LanguageConstants.String)
+                new NamedTypeProperty("name", LanguageConstants.String, TypePropertyFlags.Required),
+                new NamedTypeProperty("location", LanguageConstants.String, TypePropertyFlags.Required),
+                new NamedTypeProperty("id", LanguageConstants.String)
             }, null);
 
             IEnumerable<Snippet> snippets = CreateSnippetsProvider().GetObjectBodyCompletionSnippets(objectType);
@@ -568,14 +684,14 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2019-06-01' 
         {
             var objectTypeA = new ObjectType("objA", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("discKey", TypeFactory.CreateStringLiteralType("keyA")),
-                new TypeProperty("keyAProp", LanguageConstants.String),
+                new NamedTypeProperty("discKey", TypeFactory.CreateStringLiteralType("keyA")),
+                new NamedTypeProperty("keyAProp", LanguageConstants.String),
             }, null);
 
             var objectTypeB = new ObjectType("objB", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("discKey", TypeFactory.CreateStringLiteralType("keyB")),
-                new TypeProperty("keyBProp", LanguageConstants.String),
+                new NamedTypeProperty("discKey", TypeFactory.CreateStringLiteralType("keyB")),
+                new NamedTypeProperty("keyBProp", LanguageConstants.String),
             }, null);
 
             var discriminatedObjectType = new DiscriminatedObjectType("discObj", TypeSymbolValidationFlags.Default, "discKey", new[] { objectTypeA, objectTypeB });
@@ -597,18 +713,18 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2019-06-01' 
         {
             var objectTypeA = new ObjectType("objA", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("discKey", TypeFactory.CreateStringLiteralType("keyA")),
-                new TypeProperty("name", TypeFactory.CreateStringLiteralType("keyA"), TypePropertyFlags.Required),
-                new TypeProperty("location", LanguageConstants.String, TypePropertyFlags.Required),
-                new TypeProperty("id", LanguageConstants.String)
+                new NamedTypeProperty("discKey", TypeFactory.CreateStringLiteralType("keyA")),
+                new NamedTypeProperty("name", TypeFactory.CreateStringLiteralType("keyA"), TypePropertyFlags.Required),
+                new NamedTypeProperty("location", LanguageConstants.String, TypePropertyFlags.Required),
+                new NamedTypeProperty("id", LanguageConstants.String)
             }, null);
 
             var objectTypeB = new ObjectType("objB", TypeSymbolValidationFlags.Default, new[]
             {
-                new TypeProperty("discKey", TypeFactory.CreateStringLiteralType("keyB")),
-                new TypeProperty("name", LanguageConstants.String, TypePropertyFlags.Required),
-                new TypeProperty("kind", TypeFactory.CreateStringLiteralType("discKey"), TypePropertyFlags.ReadOnly),
-                new TypeProperty("hostPoolType", LanguageConstants.String)
+                new NamedTypeProperty("discKey", TypeFactory.CreateStringLiteralType("keyB")),
+                new NamedTypeProperty("name", LanguageConstants.String, TypePropertyFlags.Required),
+                new NamedTypeProperty("kind", TypeFactory.CreateStringLiteralType("discKey"), TypePropertyFlags.ReadOnly),
+                new NamedTypeProperty("hostPoolType", LanguageConstants.String)
             }, null);
 
             var discriminatedObjectType = new DiscriminatedObjectType("discObj", TypeSymbolValidationFlags.Default, "discKey", new[] { objectTypeA, objectTypeB });
@@ -649,7 +765,7 @@ resource automationAccount 'Microsoft.Automation/automationAccounts@2019-06-01' 
             => new(
                 name,
                 TypeSymbolValidationFlags.Default,
-                properties.Select(val => new TypeProperty(val.name, val.type, val.typePropertyFlags)),
+                properties.Select(val => new NamedTypeProperty(val.name, val.type, val.typePropertyFlags)),
                 null);
     }
 }

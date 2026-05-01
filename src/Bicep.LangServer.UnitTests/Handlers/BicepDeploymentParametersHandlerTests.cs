@@ -2,9 +2,8 @@
 // Licensed under the MIT License.
 
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+using Bicep.Core.Extensions;
+using Bicep.Core.FileSystem;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.UnitTests.Mock;
@@ -557,7 +556,8 @@ resource blueprintName_policyArtifact 'Microsoft.Blueprint/blueprints/artifacts@
                     updatedParam.isExpression.Should().BeTrue();
                     updatedParam.isSecure.Should().BeFalse();
                 },
-                updatedParam => {
+                updatedParam =>
+                {
                     updatedParam.name.Should().Be("dataFactoryName");
                     updatedParam.value.Should().Be("format('datafactory{0}', uniqueString(resourceGroup().id))");
                     updatedParam.isMissingParam.Should().BeFalse();
@@ -772,18 +772,15 @@ resource dnsZone 'Microsoft.Network/dnsZones@2018-05-01' = {
 type bar = baz
 type baz = quux
 type quux = (1|2|3|4|5)[]
-param test foo", ParameterType.Array, @"{""experimentalFeaturesEnabled"":{""userDefinedTypes"":true}}")]
+param test foo", ParameterType.Array)]
         [DataRow("param test ", null)]
-        public void VerifyParameterType(string bicepFileContents, ParameterType? expected, string? configFileContents = null)
+        public async Task VerifyParameterType(string bicepFileContents, ParameterType? expected)
         {
             var outputPath = FileHelper.GetUniqueTestOutputPath(TestContext);
             var bicepFilePath = FileHelper.SaveResultFile(TestContext, "input.bicep", bicepFileContents, outputPath);
-            if (configFileContents is not null)
-            {
-              FileHelper.SaveResultFile(TestContext, "bicepconfig.json", configFileContents, outputPath);
-            }
-            var service = new ServiceBuilder().Build();
-            var parameterSymbol = service.BuildCompilation(service.BuildSourceFileGrouping(new(bicepFilePath))).GetEntrypointSemanticModel().Binder.FileSymbol.ParameterDeclarations.Single();
+            var compiler = new ServiceBuilder().Build().GetCompiler();
+            var compilation = await compiler.CreateCompilation(PathHelper.FilePathToFileUrl(bicepFilePath).ToIOUri());
+            var parameterSymbol = compilation.GetEntrypointSemanticModel().Binder.FileSymbol.ParameterDeclarations.Single();
 
             var bicepDeploymentParametersHandler = GetBicepDeploymentParametersHandler(bicepFilePath, string.Empty);
 

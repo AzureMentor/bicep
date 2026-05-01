@@ -1,20 +1,16 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using Bicep.Core;
+using Bicep.Core.Configuration;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Parsing;
-using Bicep.Core.PrettyPrint;
-using Bicep.Core.PrettyPrint.Options;
+using Bicep.Core.PrettyPrintV2;
+using Bicep.Core.Semantics.Namespaces;
 using Bicep.Core.Syntax;
+using Bicep.IO.Abstraction;
 using Bicep.LanguageServer.Telemetry;
 using MediatR;
 using OmniSharp.Extensions.JsonRpc;
@@ -30,52 +26,53 @@ namespace Bicep.LanguageServer.Handlers
 
     public record ImportKubernetesManifestResponse(string? BicepFilePath);
 
-    public class ImportKubernetesManifestHandler : IJsonRpcRequestHandler<ImportKubernetesManifestRequest, ImportKubernetesManifestResponse>
+    public class ImportKubernetesManifestHandler(
+        ILanguageServerFacade server,
+        ITelemetryProvider telemetryProvider,
+        IConfigurationManager configurationManager,
+        IFileExplorer fileExplorer) : IJsonRpcRequestHandler<ImportKubernetesManifestRequest, ImportKubernetesManifestResponse>
     {
-        private readonly TelemetryAndErrorHandlingHelper<ImportKubernetesManifestResponse> helper;
-
-        public ImportKubernetesManifestHandler(ILanguageServerFacade server, ITelemetryProvider telemetryProvider)
-        {
-            this.helper = new TelemetryAndErrorHandlingHelper<ImportKubernetesManifestResponse>(server.Window, telemetryProvider);
-        }
+        private readonly TelemetryAndErrorHandlingHelper<ImportKubernetesManifestResponse> helper = new(server.Window, telemetryProvider);
 
         public Task<ImportKubernetesManifestResponse> Handle(ImportKubernetesManifestRequest request, CancellationToken cancellationToken)
-            => helper.ExecuteWithTelemetryAndErrorHandling(async () => {
-                var bicepFilePath = Path.ChangeExtension(request.ManifestFilePath, ".bicep");
-                var manifestContents = await File.ReadAllTextAsync(request.ManifestFilePath);
+            => helper.ExecuteWithTelemetryAndErrorHandling(async () =>
+            {
+                var manifestFileUri = IOUri.FromFilePath(request.ManifestFilePath);
+                var manifestContents = await fileExplorer.GetFile(manifestFileUri).ReadAllTextAsync();
 
-                var bicepContents = Decompile(manifestContents, this.helper);
+                var bicepFileUri = manifestFileUri.WithExtension(LanguageConstants.LanguageFileExtension);
+                var bicepContents = this.Decompile(bicepFileUri, manifestContents, this.helper);
 
-                await File.WriteAllTextAsync(bicepFilePath, bicepContents, cancellationToken);
+                await fileExplorer.GetFile(bicepFileUri).WriteAllTextAsync(bicepContents, cancellationToken);
 
-                return new(new(bicepFilePath), BicepTelemetryEvent.ImportKubernetesManifestSuccess());
+                return new(new(bicepFileUri.GetFilePath()), BicepTelemetryEvent.ImportKubernetesManifestSuccess());
             });
 
-        public static string Decompile(string manifestContents, TelemetryAndErrorHandlingHelper<ImportKubernetesManifestResponse> telemetryHelper)
+        private string Decompile(IOUri bicepFileUri, string manifestContents, TelemetryAndErrorHandlingHelper<ImportKubernetesManifestResponse> telemetryHelper)
         {
             var declarations = new List<SyntaxBase>
             {
                 new ParameterDeclarationSyntax(
-                    new SyntaxBase[] {
+                    [
                         SyntaxFactory.CreateDecorator("secure"),
                         SyntaxFactory.NewlineToken,
-                    },
-                    SyntaxFactory.CreateIdentifierToken("param"),
-                    SyntaxFactory.CreateIdentifier("kubeConfig"),
+                    ],
+                    SyntaxFactory.ParameterKeywordToken,
+                    SyntaxFactory.CreateIdentifierWithTrailingSpace("kubeConfig"),
                     new VariableAccessSyntax(new(SyntaxFactory.CreateIdentifierToken("string"))),
                     null),
 
-                new ImportDeclarationSyntax(
-                    Enumerable.Empty<SyntaxBase>(),
-                    SyntaxFactory.CreateIdentifierToken("import"),
-                    SyntaxFactory.CreateStringLiteral("kubernetes@1.0.0"),
-                    new ImportWithClauseSyntax(
-                        SyntaxFactory.CreateToken(TokenType.WithKeyword),
-                        SyntaxFactory.CreateObject(new[]
-                        {
+                new ExtensionDeclarationSyntax(
+                    [],
+                    SyntaxFactory.ExtensionKeywordToken,
+                    SyntaxFactory.CreateIdentifierWithTrailingSpace(K8sNamespaceType.BuiltInName),
+                    new ExtensionWithClauseSyntax(
+                        SyntaxFactory.CreateIdentifierToken(LanguageConstants.WithKeyword),
+                        SyntaxFactory.CreateObject(
+                        [
                             SyntaxFactory.CreateObjectProperty("namespace", SyntaxFactory.CreateStringLiteral("default")),
                             SyntaxFactory.CreateObjectProperty("kubeConfig", SyntaxFactory.CreateIdentifier("kubeConfig"))
-                        })),
+                        ])),
                     asClause: SyntaxFactory.EmptySkippedTrivia)
             };
 
@@ -105,7 +102,11 @@ namespace Bicep.LanguageServer.Handlers
                 declarations.SelectMany(x => new SyntaxBase[] { x, SyntaxFactory.DoubleNewlineToken }),
                 SyntaxFactory.CreateToken(TokenType.EndOfFile));
 
-            return PrettyPrinter.PrintValidProgram(program, new PrettyPrintOptions(NewlineOption.LF, IndentKindOption.Space, 2, false));
+            var configuration = configurationManager.GetConfiguration(bicepFileUri);
+            var printerOptions = configuration.Formatting.Data;
+            var printerContext = PrettyPrinterV2Context.Create(printerOptions, EmptyDiagnosticLookup.Instance, EmptyDiagnosticLookup.Instance);
+
+            return PrettyPrinterV2.Print(program, printerContext);
         }
 
         private static ResourceDeclarationSyntax ProcessResourceYaml(YamlDocument yamlDocument, TelemetryAndErrorHandlingHelper<ImportKubernetesManifestResponse> telemetryHelper)
@@ -133,7 +134,8 @@ namespace Bicep.LanguageServer.Handlers
                 throw new YamlException(apiVersionKey.Start, apiVersionKey.End, "Unable to process 'apiVersion' for resource declaration.");
             }
 
-            var (type, apiVersion) = apiVersionNode.Value.LastIndexOf('/') switch {
+            var (type, apiVersion) = apiVersionNode.Value.LastIndexOf('/') switch
+            {
                 -1 => ($"core/{kindNode.Value}", apiVersionNode.Value),
                 int x => ($"{apiVersionNode.Value.Substring(0, x)}/{kindNode.Value}", apiVersionNode.Value.Substring(x + 1)),
             };
@@ -144,20 +146,21 @@ namespace Bicep.LanguageServer.Handlers
             var symbolName = GetResourceSymbolName(type, resourceBody);
 
             return new ResourceDeclarationSyntax(
-                Enumerable.Empty<SyntaxBase>(),
-                SyntaxFactory.CreateIdentifierToken("resource"),
-                SyntaxFactory.CreateIdentifier(symbolName),
+                [],
+                SyntaxFactory.ResourceKeywordToken,
+                SyntaxFactory.CreateIdentifierWithTrailingSpace(symbolName),
                 SyntaxFactory.CreateStringLiteral($"{type}@{apiVersion}"),
                 null,
                 SyntaxFactory.AssignmentToken,
+                [],
                 resourceBody);
         }
 
         private static string GetResourceSymbolName(string type, SyntaxBase resourceBody)
         {
             var identifier = type;
-            if ((resourceBody as ObjectSyntax)?.TryGetPropertyByNameRecursive("metadata", "name") is {} nameProperty &&
-                (nameProperty.Value as StringSyntax)?.TryGetLiteralValue() is {} nameString)
+            if ((resourceBody as ObjectSyntax)?.TryGetPropertyByNameRecursive("metadata", "name") is { } nameProperty &&
+                (nameProperty.Value as StringSyntax)?.TryGetLiteralValue() is { } nameString)
             {
                 identifier = $"{type}_{nameString}";
             }

@@ -1,16 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-/* eslint-disable jest/max-expects */
-
 import { IActionContext } from "@microsoft/vscode-azext-utils";
 import { MessageItem, window } from "vscode";
-import {
-  IPersistedSurveyState,
-  ISurveyInfo,
-  Survey,
-} from "../../feedback/surveys";
-import { bicepConfigurationKeys } from "../../language/constants";
+import { IPersistedSurveyState, ISurveyInfo, Survey } from "../../feedback/surveys";
 import { daysToMs, monthsToDays, weeksToDays } from "../../utils/time";
 import { GlobalStateFake } from "../fakes/globalStateFake";
 import { WorkspaceConfigurationFake } from "../fakes/workspaceConfigurationFake";
@@ -20,13 +13,9 @@ describe("surveys-unittests", () => {
   function createMocks(options: {
     surveyInfo?: ISurveyInfo;
     isSurveyAvailable: boolean;
-    showInformationMessageMock?: jest.Mock<
-      typeof window.showInformationMessage
-    >;
+    showInformationMessageMock?: jest.Mock<typeof window.showInformationMessage>;
     getIsSurveyAvailableMock?: jest.Mock<() => Promise<boolean>>;
-    launchSurveyMock?: jest.Mock<
-      (context: IActionContext, surveyInfo: ISurveyInfo) => Promise<void>
-    >;
+    launchSurveyMock?: jest.Mock<(context: IActionContext, surveyInfo: ISurveyInfo) => Promise<void>>;
   }) {
     const globalStorageFake = new GlobalStateFake();
     const surveyInfo =
@@ -38,18 +27,14 @@ describe("surveys-unittests", () => {
         surveyPrompt: "prompt",
         surveyStateKey: "testSurvey",
       };
-    const showInformationMessageMock =
-      options.showInformationMessageMock ?? jest.fn();
-    const getIsSurveyAvailableMock =
-      options.getIsSurveyAvailableMock ?? jest.fn();
+    const showInformationMessageMock = options.showInformationMessageMock ?? jest.fn();
+    const getIsSurveyAvailableMock = options.getIsSurveyAvailableMock ?? jest.fn();
     const launchSurveyMock = options.launchSurveyMock ?? jest.fn();
     const workspaceConfigurationFake = new WorkspaceConfigurationFake();
 
     const survey = new Survey(globalStorageFake, surveyInfo, {
       showInformationMessage: showInformationMessageMock,
-      getIsSurveyAvailable: jest
-        .fn()
-        .mockImplementation(async () => options.isSurveyAvailable),
+      getIsSurveyAvailable: jest.fn().mockImplementation(async () => options.isSurveyAvailable),
       launchSurvey: launchSurveyMock,
       provideBicepConfiguration: () => workspaceConfigurationFake,
     });
@@ -63,33 +48,34 @@ describe("surveys-unittests", () => {
     };
   }
 
-  it("doesn't prompt again if user responds never", async () => {
+  it("postpones for 180 days if user responds don't ask again", async () => {
     const mocks = createMocks({ isSurveyAvailable: true });
+    const start = new Date();
+    let now = start;
 
-    expect(
-      mocks.workspaceConfigurationFake.get<boolean>(
-        bicepConfigurationKeys.enableSurveys
-      )
-    ).toBeUndefined();
-
-    // Show and respond with "Never"
+    // Show and respond with "Don't ask again"
     mocks.showInformationMessageMock.mockResolvedValueOnce(<MessageItem>{
-      title: "Never ask again",
-      id: "never",
+      title: "Don't ask again",
+      id: "dontAskAgain",
     });
-    await mocks.survey.checkShowSurvey(createActionContextMock(), new Date());
+    await mocks.survey.checkShowSurvey(createActionContextMock(), now);
 
     expect(mocks.showInformationMessageMock).toHaveBeenCalledTimes(1);
-    expect(
-      mocks.workspaceConfigurationFake.get<boolean>(
-        bicepConfigurationKeys.enableSurveys
-      )
-    ).toBe(false);
+    expect(mocks.globalStorageFake.get<IPersistedSurveyState>("testSurvey")?.postponedUntilMs).toBe(
+      now.valueOf() + daysToMs(180),
+    );
 
-    // Try again, should not show
+    // Try again at 179 days, should not show
+    now = new Date(start.valueOf() + daysToMs(179));
     mocks.showInformationMessageMock.mockClear();
-    await mocks.survey.checkShowSurvey(createActionContextMock(), new Date());
+    await mocks.survey.checkShowSurvey(createActionContextMock(), now);
     expect(mocks.showInformationMessageMock).not.toHaveBeenCalled();
+
+    // Try again at 181 days, should show
+    now = new Date(start.valueOf() + daysToMs(181));
+    mocks.showInformationMessageMock.mockClear();
+    await mocks.survey.checkShowSurvey(createActionContextMock(), now);
+    expect(mocks.showInformationMessageMock).toHaveBeenCalledTimes(1);
   });
 
   it("doesn't prompt if survey is not available", async () => {
@@ -138,14 +124,8 @@ describe("surveys-unittests", () => {
     await mocks.survey.checkShowSurvey(context, now);
 
     expect(mocks.showInformationMessageMock).toHaveBeenCalledTimes(1);
-    expect(
-      mocks.globalStorageFake.get<IPersistedSurveyState>("testSurvey")
-        ?.postponedUntilMs
-    ).toBeFalsy();
-    expect(
-      mocks.globalStorageFake.get<IPersistedSurveyState>("testSurvey")
-        ?.lastTakenMs
-    ).toBe(now.valueOf());
+    expect(mocks.globalStorageFake.get<IPersistedSurveyState>("testSurvey")?.postponedUntilMs).toBeFalsy();
+    expect(mocks.globalStorageFake.get<IPersistedSurveyState>("testSurvey")?.lastTakenMs).toBe(now.valueOf());
 
     // Try again, right before the postponement date
     now = new Date(start.valueOf() + daysToMs(postponeAfterYes) - 1);
@@ -197,10 +177,55 @@ describe("surveys-unittests", () => {
     await mocks.survey.checkShowSurvey(context, now);
 
     expect(mocks.showInformationMessageMock).toHaveBeenCalledTimes(1);
-    expect(
-      mocks.globalStorageFake.get<IPersistedSurveyState>("testSurvey")
-        ?.postponedUntilMs
-    ).toBe(now.valueOf() + daysToMs(postponeLaterDays));
+    expect(mocks.globalStorageFake.get<IPersistedSurveyState>("testSurvey")?.postponedUntilMs).toBe(
+      now.valueOf() + daysToMs(postponeLaterDays),
+    );
+
+    // Try again, a day before the postponement date
+    now = new Date(start.valueOf() + daysToMs(postponeLaterDays - 1));
+    mocks.showInformationMessageMock.mockReset();
+    context = createActionContextMock();
+    await mocks.survey.checkShowSurvey(context, now);
+
+    // Shouldn't have asked
+    expect(mocks.showInformationMessageMock).not.toHaveBeenCalled();
+    expect(context.telemetry.properties.shouldAsk).toBe("postponed");
+
+    // Try again, a day after the postponement date
+    now = new Date(start.valueOf() + daysToMs(postponeLaterDays + 1));
+    mocks.showInformationMessageMock.mockReset();
+    context = createActionContextMock();
+    await mocks.survey.checkShowSurvey(context, now);
+
+    // Should have asked
+    expect(mocks.showInformationMessageMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("postpones after dismissing/ignoring prompt", async () => {
+    const postponeLaterDays = 7;
+    const mocks = createMocks({
+      isSurveyAvailable: true,
+      surveyInfo: {
+        akaLinkToSurvey: "link",
+        postponeAfterTakenInDays: postponeLaterDays * 2,
+        postponeForLaterInDays: postponeLaterDays,
+        surveyPrompt: "prompt",
+        surveyStateKey: "testSurvey",
+      },
+    });
+    const start = new Date();
+    let now = start;
+
+    // Show and dismiss
+    mocks.showInformationMessageMock.mockResolvedValueOnce(undefined);
+    let context = createActionContextMock();
+    await mocks.survey.checkShowSurvey(context, now);
+
+    expect(mocks.showInformationMessageMock).toHaveBeenCalledTimes(1);
+    // Should postpone same as "later"
+    expect(mocks.globalStorageFake.get<IPersistedSurveyState>("testSurvey")?.postponedUntilMs).toBe(
+      now.valueOf() + daysToMs(postponeLaterDays),
+    );
 
     // Try again, a day before the postponement date
     now = new Date(start.valueOf() + daysToMs(postponeLaterDays - 1));

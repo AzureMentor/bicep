@@ -1,10 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
+
 using System.Collections.Immutable;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
 using Bicep.LanguageServer.CompilationManager;
@@ -22,25 +19,28 @@ namespace Bicep.LanguageServer.Handlers
     {
         private readonly ILogger<BicepDocumentSymbolHandler> logger;
         private readonly ICompilationManager compilationManager;
+        private readonly DocumentSelectorFactory documentSelectorFactory;
 
-        public BicepDocumentSymbolHandler(ILogger<BicepDocumentSymbolHandler> logger, ICompilationManager compilationManager)
+        public BicepDocumentSymbolHandler(ILogger<BicepDocumentSymbolHandler> logger, ICompilationManager compilationManager, DocumentSelectorFactory documentSelectorFactory)
         {
             this.logger = logger;
             this.compilationManager = compilationManager;
+            this.documentSelectorFactory = documentSelectorFactory;
         }
 
-        public override Task<SymbolInformationOrDocumentSymbolContainer> Handle(DocumentSymbolParams request, CancellationToken cancellationToken)
+        public override async Task<SymbolInformationOrDocumentSymbolContainer?> Handle(DocumentSymbolParams request, CancellationToken cancellationToken)
         {
+            await Task.CompletedTask;
             var context = this.compilationManager.GetCompilation(request.TextDocument.Uri);
             if (context is null)
             {
                 // we have not yet compiled this document, which shouldn't really happen
                 this.logger.LogError("Document symbol request arrived before file {Uri} could be compiled.", request.TextDocument.Uri);
 
-                return Task.FromResult(new SymbolInformationOrDocumentSymbolContainer());
+                return null;
             }
 
-            return Task.FromResult(new SymbolInformationOrDocumentSymbolContainer(GetSymbols(context)));
+            return new(GetSymbols(context));
         }
 
         private IEnumerable<SymbolInformationOrDocumentSymbol> GetSymbols(CompilationContext context)
@@ -78,14 +78,17 @@ namespace Bicep.LanguageServer.Handlers
 
         private static SymbolKind SelectSymbolKind(DeclaredSymbol symbol) => symbol switch
         {
-            ImportedNamespaceSymbol => SymbolKind.Namespace,
+            ExtensionNamespaceSymbol => SymbolKind.Namespace,
             ParameterSymbol => SymbolKind.Field,
             TypeAliasSymbol => SymbolKind.Field,
             VariableSymbol => SymbolKind.Variable,
+            DeclaredFunctionSymbol => SymbolKind.Function,
             ResourceSymbol => SymbolKind.Object,
             ModuleSymbol => SymbolKind.Module,
             OutputSymbol => SymbolKind.Interface,
             ParameterAssignmentSymbol => SymbolKind.Constant,
+            ExtensionConfigAssignmentSymbol => SymbolKind.Constant,
+            AssertSymbol => SymbolKind.Boolean,
             _ => SymbolKind.Key,
         };
 
@@ -94,17 +97,19 @@ namespace Bicep.LanguageServer.Handlers
             ParameterSymbol parameter => parameter.Type.Name,
             TypeAliasSymbol declaredType => declaredType.Type.Name,
             VariableSymbol variable => variable.Type.Name,
+            DeclaredFunctionSymbol func => func.Type.Name,
             ResourceSymbol resource => resource.Type.Name,
             ModuleSymbol module => module.Type.Name,
             OutputSymbol output => output.Type.Name,
             ParameterAssignmentSymbol paramAssignment => paramAssignment.Type.Name,
+            ExtensionConfigAssignmentSymbol extConfigAssignment => extConfigAssignment.Type.Name,
+            AssertSymbol assert => assert.Type.Name,
             _ => string.Empty,
         };
 
         protected override DocumentSymbolRegistrationOptions CreateRegistrationOptions(DocumentSymbolCapability capability, ClientCapabilities clientCapabilities) => new()
         {
-            DocumentSelector = DocumentSelectorFactory.CreateForBicepAndParams()
+            DocumentSelector = documentSelectorFactory.CreateForBicepAndParams()
         };
     }
 }
-

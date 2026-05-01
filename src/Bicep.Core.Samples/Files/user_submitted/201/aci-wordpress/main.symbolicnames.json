@@ -1,13 +1,12 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "languageVersion": "1.10-experimental",
+  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
     "_generator": {
       "name": "bicep",
       "version": "dev",
-      "templateHash": "696954864064958221"
+      "templateHash": "1874808718678481912"
     }
   },
   "parameters": {
@@ -97,7 +96,7 @@
         "azPowerShellVersion": "3.0",
         "storageAccountSettings": {
           "storageAccountName": "[parameters('storageAccountName')]",
-          "storageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2019-06-01').keys[0].value]"
+          "storageAccountKey": "[listKeys('stg', '2019-06-01').keys[0].value]"
         },
         "scriptContent": "[variables('wpScriptToExecute')]",
         "cleanupPreference": "OnSuccess",
@@ -125,7 +124,7 @@
         "azPowerShellVersion": "3.0",
         "storageAccountSettings": {
           "storageAccountName": "[parameters('storageAccountName')]",
-          "storageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2019-06-01').keys[0].value]"
+          "storageAccountKey": "[listKeys('stg', '2019-06-01').keys[0].value]"
         },
         "scriptContent": "[variables('sqlScriptToExecute')]",
         "cleanupPreference": "OnSuccess",
@@ -213,7 +212,7 @@
           {
             "azureFile": {
               "shareName": "[variables('wpShareName')]",
-              "storageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2019-06-01').keys[0].value]",
+              "storageAccountKey": "[listKeys('stg', '2019-06-01').keys[0].value]",
               "storageAccountName": "[parameters('storageAccountName')]"
             },
             "name": "wordpressfile"
@@ -221,7 +220,7 @@
           {
             "azureFile": {
               "shareName": "[variables('sqlShareName')]",
-              "storageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2019-06-01').keys[0].value]",
+              "storageAccountKey": "[listKeys('stg', '2019-06-01').keys[0].value]",
               "storageAccountName": "[parameters('storageAccountName')]"
             },
             "name": "mysqlfile"

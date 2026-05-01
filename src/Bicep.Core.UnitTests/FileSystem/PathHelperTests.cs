@@ -1,8 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Reflection;
 using Bicep.Core.FileSystem;
 using FluentAssertions;
@@ -28,7 +25,7 @@ namespace Bicep.Core.UnitTests.FileSystem
         [DataRow("foo.json")]
         public void GetBuildOutputPath_ShouldThrowOnJsonExtensions_Linux(string path)
         {
-            Action badExtension = () => PathHelper.GetDefaultBuildOutputPath(path);
+            Action badExtension = () => PathHelper.GetJsonOutputPath(path);
             badExtension.Should().Throw<ArgumentException>().WithMessage("The specified file already has the '.json' extension.");
         }
 
@@ -36,7 +33,7 @@ namespace Bicep.Core.UnitTests.FileSystem
         [DataRow("foo.bicep")]
         public void GetDecompileOutputPath_ShouldThrowOnBicepExtensions_Linux(string path)
         {
-            Action badExtension = () => PathHelper.GetDefaultDecompileOutputPath(path);
+            Action badExtension = () => PathHelper.GetBicepOutputPath(path);
             badExtension.Should().Throw<ArgumentException>().WithMessage("The specified file already has the '.bicep' extension.");
         }
 #else
@@ -53,7 +50,7 @@ namespace Bicep.Core.UnitTests.FileSystem
         [DataRow("foo.JsOn")]
         public void GetBuildOutputPath_ShouldThrowOnJsonExtensions_WindowsAndMac(string path)
         {
-            Action badExtension = () => PathHelper.GetDefaultBuildOutputPath(path);
+            Action badExtension = () => PathHelper.GetJsonOutputPath(path);
             badExtension.Should().Throw<ArgumentException>().WithMessage("The specified file already has the '.json' extension.");
         }
 
@@ -63,7 +60,7 @@ namespace Bicep.Core.UnitTests.FileSystem
         [DataRow("foo.BiCeP")]
         public void GetDecompileOutputPath_ShouldThrowOnBicepExtensions_WindowsAndMac(string path)
         {
-            Action badExtension = () => PathHelper.GetDefaultDecompileOutputPath(path);
+            Action badExtension = () => PathHelper.GetBicepOutputPath(path);
             badExtension.Should().Throw<ArgumentException>().WithMessage("The specified file already has the '.bicep' extension.");
         }
 #endif
@@ -86,14 +83,32 @@ namespace Bicep.Core.UnitTests.FileSystem
         [DynamicData(nameof(GetBuildOutputPathData), DynamicDataSourceType.Method, DynamicDataDisplayName = nameof(GetDisplayName))]
         public void GetDefaultBuildOutputPath_ShouldChangeExtensionCorrectly(string path, string expectedPath)
         {
-            PathHelper.GetDefaultBuildOutputPath(path).Should().Be(expectedPath);
+            PathHelper.GetJsonOutputPath(path).Should().Be(expectedPath);
         }
 
         [DataTestMethod]
         [DynamicData(nameof(GetDecompileOutputPathData), DynamicDataSourceType.Method, DynamicDataDisplayName = nameof(GetDisplayName))]
         public void GetDefaultDecompileOutputPath_ShouldChangeExtensionCorrectly(string path, string expectedPath)
         {
-            PathHelper.GetDefaultDecompileOutputPath(path).Should().Be(expectedPath);
+            PathHelper.GetBicepOutputPath(path).Should().Be(expectedPath);
+        }
+
+        [DataRow("file:///path/to/source.txt", "file:///path/to/target.exe", "target.exe")]
+        [DataRow("file:///path/to/source.txt", "file:///path/target.exe", "../target.exe")]
+        [DataRow("file:///path/source.txt", "file:///path/to/target.exe", "to/target.exe")]
+        [DataRow("inmemory:///path/source.txt", "inmemory:///path/to/target.exe", "to/target.exe")]
+        [DataRow("file:///samefile.txt", "file:///samefile.txt", "samefile.txt")]
+        [TestMethod]
+        public void GetRelativePath_should_return_expected_output(string source, string target, string expected)
+        {
+            PathHelper.GetRelativePath(new Uri(source), new Uri(target)).Should().Be(expected);
+        }
+
+        [TestMethod]
+        public void GetRelativePath_should_fail_for_unexpected_input()
+        {
+            FluentActions.Invoking(() => PathHelper.GetRelativePath(new Uri("file:///foo.txt"), new Uri("inmemory:///bar.txt")))
+                .Should().Throw<InvalidOperationException>().WithMessage("Source scheme 'file' does not match target scheme 'inmemory'");
         }
 
         public static string GetDisplayName(MethodInfo info, object[] row)
@@ -212,7 +227,7 @@ namespace Bicep.Core.UnitTests.FileSystem
 #endif
         }
 
-        private static object[] CreateRow(string input, string expectedOutput) => new object[] { input, expectedOutput };
+        private static object[] CreateRow(string input, string expectedOutput) => [input, expectedOutput];
     }
 }
 

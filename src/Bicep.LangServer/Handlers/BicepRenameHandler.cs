@@ -1,10 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Bicep.Core.Navigation;
+using Bicep.Core.Parsing;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
 using Bicep.LanguageServer.Extensions;
@@ -17,18 +14,11 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace Bicep.LanguageServer.Handlers
 {
-    public class BicepRenameHandler : RenameHandlerBase
+    public class BicepRenameHandler(ISymbolResolver symbolResolver, DocumentSelectorFactory documentSelectorFactory) : RenameHandlerBase
     {
-        private readonly ISymbolResolver symbolResolver;
-
-        public BicepRenameHandler(ISymbolResolver symbolResolver) : base()
-        {
-            this.symbolResolver = symbolResolver;
-        }
-
         public override Task<WorkspaceEdit?> Handle(RenameParams request, CancellationToken cancellationToken)
         {
-            var result = this.symbolResolver.ResolveSymbol(request.TextDocument.Uri, request.Position);
+            var result = symbolResolver.ResolveSymbol(request.TextDocument.Uri, request.Position);
             if (result == null || !(result.Symbol is DeclaredSymbol))
             {
                 // result is not a symbol or it's a built-in symbol that was not declared by the user (namespaces, functions, for example)
@@ -39,6 +29,14 @@ namespace Bicep.LanguageServer.Handlers
             if (result.Symbol is PropertySymbol)
             {
                 // TODO: Implement for PropertySymbol
+                return Task.FromResult<WorkspaceEdit?>(null);
+            }
+
+            if (!Lexer.IsValidIdentifier(request.NewName))
+            {
+                // if the value that the user wants to rename to is invalid (contains characters, etc.), the rename will fail.
+                // despite there being a way for errors to be represented in LSP (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_rename),
+                // we are failing here as Omnisharp doesn't handle returning error messages.
                 return Task.FromResult<WorkspaceEdit?>(null);
             }
 
@@ -84,7 +82,7 @@ namespace Bicep.LanguageServer.Handlers
 
         protected override RenameRegistrationOptions CreateRegistrationOptions(RenameCapability capability, ClientCapabilities clientCapabilities) => new()
         {
-            DocumentSelector = DocumentSelectorFactory.CreateForBicepAndParams(),
+            DocumentSelector = documentSelectorFactory.CreateForBicepAndParams(),
             PrepareProvider = false
         };
     }

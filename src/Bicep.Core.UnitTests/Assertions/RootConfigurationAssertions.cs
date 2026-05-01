@@ -2,9 +2,9 @@
 // Licensed under the MIT License.
 
 using Bicep.Core.Configuration;
-using Bicep.Core.Parsing;
 using FluentAssertions;
 using FluentAssertions.Primitives;
+using Newtonsoft.Json.Linq;
 
 namespace Bicep.Core.UnitTests.Assertions
 {
@@ -24,11 +24,9 @@ namespace Bicep.Core.UnitTests.Assertions
 
         public AndConstraint<RootConfigurationAssertions> HaveContents(string contents, string because = "", params object[] becauseArgs)
         {
-            string actual = StringUtils.ReplaceNewlines(Subject.ToUtf8Json(), "\n");
-            string expected = StringUtils.ReplaceNewlines(contents, "\n");
-
-            actual.Should().Be(expected, because, becauseArgs);
-
+            var actual = Subject.ToUtf8Json().ReplaceLineEndings();
+            var expected = contents.ReplaceLineEndings();
+            JToken.Parse(expected).Should().DeepEqual(JToken.Parse(actual));
             return new AndConstraint<RootConfigurationAssertions>(this);
         }
     }

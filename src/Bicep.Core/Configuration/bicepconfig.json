@@ -1,5 +1,7 @@
 {
   // This is the base configuration which provides the defaults for all values (end users don't see this file).
+  // Intellisense for bicepconfig.json is controlled by src/vscode-bicep/schemas/bicepconfig.schema.json
+
   "cloud": {
     "currentProfile": "AzureCloud",
     "profiles": {
@@ -16,10 +18,7 @@
         "activeDirectoryAuthority": "https://login.microsoftonline.us"
       }
     },
-    "credentialPrecedence": [
-      "AzureCLI",
-      "AzurePowerShell"
-    ]
+    "credentialPrecedence": ["AzureCLI", "AzurePowerShell"]
   },
   "moduleAliases": {
     "ts": {},
@@ -30,6 +29,11 @@
       }
     }
   },
+  "extensions": {
+    "az": "builtin:",
+    "kubernetes": "builtin:"
+  },
+  "implicitExtensions": ["az"],
   "analyzers": {
     "core": {
       "verbose": false,
@@ -38,7 +42,6 @@
         "no-hardcoded-env-urls": {
           "level": "warning",
           "disallowedhosts": [
-            "api.loganalytics.io",
             "azuredatalakeanalytics.net",
             "azuredatalakestore.net",
             "batch.core.windows.net",
@@ -50,16 +53,17 @@
             "login.microsoftonline.com",
             "management.azure.com",
             "management.core.windows.net",
-            "region.asazure.windows.net",
-            "trafficmanager.net",
             "vault.azure.net"
           ],
-          "excludedhosts": [
-            "schema.management.azure.com"
-          ]
+          "excludedhosts": ["schema.management.azure.com"]
         }
       }
     }
   },
-  "experimentalFeaturesEnabled": {}
+  "experimentalFeaturesWarning": true,
+  "experimentalFeaturesEnabled": {},
+  "formatting": {},
+  "security": {
+    "trustedRegistries": []
+  }
 }

@@ -25,8 +25,13 @@ resource subscriptionAlias_resource 'Microsoft.Subscription/aliases@2020-09-01' 
   properties: {
     workload: subscriptionWorkload
     displayName: subscriptionDisplayName
-    billingScope: tenantResourceId('Microsoft.Billing/billingAccounts/enrollmentAccounts', billingAccount, enrollmentAccount)
+    billingScope: tenantResourceId(
+      'Microsoft.Billing/billingAccounts/enrollmentAccounts',
+      billingAccount,
+      enrollmentAccount
+    )
   }
 }
 
 output subscriptionId string = subscriptionAlias_resource.properties.subscriptionId
+

@@ -5,11 +5,8 @@ using Bicep.Core.Analyzers.Interfaces;
 using Bicep.Core.CodeAction;
 using Bicep.Core.Configuration;
 using Bicep.Core.Diagnostics;
-using Bicep.Core.Parsing;
 using Bicep.Core.Semantics;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using Bicep.Core.Text;
 
 namespace Bicep.Core.Analyzers.Linter
 {
@@ -18,29 +15,34 @@ namespace Bicep.Core.Analyzers.Linter
         public LinterRuleBase(
             string code,
             string description,
-            Uri? docUri = null,
-            DiagnosticLevel diagnosticLevel = DiagnosticLevel.Warning,
-            DiagnosticStyling diagnosticStyling = DiagnosticStyling.Default)
+            LinterRuleCategory category,
+            DiagnosticStyling diagnosticStyling = DiagnosticStyling.Default,
+            // This should normally be left unspecified so that the default diagnostic level is set based on the category.  Only specify
+            //   if it needs to default to something other than the category's default diagnostic level.
+            DiagnosticLevel? overrideCategoryDefaultDiagnosticLevel = default)
         {
-            this.AnalyzerName = LinterAnalyzer.AnalyzerName;
             this.Code = code;
             this.Description = description;
-            this.Uri = docUri;
-            this.DefaultDiagnosticLevel = diagnosticLevel;
+            this.Uri = new Uri($"https://aka.ms/bicep/linter-diagnostics#{Code}");
+            this.Category = category;
             this.DiagnosticStyling = diagnosticStyling;
+            this.OverrideCategoryDefaultDiagnosticLevel = overrideCategoryDefaultDiagnosticLevel;
         }
-
-        public string AnalyzerName { get; }
 
         public string Code { get; }
 
+        public LinterRuleCategory Category { get; }
+
         public readonly string RuleConfigSection = $"{LinterAnalyzer.AnalyzerName}.rules";
 
-        public DiagnosticLevel DefaultDiagnosticLevel { get; }
+        public DiagnosticLevel DefaultDiagnosticLevel =>
+            OverrideCategoryDefaultDiagnosticLevel.HasValue ? OverrideCategoryDefaultDiagnosticLevel.Value : GetDefaultDiagosticLevelForCategory(this.Category);
 
         public string Description { get; }
 
-        public Uri? Uri { get; }
+        public Uri Uri { get; }
+
+        public DiagnosticLevel? OverrideCategoryDefaultDiagnosticLevel { get; }
 
         // If specified, adds the given diagnostic label to every diagnostic created for this rule (such as for unnecessary or obsolete code).
         // Should be left as None/null for most rules.
@@ -60,24 +62,35 @@ namespace Bicep.Core.Analyzers.Linter
         /// </summary>
         /// <param name="values"></param>
         /// <returns></returns>
-        public string GetMessage(params object[] values)
-            => (values.Any() ? FormatMessage(values) : this.Description);
+        public string GetMessage(params object[] values) => FormatMessage(values);
 
-        public IEnumerable<IDiagnostic> Analyze(SemanticModel model)
+        public IEnumerable<IDiagnostic> Analyze(SemanticModel model, IServiceProvider serviceProvider)
         {
             if (GetDiagnosticLevel(model) == DiagnosticLevel.Off)
             {
-                return Enumerable.Empty<IDiagnostic>();
+                return [];
             }
 
-            return AnalyzeInternal(model, GetDiagnosticLevel(model));
+            return AnalyzeInternal(model, serviceProvider, GetDiagnosticLevel(model));
         }
 
         /// <summary>
         /// Abstract method each rule must implement to provide analyzer
         /// diagnostics through the Analyze API
         /// </summary>
-        public abstract IEnumerable<IDiagnostic> AnalyzeInternal(SemanticModel model, DiagnosticLevel diagnosticLevel);
+        public virtual IEnumerable<IDiagnostic> AnalyzeInternal(SemanticModel model, IServiceProvider serviceProvider, DiagnosticLevel diagnosticLevel)
+        {
+            return AnalyzeInternal(model, diagnosticLevel);
+        }
+
+        /// <summary>
+        /// Abstract method each rule must implement to provide analyzer
+        /// diagnostics through the Analyze API
+        /// </summary>
+        public virtual IEnumerable<IDiagnostic> AnalyzeInternal(SemanticModel model, DiagnosticLevel diagnosticLevel)
+        {
+            throw new NotImplementedException($"{this.GetType().Name} must implement one of the overloads of {nameof(AnalyzeInternal)}");
+        }
 
         protected DiagnosticLevel GetDiagnosticLevel(SemanticModel model) => GetDiagnosticLevel(model.Configuration.Analyzers);
 
@@ -104,22 +117,6 @@ namespace Bicep.Core.Analyzers.Linter
             configuration.GetValue($"{RuleConfigSection}.{Code}.{key}", defaultValue);
 
         /// <summary>
-        ///  Create a simple diagnostic that displays the defined Description
-        ///  of the derived rule.
-        /// </summary>
-        /// <param name="level"></param>
-        /// <param name="span"></param>
-        /// <returns></returns>
-        protected virtual AnalyzerDiagnostic CreateDiagnosticForSpan(DiagnosticLevel level, TextSpan span) =>
-            new(analyzerName: this.AnalyzerName,
-                span: span,
-                level: level,
-                code: this.Code,
-                message: this.GetMessage(),
-                documentationUri: this.Uri,
-                styling: this.DiagnosticStyling);
-
-        /// <summary>
         /// Create a diagnostic message for a span that has a customized string
         /// formatter defined in the deriving class.
         /// </summary>
@@ -127,26 +124,55 @@ namespace Bicep.Core.Analyzers.Linter
         /// <param name="span"></param>
         /// <param name="values"></param>
         /// <returns></returns>
-        protected virtual AnalyzerDiagnostic CreateDiagnosticForSpan(DiagnosticLevel level, TextSpan span, params object[] values) =>
-            new(analyzerName: this.AnalyzerName,
-                span: span,
-                level: level,
-                code: this.Code,
-                message: this.GetMessage(values),
-                documentationUri: this.Uri,
-                styling: this.DiagnosticStyling);
+        protected virtual Diagnostic CreateDiagnosticForSpan(DiagnosticLevel level, TextSpan span, params object[] values) => new(
+            span,
+            level,
+            DiagnosticSource.CoreLinter,
+            Code,
+            GetMessage(values))
+        {
+            Uri = Uri,
+            Styling = DiagnosticStyling
+        };
 
-        protected virtual AnalyzerFixableDiagnostic CreateFixableDiagnosticForSpan(DiagnosticLevel level, TextSpan span, CodeFix fix, params object[] values) =>
-            CreateFixableDiagnosticForSpan(level, span, new[] { fix }, values);
+        /// <summary>
+        /// Create a diagnostic message for a span that has a customized string.
+        /// </summary>
+        protected Diagnostic CreateDiagnostic(TextSpan span, string message) => new(
+            span,
+            DefaultDiagnosticLevel,
+            DiagnosticSource.CoreLinter,
+            Code,
+            message)
+        {
+            Uri = Uri,
+            Styling = DiagnosticStyling
+        };
 
-        protected virtual AnalyzerFixableDiagnostic CreateFixableDiagnosticForSpan(DiagnosticLevel level, TextSpan span, CodeFix[] fixes, params object[] values) =>
-            new(analyzerName: this.AnalyzerName,
-                span: span,
-                level: level,
-                code: this.Code,
-                message: this.GetMessage(values),
-                documentationUri: this.Uri,
-                codeFixes: fixes,
-                styling: this.DiagnosticStyling);
+        protected virtual Diagnostic CreateFixableDiagnosticForSpan(DiagnosticLevel level, TextSpan span, CodeFix fix, params object[] values) =>
+            CreateFixableDiagnosticForSpan(level, span, [fix], values);
+
+        protected virtual Diagnostic CreateFixableDiagnosticForSpan(DiagnosticLevel level, TextSpan span, CodeFix[] fixes, params object[] values) =>
+            CreateDiagnosticForSpan(level, span, values) with { Fixes = [.. fixes] };
+
+        public static DiagnosticLevel GetDefaultDiagosticLevelForCategory(LinterRuleCategory category) =>
+            category switch
+            {
+                // Note: In general the default diagnostic level for a category should be either Warning or Off
+                LinterRuleCategory.BestPractice => DiagnosticLevel.Warning,
+                LinterRuleCategory.Portability => DiagnosticLevel.Off,
+                LinterRuleCategory.PotentialCodeIssues => DiagnosticLevel.Warning,
+                LinterRuleCategory.ResourceLocationRules => DiagnosticLevel.Off,
+                LinterRuleCategory.Security => DiagnosticLevel.Warning,
+                LinterRuleCategory.Style => DiagnosticLevel.Warning,
+
+                // This is an exception to the "Warning" or "Off" only rule - these will cause actual deployment errors, so default level is Error
+                LinterRuleCategory.DeploymentError => DiagnosticLevel.Error,
+                // For stacks incompatibilities, the default level is Info so we can inform but not disrupt users who are not exclusively Deployment stack users.
+                LinterRuleCategory.DeploymentStackIncompatibility => DiagnosticLevel.Info,
+
+                // Unexpected values
+                _ => throw new ArgumentOutOfRangeException($"LinterRuleCategory (unexpected value \"{category}\")")
+            };
     }
 }

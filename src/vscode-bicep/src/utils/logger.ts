@@ -1,10 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+import * as path from "path";
+import { MESSAGE } from "triple-beam";
 import vscode from "vscode";
 import * as winston from "winston";
 import Transport from "winston-transport";
-import * as path from "path";
-import { MESSAGE } from "triple-beam";
 
 /**
  * This logfile is written during to E2E tests. It serves as a way to watch for events from the code
@@ -37,8 +37,8 @@ export class WinstonLogger implements Logger {
         winston.format.printf((entry) =>
           entry.stack
             ? `${entry.timestamp} ${entry.level}: ${entry.message} - ${entry.stack}`
-            : `${entry.timestamp} ${entry.level}: ${entry.message}`
-        )
+            : `${entry.timestamp} ${entry.level}: ${entry.message}`,
+        ),
       ),
       transports: [
         new outputChannelTransport(outputChannel),
@@ -91,10 +91,7 @@ class outputChannelTransport extends Transport {
   }
 }
 
-export function createLogger(
-  context: vscode.ExtensionContext,
-  outputChannel: vscode.OutputChannel
-): Logger {
+export function createLogger(context: vscode.ExtensionContext, outputChannel: vscode.OutputChannel): Logger {
   // TODO:
   // - make log level configurable
   // - Default log level should be info
@@ -110,9 +107,7 @@ export function createLogger(
 
 export function getLogger(): Logger {
   if (!logger) {
-    throw new Error(
-      "Logger is undefined. Make sure to call createLogger() first."
-    );
+    throw new Error("Logger is undefined. Make sure to call createLogger() first.");
   }
 
   return logger;

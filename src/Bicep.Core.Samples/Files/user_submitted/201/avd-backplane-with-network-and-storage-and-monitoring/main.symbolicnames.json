@@ -1,13 +1,12 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
-  "languageVersion": "1.10-experimental",
+  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
     "_generator": {
       "name": "bicep",
       "version": "dev",
-      "templateHash": "3562708831309571470"
+      "templateHash": "11238011223108550992"
     }
   },
   "parameters": {
@@ -165,7 +164,7 @@
     },
     "avdbackplane": {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2022-09-01",
+      "apiVersion": "2025-04-01",
       "name": "avdbackplane",
       "resourceGroup": "[format('{0}BACKPLANE', parameters('resourceGroupPrefrix'))]",
       "properties": {
@@ -222,14 +221,13 @@
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "languageVersion": "1.10-experimental",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
-            "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
             "_generator": {
               "name": "bicep",
               "version": "dev",
-              "templateHash": "14232420119402199964"
+              "templateHash": "18177712368314985712"
             }
           },
           "parameters": {
@@ -332,7 +330,7 @@
             },
             "avdmonitor": {
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2022-09-01",
+              "apiVersion": "2025-04-01",
               "name": "LAWorkspace",
               "resourceGroup": "[parameters('logAnalyticsResourceGroup')]",
               "properties": {
@@ -362,14 +360,13 @@
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "languageVersion": "1.10-experimental",
+                  "languageVersion": "2.0",
                   "contentVersion": "1.0.0.0",
                   "metadata": {
-                    "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
                     "_generator": {
                       "name": "bicep",
                       "version": "dev",
-                      "templateHash": "17360174109371358486"
+                      "templateHash": "3538928845112752341"
                     }
                   },
                   "parameters": {
@@ -408,7 +405,7 @@
                     },
                     "avdmonitor": {
                       "type": "Microsoft.Resources/deployments",
-                      "apiVersion": "2022-09-01",
+                      "apiVersion": "2025-04-01",
                       "name": "myBicepLADiag",
                       "resourceGroup": "[parameters('avdBackplaneResourceGroup')]",
                       "properties": {
@@ -429,14 +426,13 @@
                         },
                         "template": {
                           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                          "languageVersion": "1.10-experimental",
+                          "languageVersion": "2.0",
                           "contentVersion": "1.0.0.0",
                           "metadata": {
-                            "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
                             "_generator": {
                               "name": "bicep",
                               "version": "dev",
-                              "templateHash": "13594450377905290817"
+                              "templateHash": "4097443846793063282"
                             }
                           },
                           "parameters": {
@@ -464,9 +460,9 @@
                               "name": "[parameters('workspaceName')]"
                             },
                             "avdhpds": {
-                              "type": "Microsoft.Insights/diagnosticSettings",
+                              "type": "microsoft.insights/diagnosticSettings",
                               "apiVersion": "2017-05-01-preview",
-                              "scope": "[format('Microsoft.DesktopVirtualization/hostPools/{0}', parameters('hostpoolName'))]",
+                              "scope": "[resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostpoolName'))]",
                               "name": "hostpool-diag",
                               "properties": {
                                 "workspaceId": "[parameters('logAnalyticsWorkspaceID')]",
@@ -495,9 +491,9 @@
                               }
                             },
                             "avdwsds": {
-                              "type": "Microsoft.Insights/diagnosticSettings",
+                              "type": "microsoft.insights/diagnosticSettings",
                               "apiVersion": "2017-05-01-preview",
-                              "scope": "[format('Microsoft.DesktopVirtualization/workspaces/{0}', parameters('workspaceName'))]",
+                              "scope": "[resourceId('Microsoft.DesktopVirtualization/workspaces', parameters('workspaceName'))]",
                               "name": "workspacepool-diag",
                               "properties": {
                                 "workspaceId": "[parameters('logAnalyticsWorkspaceID')]",
@@ -546,7 +542,7 @@
     },
     "avdnetwork": {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2022-09-01",
+      "apiVersion": "2025-04-01",
       "name": "avdnetwork",
       "resourceGroup": "[format('{0}NETWORK', parameters('resourceGroupPrefrix'))]",
       "properties": {
@@ -573,14 +569,13 @@
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "languageVersion": "1.10-experimental",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
-            "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
             "_generator": {
               "name": "bicep",
               "version": "dev",
-              "templateHash": "17467554710727696659"
+              "templateHash": "13033865596881057862"
             }
           },
           "parameters": {
@@ -664,7 +659,7 @@
     },
     "avdFileServices": {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2022-09-01",
+      "apiVersion": "2025-04-01",
       "name": "avdFileServices",
       "resourceGroup": "[format('{0}FILESERVICES', parameters('resourceGroupPrefrix'))]",
       "properties": {
@@ -691,14 +686,13 @@
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "languageVersion": "1.10-experimental",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
-            "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
             "_generator": {
               "name": "bicep",
               "version": "dev",
-              "templateHash": "3282224269400261115"
+              "templateHash": "17889722589712575360"
             }
           },
           "parameters": {
@@ -757,7 +751,7 @@
     },
     "pep": {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2022-09-01",
+      "apiVersion": "2025-04-01",
       "name": "privateEndpoint",
       "resourceGroup": "[format('{0}NETWORK', parameters('resourceGroupPrefrix'))]",
       "properties": {
@@ -784,14 +778,13 @@
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "languageVersion": "1.10-experimental",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
-            "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
             "_generator": {
               "name": "bicep",
               "version": "dev",
-              "templateHash": "11289023994914791241"
+              "templateHash": "6728112594291271947"
             }
           },
           "parameters": {
@@ -894,7 +887,7 @@
     },
     "avdsig": {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2022-09-01",
+      "apiVersion": "2025-04-01",
       "name": "avdsig",
       "resourceGroup": "[format('{0}SIG', parameters('resourceGroupPrefrix'))]",
       "properties": {
@@ -930,14 +923,13 @@
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "languageVersion": "1.10-experimental",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
-            "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
             "_generator": {
               "name": "bicep",
               "version": "dev",
-              "templateHash": "4809662570664543995"
+              "templateHash": "11073064803786941185"
             }
           },
           "parameters": {
@@ -1070,7 +1062,7 @@
     },
     "avdaib": {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2022-09-01",
+      "apiVersion": "2025-04-01",
       "name": "[format('avdimagebuilder{0}', 'avdsig')]",
       "resourceGroup": "[format('{0}SIG', parameters('resourceGroupPrefrix'))]",
       "properties": {
@@ -1103,14 +1095,13 @@
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "languageVersion": "1.10-experimental",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
-            "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
             "_generator": {
               "name": "bicep",
               "version": "dev",
-              "templateHash": "18154557577220218550"
+              "templateHash": "2725585745262341266"
             }
           },
           "parameters": {
@@ -1240,7 +1231,8 @@
                 "principalType": "ServicePrincipal"
               },
               "dependsOn": [
-                "aibdef"
+                "aibdef",
+                "managedidentity"
               ]
             },
             "miorole": {
@@ -1252,7 +1244,10 @@
                 "roleDefinitionId": "/providers/Microsoft.Authorization/roleDefinitions/f1a07417-d97a-45cb-824c-7a7467783830",
                 "principalId": "[reference('managedidentity').principalId]",
                 "principalType": "ServicePrincipal"
-              }
+              },
+              "dependsOn": [
+                "managedidentity"
+              ]
             },
             "scriptName_BuildVMImage": {
               "condition": "[parameters('InvokeRunImageBuildThroughDeploymentScript')]",

@@ -18,15 +18,19 @@ resource managementGroup 'Microsoft.Management/managementGroups@2020-05-01' = {
     displayName: managementGroupDisplayName
     details: {
       parent: {
-        id: (!empty(parentManagementGroupId)) ? '/providers/Microsoft.Management/managementGroups/${parentManagementGroupId}' : null
+        id: (!empty(parentManagementGroupId))
+          ? '/providers/Microsoft.Management/managementGroups/${parentManagementGroupId}'
+          : null
       }
     }
   }
 }
 
-resource managementGroupsubscriptions 'Microsoft.Management/managementGroups/subscriptions@2020-05-01' = [for subscriptionId in subscriptionIds: {
-  name: subscriptionId
-  parent: managementGroup
-}]
+resource managementGroupsubscriptions 'Microsoft.Management/managementGroups/subscriptions@2020-05-01' = [
+  for subscriptionId in subscriptionIds: {
+    name: subscriptionId
+    parent: managementGroup
+  }
+]
 
 output managementGroupID string = managementGroup.name

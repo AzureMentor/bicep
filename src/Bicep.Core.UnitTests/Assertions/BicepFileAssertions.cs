@@ -1,10 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 using Bicep.Core.Diagnostics;
-using Bicep.Core.Navigation;
-using Bicep.Core.Syntax;
-using Bicep.Core.Workspaces;
+using Bicep.Core.Parsing;
+using Bicep.Core.SourceGraph;
 using FluentAssertions;
+using FluentAssertions.Execution;
 using FluentAssertions.Primitives;
 
 namespace Bicep.Core.UnitTests.Assertions
@@ -28,15 +28,18 @@ namespace Bicep.Core.UnitTests.Assertions
 
         public AndConstraint<BicepFileAssertions> HaveSourceText(string expected, string because = "", params object[] becauseArgs)
         {
-            Subject.ProgramSyntax.ToTextPreserveFormatting().Should().EqualIgnoringNewlines(expected, because, becauseArgs);
+            var actual = Subject.ProgramSyntax.ToString().NormalizeNewlines();
+            expected = expected.NormalizeNewlines();
+
+            actual.Should().EqualWithLineByLineDiff(expected, because, becauseArgs);
 
             return new AndConstraint<BicepFileAssertions>(this);
         }
 
         public AndConstraint<BicepFileAssertions> HaveEquivalentSourceText(BicepFile other, string because = "", params object[] becauseArgs)
         {
-            var expectedText = Subject.ProgramSyntax.ToTextPreserveFormatting();
-            var actualText = other.ProgramSyntax.ToTextPreserveFormatting();
+            var expectedText = Subject.ProgramSyntax.ToString();
+            var actualText = other.ProgramSyntax.ToString();
 
             expectedText.Should().EqualIgnoringNewlines(actualText, because, becauseArgs);
 
@@ -45,7 +48,7 @@ namespace Bicep.Core.UnitTests.Assertions
 
         public AndConstraint<BicepFileAssertions> NotHaveParseErrors(string because = "", params object[] becauseArgs)
         {
-            Subject.ParsingErrorLookup.Should().NotContain(d => d.Level == DiagnosticLevel.Error, because, becauseArgs);
+            Subject.ParsingErrorLookup.Should().NotContain(d => d.IsError(), because, becauseArgs);
 
             return new AndConstraint<BicepFileAssertions>(this);
         }

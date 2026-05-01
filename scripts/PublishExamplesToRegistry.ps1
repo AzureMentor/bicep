@@ -1,45 +1,70 @@
 
 param (
+  # Folder containing bicep executable
   [Parameter(Mandatory = $true)]
   [string]
   $BicepPath,
 
+  # E.g. ~/repos/bicep-registry-modules/modules
+  #   or ~/repos/azure-quickstart-templates/quickstarts or
   [Parameter(Mandatory = $true)]
   [string]
   $ExamplesPath,
 
+  # Registry name (to be placed in front of ".azurecr.io")
   [Parameter(Mandatory = $true)]
   [string]
-  $Tag
+  $RegistryName,
+
+  [Parameter(Mandatory = $true)]
+  [string]
+  $Tag,
+
+  [Parameter(Mandatory = $false)]
+  [string]
+  $RegistryPathPrefix = "examples"
 )
 
 $ErrorActionPreference = 'Stop';
 
+# Resolve paths before we change current location
+$BicepPath = Resolve-Path $BicepPath
+$ExamplesPath = Resolve-Path $ExamplesPath
+
 $previousLocation = Get-Location;
-try
-{
+try {
   Set-Location $BicepPath;
 
   $levelDirs = Get-ChildItem -Path $ExamplesPath;
 
   foreach ($levelDir in $levelDirs) {
-    $moduleDirs = Get-ChildItem -Path $levelDir.FullName;
-    
-    foreach ($moduleDir in $moduleDirs) {
-      $bicep = Join-Path -Path $moduleDir.Fullname -ChildPath 'main.bicep';
-      $json = Join-Path -Path $moduleDir.Fullname -ChildPath 'main.json';
+    $moduleDirs = Get-ChildItem -Path $levelDir.FullName -Directory
 
-      if((Test-Path $bicep) -and (Test-Path $json))
-      {
-        $artifactRef = "br:majastrzoci.azurecr.io/examples/$($levelDir.Name)/$($moduleDir.Name):$($Tag)";
-        Write-Output $artifactRef;
-        .\bicep.exe publish $bicep --target $artifactRef
+    foreach ($moduleDir in $moduleDirs) {
+      $modulePath = Join-Path -Path $moduleDir.Fullname -ChildPath 'main.bicep'
+      Write-Host "Checking for $($modulePath)"
+
+      if (Test-Path $modulePath) {
+        $artifactRef = "br:$($RegistryName).azurecr.io/$($RegistryPathPrefix)/$($levelDir.Name.ToLowerInvariant())/$($moduleDir.Name.ToLowerInvariant()):$($Tag)";
+
+        Write-Host "./bicep publish $modulePath --target $artifactRef --with-source --force"
+        ./bicep publish $modulePath --target $artifactRef --with-source --force
+
+        # Write out the bicep needed to reference the module
+        Write-Output @"
+// $($levelDir.Name)/$($moduleDir.Name)
+module $($moduleDir.Name -replace "-","_") '$($artifactRef)' = {
+  name: '$($moduleDir.Name)'
+  params: {}
+}
+"@
+        Write-Host "Published $($modulePath) to $($artifactRef)"
+        Write-Host
       }
     }
   }
 }
-finally
-{
+finally {
   # restore previous location
   Set-Location $previousLocation;
 }

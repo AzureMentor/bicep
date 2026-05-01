@@ -1,73 +1,52 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Collections.Immutable;
 using Bicep.Core.Extensions;
 using Bicep.Core.Features;
 using Bicep.Core.Resources;
+using Bicep.Core.SourceGraph;
 using Bicep.Core.Syntax;
 using Bicep.Core.TypeSystem;
-using Bicep.Core.Workspaces;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
+using Bicep.Core.TypeSystem.Providers;
+using Bicep.Core.TypeSystem.Types;
 
 namespace Bicep.Core.Semantics.Namespaces
 {
     public class NamespaceResolver
     {
         private readonly ImmutableDictionary<string, NamespaceType> namespaceTypes;
+        public ImmutableDictionary<string, BuiltInNamespaceSymbol> ImplicitNamespaces { get; }
 
-        private NamespaceResolver(ImmutableDictionary<string, NamespaceType> namespaceTypes, ImmutableDictionary<string, BuiltInNamespaceSymbol> builtIns)
+        public static NamespaceResolver Create(ImmutableArray<NamespaceResult> namespaceResults)
+        {
+            var namespaceTypes = ImmutableDictionary.CreateBuilder<string, NamespaceType>(LanguageConstants.IdentifierComparer);
+            var implicitNamespaces = ImmutableDictionary.CreateBuilder<string, BuiltInNamespaceSymbol>(LanguageConstants.IdentifierComparer);
+
+            foreach (var result in namespaceResults)
+            {
+                if (result.Origin is null)
+                {
+                    implicitNamespaces[result.Name] = new BuiltInNamespaceSymbol(result.Name, result.Type);
+                }
+
+                if (result.Type is NamespaceType namespaceType)
+                {
+                    namespaceTypes[result.Name] = namespaceType;
+                    continue;
+                }
+            }
+
+            return new(
+                namespaceTypes.ToImmutable(),
+                implicitNamespaces.ToImmutable());
+        }
+
+        private NamespaceResolver(ImmutableDictionary<string, NamespaceType> namespaceTypes, ImmutableDictionary<string, BuiltInNamespaceSymbol> implicitNamespaces)
         {
             this.namespaceTypes = namespaceTypes;
-            this.BuiltIns = builtIns;
+            this.ImplicitNamespaces = implicitNamespaces;
         }
-
-        public static NamespaceResolver Create(IFeatureProvider features, INamespaceProvider namespaceProvider, BicepSourceFile sourceFile, ResourceScope targetScope, IEnumerable<ImportedNamespaceSymbol> importedNamespaces)
-        {
-            var builtInNamespaceSymbols = new Dictionary<string, BuiltInNamespaceSymbol>(LanguageConstants.IdentifierComparer);
-            var namespaceTypes = importedNamespaces
-                .Select(x => x.DeclaredType)
-                .OfType<NamespaceType>()
-                .ToImmutableDictionary(x => x.Name, LanguageConstants.IdentifierComparer);
-
-            void TryAddBuiltInNamespace(string @namespace)
-            {
-                if (namespaceProvider.TryGetNamespace(@namespace, @namespace, targetScope, features) is not { } namespaceType)
-                {
-                    // this namespace doesn't match a known built-in namespace
-                    return;
-                }
-
-                if (namespaceTypes.Values.Any(x => LanguageConstants.IdentifierComparer.Equals(x.ProviderName, @namespace)))
-                {
-                    // the namespace has already been explicitly imported. don't register it as a built-in.
-                    return;
-                }
-
-                var symbol = new BuiltInNamespaceSymbol(@namespace, namespaceType);
-                builtInNamespaceSymbols[@namespace] = symbol;
-
-                // If we've already imported a namespace with this symbolic name, don't add the builtin namespace to the
-                // dictionary of active namespaces. It will still be listed in the BuiltIns dictionary for error reporting,
-                // as it is masking a namespace that would otherwise be loaded and bound by default.
-                if (!namespaceTypes.ContainsKey(@namespace))
-                {
-                    namespaceTypes = namespaceTypes.Add(@namespace, namespaceType);
-                }
-            }
-
-            TryAddBuiltInNamespace(SystemNamespaceType.BuiltInName);
-            if (sourceFile.FileKind == BicepSourceFileKind.BicepFile)
-            {
-                // don't register "az" namespace for Bicep Parameters files
-                TryAddBuiltInNamespace(AzNamespaceType.BuiltInName);
-            }
-
-            return new(namespaceTypes, builtInNamespaceSymbols.ToImmutableDictionary(LanguageConstants.IdentifierComparer));
-        }
-
-        public ImmutableDictionary<string, BuiltInNamespaceSymbol> BuiltIns { get; }
 
         public IEnumerable<Symbol> ResolveUnqualifiedFunction(IdentifierSyntax identifierSyntax, bool includeDecorators)
         {
@@ -92,13 +71,14 @@ namespace Bicep.Core.Semantics.Namespaces
         /// </summary>
         public IEnumerable<AmbientTypeSymbol> ResolveUnqualifiedTypeSymbol(IdentifierSyntax identifierSyntax) => this.namespaceTypes.Values
             .Select(@namespace => @namespace.Properties.TryGetValue(identifierSyntax.IdentifierName, out var found)
-                ? new AmbientTypeSymbol(identifierSyntax.IdentifierName, found.TypeReference.Type, @namespace, found.Description)
+                ? new AmbientTypeSymbol(identifierSyntax.IdentifierName, found.TypeReference.Type, @namespace, found.Flags, found.Description)
                 : null)
             .WhereNotNull();
 
-        public IEnumerable<FunctionSymbol> GetKnownFunctions(string functionName)
+        public IEnumerable<FunctionSymbol> GetKnownFunctions(string functionName, bool includeDecorators)
             => this.namespaceTypes.Values
-                .Select(type => type.MethodResolver.TryGetFunctionSymbol(functionName))
+                .Select(type => type.MethodResolver.TryGetFunctionSymbol(functionName) ??
+                    (includeDecorators ? type.DecoratorResolver.TryGetDecoratorFunctionSymbol(functionName) : null))
                 .OfType<FunctionSymbol>();
 
         public IEnumerable<string> GetKnownFunctionNames(bool includeDecorators)
@@ -111,7 +91,7 @@ namespace Bicep.Core.Semantics.Namespaces
             => this.namespaceTypes.Values.SelectMany(type => type.Properties.Keys);
 
         public IEnumerable<AmbientTypeSymbol> GetKnownTypes() => this.namespaceTypes.Values
-            .SelectMany(@namespace => @namespace.Properties.Select(p => new AmbientTypeSymbol(p.Key, p.Value.TypeReference.Type, @namespace, p.Value.Description)));
+            .SelectMany(@namespace => @namespace.Properties.Select(p => new AmbientTypeSymbol(p.Key, p.Value.TypeReference.Type, @namespace, p.Value.Flags, p.Value.Description)));
 
         public IEnumerable<string> GetNamespaceNames()
             => this.namespaceTypes.Keys;
@@ -139,11 +119,15 @@ namespace Bicep.Core.Semantics.Namespaces
             return fallbackTypes;
         }
 
-        public IEnumerable<ResourceTypeReference> GetAvailableResourceTypes()
+        public IEnumerable<ResourceTypeReference> GetAvailableAzureResourceTypes() =>
+            namespaceTypes.Values.SingleOrDefault(x => x.Name.Equals(AzNamespaceType.BuiltInName, StringComparison.Ordinal))?.ResourceTypeProvider.GetAvailableTypes() ??
+            [];
+
+        public ILookup<string, ImmutableArray<ResourceTypeReference>> GetGroupedResourceTypes()
         {
-            // Here we are not handling any deduplication between namespaces. This is OK for now, because there
-            // are only two supported namespaces ("az" & "sys"), both singletons. "sys" does not contain any resource types.
-            return namespaceTypes.Values.SelectMany(type => type.ResourceTypeProvider.GetAvailableTypes());
+            return namespaceTypes.Values
+                .SelectMany(x => x.ResourceTypeProvider.TypeReferencesByType)
+                .ToLookup(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
         }
     }
 }

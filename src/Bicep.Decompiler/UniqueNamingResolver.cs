@@ -1,18 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Security.AccessControl;
-using System.Text;
 using System.Text.RegularExpressions;
 using Azure.Deployments.Expression.Engines;
 using Azure.Deployments.Expression.Expressions;
 using Bicep.Core;
+using Bicep.Core.ArmHelpers;
 using Bicep.Decompiler.ArmHelpers;
 using Microsoft.WindowsAzure.ResourceStack.Common.Extensions;
-using Newtonsoft.Json.Linq;
 
 namespace Bicep.Decompiler
 {
@@ -23,7 +18,7 @@ namespace Bicep.Decompiler
         private readonly Dictionary<string, string> assignedResourceNames = new(StringComparer.OrdinalIgnoreCase);
 
         // This regex/replacements allows us to change vmName -> vm and vmName2 -> vm2
-        private readonly Regex ResourceNameRemoveTrailingNameRegex = new Regex("([a-zA-Z][a-zA-Z0-9_]*)Name([0-9]*)$");
+        private readonly Regex ResourceNameRemoveTrailingNameRegex = new("([a-zA-Z][a-zA-Z0-9_]*)Name([0-9]*)$");
         private const string ResourceNameRemoveTrailingNameReplacement = "$1$2";
 
         private static string GetNamingSuffix(NameType nameType)
@@ -134,15 +129,12 @@ namespace Bicep.Decompiler
             {
                 var nameString = ExpressionsEngine.SerializeExpression(nameExpression);
                 var resourceKeySuffix = EscapeIdentifier($"_{nameString}", isGenerated: true);
+                var matchingResources = assignedResourceNames
+                    .Where(kvp => kvp.Key.EndsWith(resourceKeySuffix, StringComparison.OrdinalIgnoreCase))
+                    .Select(x => x.Value)
+                    .SingleOrDefault();
 
-                var matchingResources = assignedResourceNames.Where(kvp => kvp.Key.EndsWith(resourceKeySuffix, StringComparison.OrdinalIgnoreCase));
-                if (matchingResources.Count() == 1)
-                {
-                    // only return a value if we're sure about the match
-                    return matchingResources.First().Value;
-                }
-
-                return null;
+                return matchingResources;
             }
 
             // it's valid to include a trailing slash, so we need to normalize it

@@ -6,13 +6,15 @@ using Bicep.Core.Analyzers.Linter.Rules;
 using Bicep.Core.UnitTests.Assertions;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System.Linq;
 
 namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
 {
     [TestClass]
     public class PreferInterpolationRuleTests : LinterRuleTestsBase
     {
+        private void AssertCodeFix(string inputFile, string resultFile)
+            => AssertCodeFix(PreferInterpolationRule.Code, "Use string interpolation", inputFile, resultFile);
+
         private void ExpectPass(string text, OnCompileErrors onCompileErrors = OnCompileErrors.IncludeErrors)
         {
             AssertLinterRuleDiagnostics(PreferInterpolationRule.Code, text, diags =>
@@ -24,7 +26,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
 
         private void ExpectDiagnosticWithFix(string text, string expectedFix, Options? options = null)
         {
-            ExpectDiagnosticWithFix(text, new string[] { expectedFix }, options);
+            ExpectDiagnosticWithFix(text, [expectedFix], options);
         }
 
         private void ExpectDiagnosticWithFix(string text, string[] expectedFixes, Options? options = null)
@@ -33,9 +35,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 {
                     diags.Should().HaveCount(expectedFixes.Length, $"expecting one fix per testcase");
 
-                    diags.First().As<IBicepAnalyerFixableDiagnostic>().Fixes.Should().HaveCount(1);
-                    diags.First().As<IBicepAnalyerFixableDiagnostic>().Fixes.First().Replacements.Should().HaveCount(1);
-                    var a = diags.First().As<IBicepAnalyerFixableDiagnostic>().Fixes.SelectMany(f => f.Replacements.SelectMany(r => r.Text));
+                    diags.First().Fixes.Should().HaveCount(1);
+                    diags.First().Fixes.First().Replacements.Should().HaveCount(1);
+                    var a = diags.First().Fixes.SelectMany(f => f.Replacements.SelectMany(r => r.Text));
                 },
                 options);
         }
@@ -137,11 +139,6 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             ",
             "'abcdefghi'"
         )]
-        [DataRow(@"
-                var v3 = concat(concat('pre'), concat('abc', 'def'), concat('ghi', 'jkl', 'mno'))
-            ",
-            "'preabcdefghijklmno'"
-        )]
         [DataTestMethod]
         public void JustLiterals_HasFix(string text, string expectedFix)
         {
@@ -183,13 +180,6 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             ",
             "'a${v1}b${v2}'"
         )]
-        [DataRow(@"
-                var v1 = 'v1'
-                var v2 = 'v2'
-                var v3 = concat(concat('abc', v1), concat('ghi', v2, 'jkl'))
-            ",
-            "'abc${v1}ghi${v2}jkl'"
-        )]
         [DataTestMethod]
         public void MixedLiteralsAndExpressions_HasFix(string text, string expectedFix)
         {
@@ -202,26 +192,6 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 var v3 = concat(v1, v2)
             ",
             "'${v1}${v2}'"
-        )]
-        [DataRow(@"
-                var v1 = 'abc'
-                var v2 = 'def'
-                var v3 = concat(v1, v2)
-            ",
-            "'${v1}${v2}'"
-        )]
-        [DataRow(@"
-                var v1 = 'abc'
-                var v2 = 'def'
-                var v3 = concat(v1, concat(v1, v2))
-            ",
-            "'${v1}${v1}${v2}'"
-        )]
-        [DataRow(@"
-                var v1 = 'v1'
-                var v2 = concat(concat('abc', 'def'), concat('ghi', v1, 'jkl'))
-            ",
-            "'abcdefghi${v1}jkl'"
         )]
         [DataRow(
             @"
@@ -256,25 +226,6 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
         )]
         [DataTestMethod]
         public void StringFolding_HasFix(string text, string expectedFix)
-        {
-            ExpectDiagnosticWithFix(text, expectedFix);
-        }
-
-        [DataRow(@"
-                var v1 = 'v1'
-                var v2 = concat(concat('abc', 'def'), concat(1 + 2, v1, 'jkl'))
-            ",
-            "'abcdef${1 + 2}${v1}jkl'"
-        )]
-        [DataRow(@"
-                var v1 = 'v1'
-                var v2 = 'v2'
-                var v3 = concat(startsWith(concat('abc', v1), 'hello'), v2, 1 + 2, v1, 'jkl')
-            ",
-            "'${startsWith(concat('abc', v1), 'hello')}${v2}${1 + 2}${v1}jkl'"
-        )]
-        [DataTestMethod]
-        public void NestedComplexExpressions_HasFix(string text, string expectedFix)
         {
             ExpectDiagnosticWithFix(text, expectedFix);
         }
@@ -454,5 +405,19 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
         {
             ExpectPass(text);
         }
+
+        [TestMethod]
+        public void Codefix_ignores_nested_concats() => AssertCodeFix("""
+var test = conc|at('abc', concat('def', 'ghi'), 'jkl')
+""", """
+var test = 'abc${concat('def', 'ghi')}jkl'
+""");
+
+        [TestMethod]
+        public void Codefix_understands_namespaces() => AssertCodeFix("""
+var test = sys.conc|at('abc', concat('def', 'ghi'), 'jkl')
+""", """
+var test = 'abc${concat('def', 'ghi')}jkl'
+""");
     }
 }

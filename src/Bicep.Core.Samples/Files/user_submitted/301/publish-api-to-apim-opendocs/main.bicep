@@ -1,7 +1,7 @@
 // ****************************************
 // Azure Bicep main template
-// This bicep template demonstrates publishing an existing API end-point to an existing API maangement instance.
-// The example illustrates using the "existing" term for an exisitng resource and then also importing an API end-point with OpenDocs specificatons to API management
+// This bicep template demonstrates publishing an existing API end-point to an existing API management instance.
+// The example illustrates using the "existing" term for an existing resource and then also importing an API end-point with OpenDocs specifications to API management
 // ****************************************
 //refer to existing APIM
 targetScope = 'resourceGroup'
@@ -53,27 +53,29 @@ var productsSet = [
   }
 ]
 
-//we refer to exisitng APIM instance. This may even be in a different resoruce group
+//we refer to existing APIM instance. This may even be in a different resource group
 resource apiManagementService 'Microsoft.ApiManagement/service@2020-12-01' existing = {
   name: apimInstanceName
 }
 
 //establish one or many products to an existing APIM instance
-resource ProductRecords 'Microsoft.ApiManagement/service/products@2020-12-01' = [for product in productsSet: {
-  parent: apiManagementService
-  name: product.productName
-  properties: {
-    displayName: product.displayName
-    description: product.productDescription
-    terms: product.productTerms
-    subscriptionRequired: product.isSubscriptionRequired
-    approvalRequired: product.isApprovalRequired
-    subscriptionsLimit: product.subscriptionLimit
-    state: product.publishState
+resource ProductRecords 'Microsoft.ApiManagement/service/products@2020-12-01' = [
+  for product in productsSet: {
+    parent: apiManagementService
+    name: product.productName
+    properties: {
+      displayName: product.displayName
+      description: product.productDescription
+      terms: product.productTerms
+      subscriptionRequired: product.isSubscriptionRequired
+      approvalRequired: product.isApprovalRequired
+      subscriptionsLimit: product.subscriptionLimit
+      state: product.publishState
+    }
   }
-}]
+]
 
-//publish the API endpint to APIM
+//publish the API endpoint to APIM
 resource functionAPI 'Microsoft.ApiManagement/service/apis@2020-12-01' = {
   parent: apiManagementService
   name: apiName
@@ -85,12 +87,16 @@ resource functionAPI 'Microsoft.ApiManagement/service/apis@2020-12-01' = {
 }
 
 //attach API to product(s)
-resource attachAPIToProducts 'Microsoft.ApiManagement/service/products/apis@2020-12-01' = [for (product, i) in productsSet: {
-  parent: ProductRecords[i]
-  name: apiName
-}]
+resource attachAPIToProducts 'Microsoft.ApiManagement/service/products/apis@2020-12-01' = [
+  for (product, i) in productsSet: {
+    parent: ProductRecords[i]
+    name: apiName
+  }
+]
 
-output apimProducts array = [for (name, i) in productsSet: {
-  productId: ProductRecords[i].id
-  productName: ProductRecords[i].name
-}]
+output apimProducts array = [
+  for (name, i) in productsSet: {
+    productId: ProductRecords[i].id
+    productName: ProductRecords[i].name
+  }
+]

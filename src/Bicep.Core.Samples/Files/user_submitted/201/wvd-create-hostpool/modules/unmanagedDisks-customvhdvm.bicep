@@ -1,22 +1,14 @@
 @description('The base URI where artifacts required by this template are located.')
 param artifactsLocation string = 'ttps://raw.githubusercontent.com/Azure/RDS-Templates/master/ARM-wvd-templates/DSC/Configuration.zip'
 
-@allowed([
-  'None'
-  'AvailabilitySet'
-  'AvailabilityZone'
-])
+@allowed(['None', 'AvailabilitySet', 'AvailabilityZone'])
 @description('The availability option for the VMs.')
 param availabilityOption string = 'None'
 
-@description('The name of avaiability set to be used when create the VMs.')
+@description('The name of availability set to be used when create the VMs.')
 param availabilitySetName string = ''
 
-@allowed([
-  1
-  2
-  3
-])
+@allowed([1, 2, 3])
 @description('The number of availability zone to be used when create the VMs.')
 param availabilityZone int = 1
 
@@ -41,11 +33,7 @@ param rdshPrefix string = take(toLower(resourceGroup().name), 10)
 @description('Number of session hosts that will be created and added to the hostpool.')
 param rdshNumberOfInstances int
 
-@allowed([
-  'Premium_LRS'
-  'StandardSSD_LRS'
-  'Standard_LRS'
-])
+@allowed(['Premium_LRS', 'StandardSSD_LRS', 'Standard_LRS'])
 @description('The VM disk type for the VM: HDD or SSD.')
 param rdshVMDiskType string
 
@@ -127,12 +115,22 @@ param intune bool = false
 var emptyArray = []
 var domain_var = ((domain == '') ? last(split(administratorAccountUsername, '@'))! : domain)
 var storageAccountName = split(split(vmImageVhdUri, '/')[2], '.')[0]
-var storageaccount = concat(resourceId(storageAccountResourceGroupName, 'Microsoft.Storage/storageAccounts', storageAccountName))
+var storageaccount = concat(resourceId(
+  storageAccountResourceGroupName,
+  'Microsoft.Storage/storageAccounts',
+  storageAccountName
+))
 var newNsgName = '${rdshPrefix}nsg-${guidValue}'
-var nsgId = (createNetworkSecurityGroup ? resourceId('Microsoft.Network/networkSecurityGroups', newNsgName) : networkSecurityGroupId)
+var nsgId = (createNetworkSecurityGroup
+  ? resourceId('Microsoft.Network/networkSecurityGroups', newNsgName)
+  : networkSecurityGroupId)
 var isVMAdminAccountCredentialsProvided = ((!(vmAdministratorAccountUsername == '')) && (!(vmAdministratorAccountPassword == '')))
-var vmAdministratorUsername = (isVMAdminAccountCredentialsProvided ? vmAdministratorAccountUsername : first(split(administratorAccountUsername, '@')))
-var vmAdministratorPassword = (isVMAdminAccountCredentialsProvided ? vmAdministratorAccountPassword : administratorAccountPassword)
+var vmAdministratorUsername = (isVMAdminAccountCredentialsProvided
+  ? vmAdministratorAccountUsername
+  : first(split(administratorAccountUsername, '@')))
+var vmAdministratorPassword = (isVMAdminAccountCredentialsProvided
+  ? vmAdministratorAccountPassword
+  : administratorAccountPassword)
 var vmAvailabilitySetResourceId = {
   id: resourceId('Microsoft.Compute/availabilitySets/', availabilitySetName)
 }
@@ -148,155 +146,155 @@ module NSG './NSG.bicep' = {
   }
 }
 
-resource nic 'Microsoft.Network/networkInterfaces@2018-11-01' = [for i in range(0, rdshNumberOfInstances): {
-  name: '${rdshPrefix}${(i + vmInitialNumber)}-nic'
-  location: location
-  tags: networkInterfaceTags
-  properties: {
-    ipConfigurations: [
-      {
-        name: 'ipconfig'
-        properties: {
-          privateIPAllocationMethod: 'Dynamic'
-          subnet: {
-            id: subnet_id
+resource nic 'Microsoft.Network/networkInterfaces@2018-11-01' = [
+  for i in range(0, rdshNumberOfInstances): {
+    name: '${rdshPrefix}${(i + vmInitialNumber)}-nic'
+    location: location
+    tags: networkInterfaceTags
+    properties: {
+      ipConfigurations: [
+        {
+          name: 'ipconfig'
+          properties: {
+            privateIPAllocationMethod: 'Dynamic'
+            subnet: {
+              id: subnet_id
+            }
+          }
+        }
+      ]
+      enableAcceleratedNetworking: enableAcceleratedNetworking
+      networkSecurityGroup: (empty(networkSecurityGroupId) ? null : json('{"id": "${nsgId}"}'))
+    }
+    dependsOn: [NSG]
+  }
+]
+
+resource vm 'Microsoft.Compute/virtualMachines@2018-10-01' = [
+  for i in range(0, rdshNumberOfInstances): {
+    name: concat(rdshPrefix, (i + vmInitialNumber))
+    location: location
+    tags: virtualMachineTags
+    identity: {
+      type: (aadJoin ? 'SystemAssigned' : 'None')
+    }
+    properties: {
+      hardwareProfile: {
+        vmSize: rdshVmSize
+      }
+      availabilitySet: ((availabilityOption == 'AvailabilitySet') ? vmAvailabilitySetResourceId : null)
+      osProfile: {
+        computerName: concat(rdshPrefix, (i + vmInitialNumber))
+        adminUsername: vmAdministratorUsername
+        adminPassword: vmAdministratorPassword
+      }
+      storageProfile: {
+        osDisk: {
+          name: '${rdshPrefix}${(i + vmInitialNumber)}-osDisk'
+          osType: 'Windows'
+          caching: 'ReadWrite'
+          createOption: 'FromImage'
+          image: {
+            uri: vmImageVhdUri
+          }
+          vhd: {
+            uri: '${reference(storageaccount, '2018-11-01').primaryEndpoints.blob}${vhds}${(i + vmInitialNumber)}-osdisk.vhd'
           }
         }
       }
-    ]
-    enableAcceleratedNetworking: enableAcceleratedNetworking
-    networkSecurityGroup: (empty(networkSecurityGroupId) ? null : json('{"id": "${nsgId}"}'))
-  }
-  dependsOn: [
-    NSG
-  ]
-}]
-
-resource vm 'Microsoft.Compute/virtualMachines@2018-10-01' = [for i in range(0, rdshNumberOfInstances): {
-  name: concat(rdshPrefix, (i + vmInitialNumber))
-  location: location
-  tags: virtualMachineTags
-  identity: {
-    type: (aadJoin ? 'SystemAssigned' : 'None')
-  }
-  properties: {
-    hardwareProfile: {
-      vmSize: rdshVmSize
-    }
-    availabilitySet: ((availabilityOption == 'AvailabilitySet') ? vmAvailabilitySetResourceId : null)
-    osProfile: {
-      computerName: concat(rdshPrefix, (i + vmInitialNumber))
-      adminUsername: vmAdministratorUsername
-      adminPassword: vmAdministratorPassword
-    }
-    storageProfile: {
-      osDisk: {
-        name: '${rdshPrefix}${(i + vmInitialNumber)}-osDisk'
-        osType: 'Windows'
-        caching: 'ReadWrite'
-        createOption: 'FromImage'
-        image: {
-          uri: vmImageVhdUri
+      networkProfile: {
+        networkInterfaces: [
+          {
+            id: resourceId('Microsoft.Network/networkInterfaces', '${rdshPrefix}${(i + vmInitialNumber)}-nic')
+          }
+        ]
+      }
+      diagnosticsProfile: {
+        bootDiagnostics: {
+          enabled: false
         }
-        vhd: {
-          uri: '${reference(storageaccount, '2018-11-01').primaryEndpoints.blob}${vhds}${(i + vmInitialNumber)}-osdisk.vhd'
+      }
+      licenseType: 'Windows_Client'
+    }
+    zones: ((availabilityOption == 'AvailabilityZone') ? array(availabilityZone) : emptyArray)
+    dependsOn: [nic]
+  }
+]
+
+resource vm_DSC 'Microsoft.Compute/virtualMachines/extensions@2018-10-01' = [
+  for i in range(0, rdshNumberOfInstances): {
+    name: '${rdshPrefix}${(i + vmInitialNumber)}/Microsoft.PowerShell.DSC'
+    location: location
+    properties: {
+      publisher: 'Microsoft.Powershell'
+      type: 'DSC'
+      typeHandlerVersion: '2.73'
+      autoUpgradeMinorVersion: true
+      settings: {
+        modulesUrl: artifactsLocation
+        configurationFunction: 'Configuration.ps1\\AddSessionHost'
+        properties: {
+          hostPoolName: hostpoolName
+          registrationInfoToken: hostpoolToken
+          aadJoin: aadJoin
         }
       }
     }
-    networkProfile: {
-      networkInterfaces: [
-        {
-          id: resourceId('Microsoft.Network/networkInterfaces', '${rdshPrefix}${(i + vmInitialNumber)}-nic')
-        }
-      ]
+    dependsOn: [vm]
+  }
+]
+
+resource vm_AADLoginForWindows 'Microsoft.Compute/virtualMachines/extensions@2018-10-01' = [
+  for i in range(0, rdshNumberOfInstances): if (aadJoin && !intune) {
+    name: '${rdshPrefix}${(i + vmInitialNumber)}/AADLoginForWindows'
+    location: location
+    properties: {
+      publisher: 'Microsoft.Azure.ActiveDirectory'
+      type: 'AADLoginForWindows'
+      typeHandlerVersion: '1.0'
+      autoUpgradeMinorVersion: true
     }
-    diagnosticsProfile: {
-      bootDiagnostics: {
-        enabled: false
+    dependsOn: [vm_DSC]
+  }
+]
+
+resource vm_AADLoginForWindowsWithIntune 'Microsoft.Compute/virtualMachines/extensions@2018-10-01' = [
+  for i in range(0, rdshNumberOfInstances): if (aadJoin && intune) {
+    name: '${rdshPrefix}${(i + vmInitialNumber)}/AADLoginForWindowsWithIntune'
+    location: location
+    properties: {
+      publisher: 'Microsoft.Azure.ActiveDirectory'
+      type: 'AADLoginForWindows'
+      typeHandlerVersion: '1.0'
+      autoUpgradeMinorVersion: true
+      settings: {
+        mdmId: '0000000a-0000-0000-c000-000000000000'
       }
     }
-    licenseType: 'Windows_Client'
+    dependsOn: [vm_DSC]
   }
-  zones: ((availabilityOption == 'AvailabilityZone') ? array(availabilityZone) : emptyArray)
-  dependsOn: [
-    nic
-  ]
-}]
+]
 
-resource vm_DSC 'Microsoft.Compute/virtualMachines/extensions@2018-10-01' = [for i in range(0, rdshNumberOfInstances): {
-  name: '${rdshPrefix}${(i + vmInitialNumber)}/Microsoft.PowerShell.DSC'
-  location: location
-  properties: {
-    publisher: 'Microsoft.Powershell'
-    type: 'DSC'
-    typeHandlerVersion: '2.73'
-    autoUpgradeMinorVersion: true
-    settings: {
-      modulesUrl: artifactsLocation
-      configurationFunction: 'Configuration.ps1\\AddSessionHost'
-      properties: {
-        hostPoolName: hostpoolName
-        registrationInfoToken: hostpoolToken
-        aadJoin: aadJoin
+resource vm_joindomain 'Microsoft.Compute/virtualMachines/extensions@2018-10-01' = [
+  for i in range(0, rdshNumberOfInstances): if (!aadJoin) {
+    name: '${rdshPrefix}${(i + vmInitialNumber)}/joindomain'
+    location: location
+    properties: {
+      publisher: 'Microsoft.Compute'
+      type: 'JsonADDomainExtension'
+      typeHandlerVersion: '1.3'
+      autoUpgradeMinorVersion: true
+      settings: {
+        name: domain_var
+        ouPath: ouPath
+        user: administratorAccountUsername
+        restart: 'true'
+        options: '3'
+      }
+      protectedSettings: {
+        password: administratorAccountPassword
       }
     }
+    dependsOn: [vm_DSC]
   }
-  dependsOn: [
-    vm
-  ]
-}]
-
-resource vm_AADLoginForWindows 'Microsoft.Compute/virtualMachines/extensions@2018-10-01' = [for i in range(0, rdshNumberOfInstances): if (aadJoin && !intune) {
-  name: '${rdshPrefix}${(i + vmInitialNumber)}/AADLoginForWindows'
-  location: location
-  properties: {
-    publisher: 'Microsoft.Azure.ActiveDirectory'
-    type: 'AADLoginForWindows'
-    typeHandlerVersion: '1.0'
-    autoUpgradeMinorVersion: true
-  }
-  dependsOn: [
-    vm_DSC
-  ]
-}]
-
-resource vm_AADLoginForWindowsWithIntune 'Microsoft.Compute/virtualMachines/extensions@2018-10-01' = [for i in range(0, rdshNumberOfInstances): if (aadJoin && intune) {
-  name: '${rdshPrefix}${(i + vmInitialNumber)}/AADLoginForWindowsWithIntune'
-  location: location
-  properties: {
-    publisher: 'Microsoft.Azure.ActiveDirectory'
-    type: 'AADLoginForWindows'
-    typeHandlerVersion: '1.0'
-    autoUpgradeMinorVersion: true
-    settings: {
-      mdmId: '0000000a-0000-0000-c000-000000000000'
-    }
-  }
-  dependsOn: [
-    vm_DSC
-  ]
-}]
-
-resource vm_joindomain 'Microsoft.Compute/virtualMachines/extensions@2018-10-01' = [for i in range(0, rdshNumberOfInstances): if (!aadJoin) {
-  name: '${rdshPrefix}${(i + vmInitialNumber)}/joindomain'
-  location: location
-  properties: {
-    publisher: 'Microsoft.Compute'
-    type: 'JsonADDomainExtension'
-    typeHandlerVersion: '1.3'
-    autoUpgradeMinorVersion: true
-    settings: {
-      name: domain_var
-      ouPath: ouPath
-      user: administratorAccountUsername
-      restart: 'true'
-      options: '3'
-    }
-    protectedSettings: {
-      password: administratorAccountPassword
-    }
-  }
-  dependsOn: [
-    vm_DSC
-  ]
-}]
+]

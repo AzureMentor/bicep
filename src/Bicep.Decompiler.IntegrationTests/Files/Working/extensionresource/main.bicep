@@ -35,3 +35,4 @@ resource siteLock 'Microsoft.Authorization/locks@2016-09-01' = {
     notes: 'Site should not be deleted.'
   }
 }
+

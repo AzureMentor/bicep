@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Linq;
 using Bicep.Core.TypeSystem;
+using Bicep.Core.TypeSystem.Types;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -123,7 +123,7 @@ namespace Bicep.Core.UnitTests.TypeSystem
                 LanguageConstants.Array,
                 new TypedArrayType(LanguageConstants.Int, TypeSymbolValidationFlags.Default),
                 LanguageConstants.String,
-                new ObjectType("myObj", TypeSymbolValidationFlags.Default, Enumerable.Empty<TypeProperty>(), null));
+                new ObjectType("myObj", TypeSymbolValidationFlags.Default, [], null));
             actual.Name.Should().Be("array | myObj | string");
         }
 

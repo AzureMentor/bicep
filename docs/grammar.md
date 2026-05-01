@@ -4,43 +4,67 @@ The following is the active pseudo-grammar of the bicep language.
 program -> statement* EOF
 statement ->
   targetScopeDecl |
-  importDecl |
+  extensionDecl |
+  compileTimeImportDecl |
   metadataDecl |
-  parameterDecl |
+  paramDecl |
   typeDecl |
-  variableDecl |
+  varDecl |
   resourceDecl |
   moduleDecl |
+  testDecl |
+  assertDel |
   outputDecl |
+  functionDecl |
   NL
 
 targetScopeDecl -> "targetScope" "=" expression
 
-importDecl -> decorator* "import" interpString(specification) importWithClause? importAsClause? NL
+extensionDecl -> decorator* "extension" interpString(specification) extensionWithClause? extensionAsClause? NL
 
-importWithClause -> "with" object
+extensionWithClause -> "with" object
 
-importAsClause -> "as" IDENTIFIER(alias)
+extensionAsClause -> "as" IDENTIFIER(alias)
+
+compileTimeImportDecl -> decorator* "import" compileTimeImportTarget compileTimeImportFromClause
+
+compileTimeImportTarget ->
+  importedSymbolsList |
+  wildcardImport
+
+importedSymbolsList -> "{" ( NL+ ( importedSymbolsListItem NL+ )* )? "}"
+
+importedSymbolsListItem -> IDENTIFIER(originalSymbolName) extensionAsClause?
+
+wildcardImport -> "*" extensionAsClause
+
+compileTimeImportFromClause -> "from" interpString(path)
 
 metadataDecl -> "metadata" IDENTIFIER(name) "=" expression NL
 
-parameterDecl ->
-  decorator* "parameter" IDENTIFIER(name) typeExpression parameterDefaultValue? NL |
-  decorator* "parameter" IDENTIFIER(name) "resource" interpString(type) parameterDefaultValue? NL |
+paramDecl ->
+  decorator* "param" IDENTIFIER(name) typeExpression parameterDefaultValue? NL |
+  decorator* "param" IDENTIFIER(name) "resource" interpString(type) parameterDefaultValue? NL |
 parameterDefaultValue -> "=" expression
 
 typeDecl -> decorator* "type" IDENTIFIER(name) "=" typeExpression NL
 
-variableDecl -> decorator* "variable" IDENTIFIER(name) "=" expression NL
+varDecl -> decorator* "var" IDENTIFIER(name) typeExpression? "=" expression NL
 
 resourceDecl -> decorator* "resource" IDENTIFIER(name) interpString(type) "existing"? "=" (ifCondition | object | forExpression) NL
 
 moduleDecl -> decorator* "module" IDENTIFIER(name) interpString(type) "=" (ifCondition | object | forExpression) NL
 
+testDecl -> "test" IDENTIFIER(name) interpString(type) "=" (object) NL
+
+assertDecl -> "assert" IDENTIFIER(name) "=" expression NL
+
 outputDecl ->
   decorator* "output" IDENTIFIER(name) IDENTIFIER(type) "=" expression NL
   decorator* "output" IDENTIFIER(name) "resource" interpString(type) "=" expression NL
 NL -> ("\n" | "\r")+
+
+functionDecl -> decorator* "func" IDENTIFIER(name) typedLambdaExpression NL
 
 decorator -> "@" decoratorExpression NL
 
@@ -59,7 +83,9 @@ binaryExpression ->
 equalityExpression ->
   relationalExpression |
   equalityExpression "==" relationalExpression |
-  equalityExpression "!=" relationalExpression
+  equalityExpression "!=" relationalExpression |
+  equalityExpression "=~" relationalExpression |
+  equalityExpression "!~" relationalExpression
 
 relationalExpression ->
   additiveExpression |
@@ -88,16 +114,20 @@ unaryOperator -> "!" | "-" | "+"
 memberExpression ->
   primaryExpression |
   memberExpression "[" expression "]" |
+  memberExpression "[^" expression "]" |
+  memberExpression "[?" expression "]" |
+  memberExpression "[?^" expression "]" |
   memberExpression "." IDENTIFIER(property) |
+  memberExpression ".?" IDENTIFIER(property) |
   memberExpression "." functionCall |
-  memberExpression ":" IDENTIFIER(name) |
+  memberExpression "::" IDENTIFIER(name) |
   memberExpression "!"
 
 primaryExpression ->
   functionCall |
   literalValue |
   interpString |
-  multilineString |
+  interpMultilineString |
   array |
   forExpression |
   object |
@@ -106,13 +136,18 @@ primaryExpression ->
 
 decoratorExpression -> functionCall | memberExpression "." functionCall
 
-functionCall -> IDENTIFIER "(" argumentList? ")"
-
 argumentList -> expression ("," expression)*
+functionCall -> IDENTIFIER "(" argumentList? ")"
 
 parenthesizedExpression -> "(" expression ")"
 
-lambdaExpression -> ( "(" argumentList? ")" | IDENTIFIER ) "=>" expression
+localVariable -> IDENTIFIER
+variableBlock -> "(" NL* ( localVariable NL* ("," NL* localVariable NL*)* )? ")"
+lambdaExpression -> ( variableBlock | localVariable ) "=>" expression
+
+typedLocalVariable -> IDENTIFIER primaryTypeExpression
+typedVariableBlock -> "(" NL* ( typedLocalVariable NL* ("," NL* typedLocalVariable NL*)* )? ")"
+typedLambdaExpression -> typedVariableBlock primaryTypeExpression "=>" expression
 
 ifCondition -> "if" parenthesizedExpression object
 
@@ -120,23 +155,35 @@ forExpression -> "[" "for" (IDENTIFIER(item) | forVariableBlock) "in" expression
 forVariableBlock -> "(" IDENTIFIER(item) "," IDENTIFIER(index) ")"
 forBody -> expression(body) | ifCondition
 
-interpString ->  stringLeftPiece ( expression stringMiddlePiece )* expression stringRightPiece | stringComplete
+interpString ->  ( stringLeftPiece ( expression stringMiddlePiece )* expression stringRightPiece ) | stringComplete
 stringLeftPiece -> "'" STRINGCHAR* "${"
 stringMiddlePiece -> "}" STRINGCHAR* "${"
 stringRightPiece -> "}" STRINGCHAR* "'"
 stringComplete -> "'" STRINGCHAR* "'"
 
-multilineString -> "'''" + MULTILINESTRINGCHAR+ + "'''"
+interpMultilineString -> ( interpMultilineStringLeftPiece ( expression interpMultilineStringMiddlePiece )* expression interpMultilineStringRightPiece ) | multilineString
+interpMultilineStringLeftPiece -> "$"+ "'''" MULTILINESTRINGCHAR* "$"+ "{"
+interpMultilineStringMiddlePiece -> "}" MULTILINESTRINGCHAR* "$"+ "{"
+interpMultilineStringRightPiece -> "}" MULTILINESTRINGCHAR* "'''"
+
+multilineString -> "'''" MULTILINESTRINGCHAR* "'''"
 
 literalValue -> NUMBER | "true" | "false" | "null"
 
-object -> "{" ( NL+ ( objectProperty NL+ )* )? "}"
-objectProperty -> ( IDENTIFIER(name) | interpString ) ":" expression
+object -> "{" NL? ( | ( objectProperty ( objectSep objectProperty )* ( | objectSep ) ) ) "}"
+objectSep -> "," | NL
+objectKey -> IDENTIFIER(name) | interpString
+objectProperty -> ( objectKey ":" expression ) | ( "..." expression )
 
-array -> "[" ( NL+ arrayItem* )? "]"
-arrayItem -> expression NL+
+array -> "[" NL? ( | ( arrayItem ( arraySep arrayItem )* ( | arraySep ) ) ) "]"
+arraySep -> "," | NL
+arrayItem -> expression | ( "..." expression )
 
-typeExpression -> singularTypeExpression ("|" singularTypeExpression)*
+typeExpression ->
+  singularTypeExpression |
+  unionTypeExpression
+
+unionTypeExpression -> "|"? singularTypeExpression ("|" singularTypeExpression)*
 
 singularTypeExpression ->
   primaryTypeExpression |
@@ -145,8 +192,7 @@ singularTypeExpression ->
   parenthesizedTypeExpression
 
 primaryTypeExpression ->
-  ambientTypeReference |
-  IDENTIFIER(type) |
+  typeReference |
   literalValue |
   unaryOperator literalValue |
   stringComplete |
@@ -154,7 +200,22 @@ primaryTypeExpression ->
   objectType |
   tupleType
 
+typeReference ->
+  ambientTypeReference |
+  fullyQualifiedAmbientTypeReference |
+  resourceDerivedType |
+  IDENTIFIER(type) |
+  IDENTIFIER(importedType) |
+  IDENTIFIER(wildcardImport) "." IDENTIFIER(type) |
+  typeReference "." IDENTIFIER(property) |
+  typeReference "[" (NUMBER | "*") "]" |
+  typeReference ".*"
+
 ambientTypeReference -> "string" | "int" | "bool" | "array" | "object"
+
+fullyQualifiedAmbientTypeReference -> IDENTIFIER(sysNamespace) "." ambientTypeReference
+
+resourceDerivedType -> ( "resourceInput" | "resourceOutput" ) "<" interpString(type) ">"
 
 objectType -> "{" (NL+ ((objectTypeProperty | objectTypeAdditionalPropertiesMatcher) NL+ )* )? "}"
 objectTypeProperty -> decorator* ( IDENTIFIER(name) | stringComplete | multilineString ) ":" typeExpression

@@ -1,87 +1,61 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Threading.Tasks;
 using Bicep.Cli.Arguments;
+using Bicep.Cli.Helpers;
 using Bicep.Cli.Logging;
 using Bicep.Cli.Services;
-using Bicep.Core.Configuration;
-using Bicep.Core.Emit;
-using Bicep.Core.Features;
-using Bicep.Core.FileSystem;
-using Bicep.Core.Workspaces;
+using Bicep.Core;
+using Bicep.IO.Abstraction;
 using Microsoft.Extensions.Logging;
 
-namespace Bicep.Cli.Commands
+namespace Bicep.Cli.Commands;
+
+public class BuildCommand(
+    ILogger logger,
+    InputOutputArgumentsResolver inputOutputArgumentsResolver,
+    DiagnosticLogger diagnosticLogger,
+    BicepCompiler compiler,
+    OutputWriter writer) : ICommand
 {
-    public class BuildCommand : ICommand
+    public async Task<int> RunAsync(BuildArguments args)
     {
-        private readonly ILogger logger;
-        private readonly IDiagnosticLogger diagnosticLogger;
-        private readonly IOContext io;
-        private readonly CompilationService compilationService;
-        private readonly CompilationWriter writer;
-        private readonly IFeatureProviderFactory featureProviderFactory;
+        var hasErrors = false;
+        var inputOutputUriPairs = inputOutputArgumentsResolver.ResolveFilePatternInputOutputArguments(args);
+        var outputToStdOut = inputOutputUriPairs.Count == 1 && args.OutputToStdOut; // If there are multiple input files, we ignore the args.OutputToStdOut flag.
 
-        public BuildCommand(
-            ILogger logger,
-            IDiagnosticLogger diagnosticLogger,
-            IOContext io,
-            CompilationService compilationService,
-            CompilationWriter writer,
-            IFeatureProviderFactory featureProviderFactory)
+        foreach (var (inputUri, outputUri) in inputOutputUriPairs)
         {
-            this.logger = logger;
-            this.diagnosticLogger = diagnosticLogger;
-            this.io = io;
-            this.compilationService = compilationService;
-            this.writer = writer;
-            this.featureProviderFactory = featureProviderFactory;
+            ArgumentHelper.ValidateBicepFile(inputUri);
+
+            var result = await Compile(inputUri, outputUri, args.NoRestore, args.DiagnosticsFormat, outputToStdOut);
+            hasErrors |= result.HasErrors;
         }
 
-        public async Task<int> RunAsync(BuildArguments args)
+        var summary = new DiagnosticSummary(hasErrors);
+
+        return CommandHelper.GetExitCode(summary);
+    }
+
+    private async Task<DiagnosticSummary> Compile(IOUri inputUri, IOUri outputUri, bool noRestore, DiagnosticsFormat? diagnosticsFormat, bool outputToStdOut)
+    {
+        var compilation = await compiler.CreateCompilation(inputUri, skipRestore: noRestore);
+        CommandHelper.LogExperimentalWarning(logger, compilation);
+
+        var summary = diagnosticLogger.LogDiagnostics(ArgumentHelper.GetDiagnosticOptions(diagnosticsFormat), compilation);
+
+        if (!summary.HasErrors)
         {
-            var inputPath = PathHelper.ResolvePath(args.InputFile);
-            var features = featureProviderFactory.GetFeatureProvider(PathHelper.FilePathToFileUrl(inputPath));
-            var emitterSettings = new EmitterSettings(features, BicepSourceFileKind.BicepFile);
-
-            if (emitterSettings.EnableSymbolicNames)
+            if (outputToStdOut)
             {
-                logger.LogWarning(CliResources.SymbolicNamesDisclaimerMessage);
+                writer.TemplateToStdout(compilation);
             }
-
-            if (features.ResourceTypedParamsAndOutputsEnabled)
+            else
             {
-                logger.LogWarning(CliResources.ResourceTypesDisclaimerMessage);
+                await writer.TemplateToFileAsync(compilation, outputUri);
             }
-
-            if (IsBicepFile(inputPath))
-            {
-                var compilation = await compilationService.CompileAsync(inputPath, args.NoRestore);
-
-                if (diagnosticLogger.ErrorCount < 1)
-                {
-                    if (args.OutputToStdOut)
-                    {
-                        writer.ToStdout(compilation);
-                    }
-                    else
-                    {
-                        static string DefaultOutputPath(string path) => PathHelper.GetDefaultBuildOutputPath(path);
-                        var outputPath = PathHelper.ResolveDefaultOutputPath(inputPath, args.OutputDir, args.OutputFile, DefaultOutputPath);
-
-                        writer.ToFile(compilation, outputPath);
-                    }
-                }
-
-                // return non-zero exit code on errors
-                return diagnosticLogger.ErrorCount > 0 ? 1 : 0;
-            }
-
-            logger.LogError(CliResources.UnrecognizedBicepFileExtensionMessage, inputPath);
-            return 1;
         }
 
-        private bool IsBicepFile(string inputPath) => PathHelper.HasBicepExtension(PathHelper.FilePathToFileUrl(inputPath));
+        return summary;
     }
 }

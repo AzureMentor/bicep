@@ -1,10 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Bicep.Core.Json
 {
@@ -17,14 +16,16 @@ namespace Bicep.Core.Json
 
         private static readonly JsonSerializerOptions DefaultSerializeOptions = new()
         {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() },
         };
 
         public static JsonElement CreateElement(ReadOnlyMemory<byte> utf8Json, JsonDocumentOptions? options = null)
         {
             using var document = JsonDocument.Parse(utf8Json, options ?? DefaultJsonDocumentOptions);
 
-            // JsonDocument is IDisposable, so we need to clone RootElement.
+            // JsonDocument is disposed when leaving scope, so we need to clone RootElement.
             // See: https://docs.microsoft.com/en-us/dotnet/standard/serialization/system-text-json-migrate-from-newtonsoft-how-to?pivots=dotnet-5-0#jsondocument-is-idisposable.
             return document.RootElement.Clone();
         }

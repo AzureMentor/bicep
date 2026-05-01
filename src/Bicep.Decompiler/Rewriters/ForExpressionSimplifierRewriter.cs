@@ -1,9 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
 using Bicep.Core.Syntax.Rewriters;
@@ -140,26 +138,28 @@ namespace Bicep.Core.Decompiler.Rewriters
             SyntaxBase forVariableBlockSyntax;
             if (independentIndexAccesses.Any())
             {
-                forVariableBlockSyntax = SyntaxFactory.CreateVariableBlock(new [] {
+                forVariableBlockSyntax = SyntaxFactory.CreateVariableBlock(new[] {
                     SyntaxFactory.CreateIdentifier(itemVarName),
                     SyntaxFactory.CreateIdentifier(arrayIndexSymbol.Name)
                 });
             }
             else
             {
-                forVariableBlockSyntax = new LocalVariableSyntax(SyntaxFactory.CreateIdentifier(itemVarName));
+                forVariableBlockSyntax = new LocalVariableSyntax(SyntaxFactory.CreateIdentifierWithTrailingSpace(itemVarName));
             }
 
             var forExpression = new VariableAccessSyntax(SyntaxFactory.CreateIdentifier(arraySymbol.Name));
 
             return new ForSyntax(
                 syntax.OpenSquare,
+                syntax.OpenNewlines,
                 syntax.ForKeyword,
                 forVariableBlockSyntax,
                 syntax.InKeyword,
                 forExpression,
                 syntax.Colon,
                 forBody,
+                syntax.CloseNewlines,
                 syntax.CloseSquare);
         }
 

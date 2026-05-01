@@ -1,17 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using Bicep.Core.Navigation;
+using System.Text.RegularExpressions;
 using Bicep.Core.Semantics;
 using Bicep.Core.Semantics.Metadata;
 using Bicep.Core.Syntax;
 using Bicep.Core.Syntax.Visitors;
-using Bicep.Core.TypeSystem.Az;
+using Bicep.Core.TypeSystem.Providers.Az;
 using Microsoft.WindowsAzure.ResourceStack.Common.Extensions;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.RegularExpressions;
 
 namespace Bicep.Core.Analyzers.Linter.Common
 {
@@ -23,7 +19,7 @@ namespace Bicep.Core.Analyzers.Linter.Common
         // TODO: Refactor more rules to use this
         public static (string stringValue, StringSyntax stringSyntax, string? pathToValueIfNonTrivial)? TryGetEvaluatedStringLiteral(SemanticModel model, SyntaxBase? expression)
         {
-            return TryGetEvaluatedStringLiteral(model, expression, Array.Empty<DeclaredSymbol>());
+            return TryGetEvaluatedStringLiteral(model, expression, []);
         }
 
         private static (string stringValue, StringSyntax stringSyntax, string? pathToValueIfNonTrivial)? TryGetEvaluatedStringLiteral(SemanticModel model, SyntaxBase? expression, DeclaredSymbol[] currentPaths)
@@ -91,13 +87,13 @@ namespace Bicep.Core.Analyzers.Linter.Common
 
             if (resourcesAndNames.Any())
             {
-                string formattedSearchName = resourceNameExpression.ToText();
+                string searchName = resourceNameExpression.ToString();
                 string? evaluatedSearchNameLiteral = TryGetEvaluatedStringLiteral(model, resourceNameExpression)?.stringValue;
 
                 foreach (var (resource, resourceName) in resourcesAndNames)
                 {
-                    // First try a formatted expression match
-                    if (resourceName.ToText().EqualsOrdinally(formattedSearchName))
+                    // First try a expression text match
+                    if (resourceName.ToString().EqualsOrdinally(searchName))
                     {
                         yield return resource;
                     }

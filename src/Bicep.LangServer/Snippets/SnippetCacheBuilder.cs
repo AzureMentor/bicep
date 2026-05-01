@@ -1,32 +1,29 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using Bicep.Core;
 using Bicep.Core.Emit;
 using Bicep.Core.Extensions;
 using Bicep.Core.Parsing;
 using Bicep.Core.Resources;
 using Bicep.Core.Semantics;
+using Bicep.Core.SourceGraph;
 using Bicep.Core.Syntax;
 using Bicep.Core.TypeSystem;
-using Bicep.Core.Workspaces;
+using Bicep.Core.TypeSystem.Types;
+using Bicep.IO.InMemory;
 using Bicep.LanguageServer.Completions;
 
 namespace Bicep.LanguageServer.Snippets;
 
 public class SnippetCacheBuilder
 {
-    private static readonly Regex SnippetPlaceholderCommentPattern = new Regex(@"\/\*(?<snippetPlaceholder>(.*?))\*\/('(.*?)'|\w+|-\d+|.*?)", RegexOptions.Compiled | RegexOptions.ExplicitCapture);
+    private static readonly Regex SnippetPlaceholderCommentPattern = new(@"\/\*(?<snippetPlaceholder>(.*?))\*\/('(.*?)'|\w+|-\d+|.*?)", RegexOptions.Compiled | RegexOptions.ExplicitCapture);
 
     // Used to cache resource declaration information. Maps resource type reference to prefix, identifier, body text and description
     private readonly ConcurrentDictionary<ResourceTypeReference, SnippetCache.SnippetCacheSnippet> resourceTypeReferenceInfoMap = new();
@@ -73,7 +70,7 @@ public class SnippetCacheBuilder
             resourceTypeReferenceInfoMap.ToImmutableDictionary(),
             resourceTypeReferenceToDependentsMap.ToImmutableDictionary(),
             resourceTypeReferenceToChildTypeSymbolsMap.ToImmutableDictionary(k => k.Key, k => k.Value.OrderBy(r => r.ToString()).ToImmutableArray()),
-            topLevelNamedDeclarationSnippets.ToImmutableArray());
+            [.. topLevelNamedDeclarationSnippets]);
     }
 
     public async Task<(string description, string snippet)> GetDescriptionAndSnippetText(string template, string manifestResourceName)
@@ -132,7 +129,7 @@ public class SnippetCacheBuilder
             bodyText = RemoveSnippetPlaceholderComments(bodyText);
 
             // snippet placeholders are authored using a multi-line comment syntax. To include this when fetching the identifier,
-            // we have to fetch everything from the end of the preceeding syntax (as multi-line comments are stored in trailing trivia on the previous token).
+            // we have to fetch everything from the end of the preceding syntax (as multi-line comments are stored in trailing trivia on the previous token).
             var nameStart = resourceDeclaration.Keyword.Span.Position + resourceDeclaration.Keyword.Span.Length;
             var nameEnd = resourceDeclaration.Name.Span.Position + resourceDeclaration.Name.Span.Length;
             var identifier = template.Substring(nameStart, nameEnd - nameStart).Trim();
@@ -157,7 +154,7 @@ public class SnippetCacheBuilder
                 {
                     resourceTypeReferenceToChildTypeSymbolsMap.AddOrUpdate(
                         resourceTypeReference,
-                        _ => ImmutableArray.Create(childResourceTypeReference),
+                        _ => [childResourceTypeReference],
                         (_, children) => children.Add(childResourceTypeReference));
                 }
 
@@ -182,21 +179,21 @@ public class SnippetCacheBuilder
 
         // We need to provide uri for syntax tree creation, but it's not used anywhere. In order to avoid
         // cross platform issues, we'll provide a placeholder uri.
-        var bicepFile = SourceFileFactory.CreateBicepFile(new Uri($"inmemory://{manifestResourceName}"), template);
-        var workspace = new Workspace();
+        var bicepFile = this.bicepCompiler.SourceFileFactory.CreateBicepFile(DummyFileHandle.Default, template);
+        var workspace = new ActiveSourceFileSet();
         workspace.UpsertSourceFiles(bicepFile.AsEnumerable());
 
-        var compilation = await bicepCompiler.CreateCompilation(bicepFile.FileUri, skipRestore: true, workspace);
+        var compilation = await bicepCompiler.CreateCompilation(bicepFile.FileHandle.Uri, workspace, skipRestore: true);
         var semanticModel = compilation.GetEntrypointSemanticModel();
 
         return ResourceDependencyVisitor.GetResourceDependencies(semanticModel);
     }
 
-    private string? GetSnippetText(TypeProperty typeProperty, int indentLevel, ref int index, string? discrimatedObjectKey = null)
+    private string? GetSnippetText(NamedTypeProperty typeProperty, int indentLevel, ref int index, string? discrimatedObjectKey = null)
     {
         if (typeProperty.Flags.HasFlag(TypePropertyFlags.Required))
         {
-            StringBuilder sb = new StringBuilder();
+            StringBuilder sb = new();
 
             if (typeProperty.TypeReference.Type is ObjectType objectType)
             {
@@ -204,7 +201,7 @@ public class SnippetCacheBuilder
 
                 indentLevel++;
 
-                foreach (KeyValuePair<string, TypeProperty> kvp in objectType.Properties.OrderBy(x => x.Key))
+                foreach (KeyValuePair<string, NamedTypeProperty> kvp in objectType.Properties.OrderBy(x => x.Key))
                 {
                     string? snippetText = GetSnippetText(kvp.Value, indentLevel, ref index);
                     if (snippetText is not null)

@@ -1,13 +1,15 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
+using Bicep.Core.Configuration;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.IntegrationTests.Extensibility;
 using Bicep.Core.Syntax;
-using Bicep.Core.TypeSystem;
+using Bicep.Core.TypeSystem.Types;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
+using Bicep.Core.UnitTests.FileSystem;
 using Bicep.Core.UnitTests.Utils;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -23,9 +25,17 @@ namespace Bicep.Core.IntegrationTests
         [NotNull]
         public TestContext? TestContext { get; set; }
 
-        private ServiceBuilder ServicesWithExtensibility => new ServiceBuilder()
-            .WithFeatureOverrides(new(TestContext, ExtensibilityEnabled: true, ResourceTypedParamsAndOutputsEnabled: true))
-            .WithNamespaceProvider(new TestExtensibilityNamespaceProvider(BicepTestConstants.AzResourceTypeLoader));
+        private ServiceBuilder ServicesWithExtensions => new ServiceBuilder()
+            .WithFeatureOverrides(new(TestContext, ResourceTypedParamsAndOutputsEnabled: true))
+            .WithConfigurationPatch(c => c.WithExtensions("""
+            {
+              "az": "builtin:",
+              "kubernetes": "builtin:",
+              "foo": "builtin:",
+              "bar": "builtin:"
+            }
+            """))
+            .WithNamespaceProvider(TestExtensionsNamespaceProvider.CreateWithDefaults());
 
         [TestMethod]
         public void Parameter_can_have_resource_type()
@@ -158,26 +168,26 @@ param p resource 'Some.Fake/Type@2019-06-01'
 
 output id string = p.id
 ");
-            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new []
+            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new[]
             {
-                ("BCP081", DiagnosticLevel.Warning, "Resource type \"Some.Fake/Type@2019-06-01\" does not have types available."),
+                ("BCP081", DiagnosticLevel.Warning, "Resource type \"Some.Fake/Type@2019-06-01\" does not have types available. Bicep is unable to validate resource properties prior to deployment, but this will not block the resource from being deployed."),
             });
         }
 
         [TestMethod]
-        public void Parameter_cannot_use_extensibility_resource_type()
+        public void Parameter_can_only_use_az_resource_type()
         {
-            var result = CompilationHelper.Compile(ServicesWithExtensibility, @"
-import 'storage@1.0.0' with {
-  connectionString: 'asdf'
-} as stg
+            var result = CompilationHelper.Compile(ServicesWithExtensions, """
+            extension bar with {
+            connectionString: 'asdf'
+            } as stg
 
-param container resource 'stg:container'
-output name string = container.name // silence unused params warning
-");
-            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new []
+            param container resource 'stg:container'
+            output name string = container.name // silence unused params warning
+            """);
+            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new[]
             {
-                ("BCP227", DiagnosticLevel.Error, "The type \"container\" cannot be used as a parameter or output type. Extensibility types are currently not supported as parameters or outputs."),
+                ("BCP227", DiagnosticLevel.Error, "The type \"container\" cannot be used as a parameter or output type. Resource types from extensions are currently not supported as parameters or outputs."),
                 ("BCP062", DiagnosticLevel.Error, "The referenced declaration with name \"container\" is not valid."),
             });
         }
@@ -193,9 +203,9 @@ resource resource 'My.Rp/myResource@2020-01-01' = {
   name: 'resource'
 }");
 
-            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new []
+            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new[]
             {
-                ("BCP081", DiagnosticLevel.Warning, "Resource type \"My.Rp/myResource@2020-01-01\" does not have types available."),
+                ("BCP081", DiagnosticLevel.Warning, "Resource type \"My.Rp/myResource@2020-01-01\" does not have types available. Bicep is unable to validate resource properties prior to deployment, but this will not block the resource from being deployed."),
                 ("BCP229", DiagnosticLevel.Error, "The parameter \"p\" cannot be used as a resource scope or parent. Resources passed as parameters cannot be used as a scope or parent of a resource."),
             });
         }
@@ -216,9 +226,9 @@ resource resource 'Microsoft.Storage/storageAccounts/tableServices@2020-06-01' =
   }
 }");
 
-            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new []
+            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new[]
             {
-                ("BCP081", DiagnosticLevel.Warning, "Resource type \"Microsoft.Storage/storageAccounts/tableServices@2020-06-01\" does not have types available."),
+                ("BCP081", DiagnosticLevel.Warning, "Resource type \"Microsoft.Storage/storageAccounts/tableServices@2020-06-01\" does not have types available. Bicep is unable to validate resource properties prior to deployment, but this will not block the resource from being deployed."),
                 ("BCP229", DiagnosticLevel.Error, "The parameter \"p\" cannot be used as a resource scope or parent. Resources passed as parameters cannot be used as a scope or parent of a resource."),
                 ("BCP169", DiagnosticLevel.Error, "Expected resource name to contain 1 \"/\" character(s). The number of name segments must match the number of segments in the resource type."),
             });
@@ -278,7 +288,7 @@ param foo string
 param bar string
 "));
 
-            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new [] {
+            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new[] {
                 ("BCP065", DiagnosticLevel.Error, "Function \"utcNow\" is not valid at this location. It can only be used as a parameter default value."),
                 ("BCP065", DiagnosticLevel.Error, "Function \"newGuid\" is not valid at this location. It can only be used as a parameter default value."),
             });
@@ -299,7 +309,7 @@ param foo string
 param bar object
 "));
 
-            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new [] {
+            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new[] {
                 ("BCP057", DiagnosticLevel.Error, "The name \"resourceId\" does not exist in the current context."),
                 ("BCP057", DiagnosticLevel.Error, "The name \"deployment\" does not exist in the current context."),
             });
@@ -355,6 +365,550 @@ param bar array
     }
   }
 }"));
+        }
+
+        [TestMethod]
+        public void Missing_required_parameters_generates_a_codefix()
+        {
+            var result = CompilationHelper.CompileParams(
+              ("parameters.bicepparam", """
+using './main.bicep'
+"""),
+              ("main.bicep", """
+param stringParam string
+param intParam int
+param boolParam bool
+param objectParam object
+param arrayParam array
+"""));
+
+            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics([
+                ("BCP258", DiagnosticLevel.Error, """The following parameters are declared in the Bicep file but are missing an assignment in the params file: "arrayParam", "boolParam", "intParam", "objectParam", "stringParam".""")
+            ]);
+
+            result.ApplyCodeFix(result.Diagnostics.Single(x => x.Code == "BCP258")).Should().EqualIgnoringNewlines("""
+using './main.bicep'
+
+param arrayParam =  /*TODO*/
+
+param boolParam =  /*TODO*/
+
+param intParam =  /*TODO*/
+
+param objectParam =  /*TODO*/
+
+param stringParam =  /*TODO*/
+
+""");
+        }
+
+        [TestMethod]
+        public void Valid_extends_should_not_fail()
+        {
+            var result = CompilationHelper.CompileParams(
+              ("bicepconfig.json", @"
+                {
+                    ""experimentalFeaturesEnabled"": {
+                        ""extendableParamFiles"": true
+                    }
+                }
+              "), ("parameters.bicepparam", @"
+                using 'main.bicep'
+                extends 'shared.bicepparam'
+              "),
+              ("shared.bicepparam", @"
+                using none
+              "),
+              ("main.bicep", @"
+              "));
+
+            result.ExcludingLinterDiagnostics().Should().NotHaveAnyDiagnostics();
+        }
+
+        [TestMethod]
+        public void Invalid_extends_reference_does_not_exist_should_fail()
+        {
+            var result = CompilationHelper.CompileParams(
+              ("bicepconfig.json", @"
+                {
+                    ""experimentalFeaturesEnabled"": {
+                        ""extendableParamFiles"": true
+                    }
+                }
+              "),
+              ("parameters.bicepparam", @"
+                using 'main.bicep'
+                extends 'does-not-exists.bicepparam'
+                param foo = ''
+              "),
+              ("main.bicep", @"
+                param foo string
+              "));
+
+            var path = InMemoryFileResolver.GetFileUri("/path/to/does-not-exists.bicepparam").LocalPath;
+
+            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new[] {
+                ("BCP091", DiagnosticLevel.Error, $"An error occurred reading file. Could not find file '{path}'."),
+            });
+        }
+
+        [TestMethod]
+        public void Invalid_extends_reference_file_type_should_fail()
+        {
+            var result = CompilationHelper.CompileParams(
+              ("bicepconfig.json", @"
+                {
+                    ""experimentalFeaturesEnabled"": {
+                        ""extendableParamFiles"": true
+                    }
+                }
+              "),
+              ("parameters.json", @"
+                { ""foo"": ""bar"" }
+              "),
+              ("parameters.bicepparam", @"
+                using 'main.bicep'
+                extends 'parameters.json'
+                param foo = ''
+              "),
+              ("main.bicep", @"
+                param foo string
+              "));
+
+            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new[] {
+                ("BCP404", DiagnosticLevel.Error, "The \"extends\" declaration is missing a bicepparam file path reference"),
+            });
+        }
+
+        [TestMethod]
+        public void Invalid_extends_and_more_than_one_extends_should_fail()
+        {
+            var result = CompilationHelper.CompileParams(
+              ("parameters.bicepparam", @"
+                using 'main.bicep'
+                extends
+                extends 'shared.bicepparam'
+                param foo = ''
+                param bar = ''
+              "),
+              ("shared.bicepparam", @"
+                using none
+                param foo = ''
+              "),
+              ("main.bicep", @"
+                param foo string
+                param bar string
+              "));
+
+            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new[] {
+                ("BCP405", DiagnosticLevel.Error, "More than one \"extends\" declaration are present"),
+                ("BCP406", DiagnosticLevel.Error, "Using \"extends\" keyword requires enabling EXPERIMENTAL feature \"ExtendableParamFiles\"."),
+                ("BCP404", DiagnosticLevel.Error, "The \"extends\" declaration is missing a bicepparam file path reference"),
+                ("BCP405", DiagnosticLevel.Error, "More than one \"extends\" declaration are present"),
+                ("BCP406", DiagnosticLevel.Error, "Using \"extends\" keyword requires enabling EXPERIMENTAL feature \"ExtendableParamFiles\"."),
+            });
+        }
+
+        [TestMethod]
+        public void Extending_parameters_allow_overriding_should_succeed()
+        {
+            var result = CompilationHelper.CompileParams(
+              ("bicepconfig.json", @"
+                {
+                    ""experimentalFeaturesEnabled"": {
+                        ""extendableParamFiles"": true
+                    }
+                }
+              "),
+              ("parameters.bicepparam", @"
+                using 'main.bicep'
+                extends 'shared.bicepparam'
+                param foo = 'bar'
+              "),
+              ("shared.bicepparam", @"
+                using none
+                param foo = 'foo'
+              "),
+              ("main.bicep", @"
+                param foo string
+              "));
+
+            result.ExcludingLinterDiagnostics().Should().NotHaveAnyDiagnostics();
+
+            result.Parameters.Should().DeepEqual(JToken.Parse(@"{
+            ""$schema"": ""https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#"",
+            ""contentVersion"": ""1.0.0.0"",
+            ""parameters"": {
+                ""foo"": {
+                ""value"": ""bar""
+                },
+            }
+            }"));
+        }
+
+        [TestMethod]
+        public void Using_variables_objects_arrays_in_base_parameters_file_should_succeed()
+        {
+            var result = CompilationHelper.CompileParams(
+              ("bicepconfig.json", @"
+                {
+                    ""experimentalFeaturesEnabled"": {
+                        ""extendableParamFiles"": true
+                    }
+                }
+              "),
+              ("parameters.bicepparam", @"
+                using 'main.bicep'
+                extends 'shared.bicepparam'
+              "),
+              ("shared.bicepparam", @"
+                using none
+
+                var var_foo = 'foo'
+                param foo = var_foo
+
+                var var_bar = {
+                    a: 'a'
+                    b: 'b'
+                }
+
+                param bar = var_bar
+
+                var var_baz = [
+                    var_foo
+                    var_bar
+                ]
+
+                param baz = var_baz
+              "),
+              ("main.bicep", @"
+                param foo string = ''
+                param bar object = {}
+                param baz array = []
+              "));
+
+            result.ExcludingLinterDiagnostics().Should().NotHaveAnyDiagnostics();
+
+            result.Parameters.Should().DeepEqual(JToken.Parse(@"{
+                ""$schema"": ""https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#"",
+                ""contentVersion"": ""1.0.0.0"",
+                ""parameters"": {
+                    ""foo"": {
+                        ""value"": ""foo""
+                    },
+                    ""bar"": {
+                        ""value"": {
+                            ""a"": ""a"",
+                            ""b"": ""b""
+                        }
+                    },
+                    ""baz"": {
+                        ""value"": [
+                            ""foo"",
+                            {
+                                ""a"": ""a"",
+                                ""b"": ""b""
+                            }
+                        ]
+                    }
+                }
+            }"));
+        }
+
+        [TestMethod]
+        public void Nested_extends_object_spread_with_base_should_succeed()
+        {
+            var result = CompilationHelper.CompileParams(
+              ("bicepconfig.json", @"
+                {
+                    ""experimentalFeaturesEnabled"": {
+                        ""extendableParamFiles"": true
+                    }
+                }
+              "),
+              ("parameters.bicepparam", @"
+                using 'main.bicep'
+                extends 'middle.bicepparam'
+                param tags = {
+                  ...base.tags
+                  tagC: 'valueC'
+                }
+              "),
+              ("middle.bicepparam", @"
+                using none
+                extends 'base.bicepparam'
+                param tags = {
+                  ...base.tags
+                  tagB: 'valueB'
+                }
+              "),
+              ("base.bicepparam", @"
+                using none
+                param tags = {
+                  tagA: 'valueA'
+                }
+              "),
+              ("main.bicep", @"
+                param tags object
+              "));
+
+            result.ExcludingLinterDiagnostics().Should().NotHaveAnyDiagnostics();
+
+            result.Parameters.Should().DeepEqual(JToken.Parse(@"{
+                ""$schema"": ""https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#"",
+                ""contentVersion"": ""1.0.0.0"",
+                ""parameters"": {
+                    ""tags"": {
+                        ""value"": {
+                            ""tagA"": ""valueA"",
+                            ""tagB"": ""valueB"",
+                            ""tagC"": ""valueC""
+                        }
+                    }
+                }
+            }"));
+        }
+
+        [TestMethod]
+        public void Nested_extends_array_spread_with_base_should_succeed()
+        {
+            var result = CompilationHelper.CompileParams(
+              ("bicepconfig.json", @"
+                {
+                    ""experimentalFeaturesEnabled"": {
+                        ""extendableParamFiles"": true
+                    }
+                }
+              "),
+              ("parameters.bicepparam", @"
+                using 'main.bicep'
+                extends 'middle.bicepparam'
+                param values = [
+                  ...base.values
+                  'valueC'
+                ]
+              "),
+              ("middle.bicepparam", @"
+                using none
+                extends 'base.bicepparam'
+                param values = [
+                  ...base.values
+                  'valueB'
+                ]
+              "),
+              ("base.bicepparam", @"
+                using none
+                param values = [
+                  'valueA'
+                ]
+              "),
+              ("main.bicep", @"
+                param values array
+              "));
+
+            result.ExcludingLinterDiagnostics().Should().NotHaveAnyDiagnostics();
+
+            result.Parameters.Should().DeepEqual(JToken.Parse(@"{
+                ""$schema"": ""https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#"",
+                ""contentVersion"": ""1.0.0.0"",
+                ""parameters"": {
+                    ""values"": {
+                        ""value"": [
+                            ""valueA"",
+                            ""valueB"",
+                            ""valueC""
+                        ]
+                    }
+                }
+            }"));
+        }
+
+        [TestMethod]
+        public void Decorators_on_using_param_and_extends_statements_should_raise_errors()
+        {
+            var result = CompilationHelper.CompileParams(
+              ("bicepconfig.json", @"
+                {
+                    ""experimentalFeaturesEnabled"": {
+                        ""extendableParamFiles"": true
+                    }
+                }
+              "),
+              ("parameters.bicepparam", @"
+                @foo('bar')
+                using 'main.bicep'
+
+                @notARealDecorator(1, 2, 3)
+                param fizz = 'buzz'
+
+                @minLength(3)
+                extends 'shared.bicepparam'
+              "),
+              ("shared.bicepparam", @"
+                using none
+              "),
+              ("main.bicep", @"
+                param fizz string
+              "));
+
+            result.ExcludingLinterDiagnostics().Should().HaveDiagnostics(new[] {
+                ("BCP130", DiagnosticLevel.Error, "Decorators are not allowed here."),
+                ("BCP130", DiagnosticLevel.Error, "Decorators are not allowed here."),
+                ("BCP130", DiagnosticLevel.Error, "Decorators are not allowed here."),
+            });
+        }
+
+        [TestMethod]
+        public void Decorators_on_param_declarations_in_bicep_files_should_be_allowed()
+        {
+            var result = CompilationHelper.Compile(@"
+                @description('A parameter with a decorator')
+                @minLength(3)
+                param myParam string
+
+                @secure()
+                param secureParam string
+            ");
+
+            result.ExcludingLinterDiagnostics().Should().NotHaveAnyDiagnostics();
+        }
+
+        [TestMethod]
+        public void ExternalInput_nested_in_function_call_with_extends_should_succeed()
+        {
+            var result = CompilationHelper.CompileParams(
+              ("bicepconfig.json", @"
+                {
+                    ""experimentalFeaturesEnabled"": {
+                        ""extendableParamFiles"": true
+                    }
+                }
+              "),
+              ("parameters.bicepparam", @"
+                using 'main.bicep'
+                extends 'shared.bicepparam'
+                param endpointWeight = 50
+              "),
+              ("shared.bicepparam", @"
+                using none
+                param trafficManagerEnabled = bool(externalInput('scopeBinding', '__TRAFFICMANAGER_ENABLED__'))
+              "),
+              ("main.bicep", @"
+                param trafficManagerEnabled bool
+                param endpointWeight int
+              "));
+
+            result.ExcludingLinterDiagnostics().Should().NotHaveAnyDiagnostics();
+        }
+
+        [TestMethod]
+        public void Deeply_nested_function_calls_with_extends_should_succeed()
+        {
+            var result = CompilationHelper.CompileParams(
+              ("bicepconfig.json", @"
+                {
+                    ""experimentalFeaturesEnabled"": {
+                        ""extendableParamFiles"": true
+                    }
+                }
+              "),
+              ("parameters.bicepparam", @"
+                using 'main.bicep'
+                extends 'shared.bicepparam'
+              "),
+              ("shared.bicepparam", @"
+                using none
+                param foo = string(int(externalInput('custom', 'value')))
+              "),
+              ("main.bicep", @"
+                param foo string
+              "));
+
+            result.ExcludingLinterDiagnostics().Should().NotHaveAnyDiagnostics();
+        }
+
+        [TestMethod]
+        public void Function_calls_in_objects_with_extends_should_succeed()
+        {
+            var result = CompilationHelper.CompileParams(
+              ("bicepconfig.json", @"
+                {
+                    ""experimentalFeaturesEnabled"": {
+                        ""extendableParamFiles"": true
+                    }
+                }
+              "),
+              ("parameters.bicepparam", @"
+                using 'main.bicep'
+                extends 'shared.bicepparam'
+              "),
+              ("shared.bicepparam", @"
+                using none
+                param config = {
+                  enabled: bool(externalInput('binding', 'enabled'))
+                  count: int(externalInput('binding', 'count'))
+                }
+              "),
+              ("main.bicep", @"
+                param config object
+              "));
+
+            result.ExcludingLinterDiagnostics().Should().NotHaveAnyDiagnostics();
+        }
+
+        [TestMethod]
+        public void Function_calls_in_arrays_with_extends_should_succeed()
+        {
+            var result = CompilationHelper.CompileParams(
+              ("bicepconfig.json", @"
+                {
+                    ""experimentalFeaturesEnabled"": {
+                        ""extendableParamFiles"": true
+                    }
+                }
+              "),
+              ("parameters.bicepparam", @"
+                using 'main.bicep'
+                extends 'shared.bicepparam'
+              "),
+              ("shared.bicepparam", @"
+                using none
+                param items = [
+                  int(externalInput('binding', 'item1'))
+                  int(externalInput('binding', 'item2'))
+                ]
+              "),
+              ("main.bicep", @"
+                param items array
+              "));
+
+            result.ExcludingLinterDiagnostics().Should().NotHaveAnyDiagnostics();
+        }
+
+        [TestMethod]
+        public void Ternary_with_nested_function_calls_with_extends_should_succeed()
+        {
+            var result = CompilationHelper.CompileParams(
+              ("bicepconfig.json", @"
+                {
+                    ""experimentalFeaturesEnabled"": {
+                        ""extendableParamFiles"": true
+                    }
+                }
+              "),
+              ("parameters.bicepparam", @"
+                using 'main.bicep'
+                extends 'shared.bicepparam'
+              "),
+              ("shared.bicepparam", @"
+                using none
+                param value = bool(externalInput('binding', 'condition')) ? int(externalInput('binding', 'trueVal')) : 0
+              "),
+              ("main.bicep", @"
+                param value int
+              "));
+
+            result.ExcludingLinterDiagnostics().Should().NotHaveAnyDiagnostics();
         }
     }
 }

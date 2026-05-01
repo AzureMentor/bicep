@@ -70,17 +70,19 @@ var linuxConfiguration = {
   }
 }
 
-resource availabilitySet 'Microsoft.Compute/availabilitySets@2020-06-01' = [for i in range(0, 2): {
-  name: '${availabilitySetName}-${i}'
-  location: location
-  properties: {
-    platformFaultDomainCount: 2
-    platformUpdateDomainCount: 2
+resource availabilitySet 'Microsoft.Compute/availabilitySets@2020-06-01' = [
+  for i in range(0, 2): {
+    name: '${availabilitySetName}-${i}'
+    location: location
+    properties: {
+      platformFaultDomainCount: 2
+      platformUpdateDomainCount: 2
+    }
+    sku: {
+      name: 'Aligned'
+    }
   }
-  sku: {
-    name: 'Aligned'
-  }
-}]
+]
 
 resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2020-05-01' = {
   name: networkSecurityGroupName
@@ -136,61 +138,66 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2020-05-01' = {
   }
 }
 
-resource nic 'Microsoft.Network/networkInterfaces@2020-05-01' = [for i in range(0, numberOfInstances): {
-  name: 'nic${i}'
-  location: location
-  properties: {
-    ipConfigurations: [
-      {
-        name: 'ipconfig1'
-        properties: {
-          privateIPAllocationMethod: 'Dynamic'
-          subnet: {
-            id: (((i % 2) == 0) ? subnet1Ref : subnet2Ref)
-          }
-        }
-      }
-    ]
-  }
-  dependsOn: [
-    virtualNetwork
-  ]
-}]
-
-resource myvm 'Microsoft.Compute/virtualMachines@2020-06-01' = [for i in range(0, numberOfInstances): {
-  name: 'myvm${i}'
-  location: location
-  properties: {
-    availabilitySet: {
-      id: resourceId('Microsoft.Compute/availabilitySets', '${availabilitySetName}-${(i % 2)}')
-    }
-    hardwareProfile: {
-      vmSize: vmSize
-    }
-    osProfile: {
-      computerName: 'vm${i}'
-      adminUsername: adminUsername
-      adminPassword: adminPasswordOrKey
-      linuxConfiguration: ((authenticationType == 'password') ? json('null') : linuxConfiguration)
-//@[64:76) [simplify-json-null (Warning)] Simplify json('null') to null (CodeDescription: bicep core(https://aka.ms/bicep/linter/simplify-json-null)) |json('null')|
-    }
-    storageProfile: {
-      imageReference: imageReference[OS]
-      osDisk: {
-        createOption: 'FromImage'
-      }
-    }
-    networkProfile: {
-      networkInterfaces: [
+resource nic 'Microsoft.Network/networkInterfaces@2020-05-01' = [
+  for i in range(0, numberOfInstances): {
+    name: 'nic${i}'
+    location: location
+    properties: {
+      ipConfigurations: [
         {
-          id: resourceId('Microsoft.Network/networkInterfaces', 'nic${i}')
+          name: 'ipconfig1'
+          properties: {
+            privateIPAllocationMethod: 'Dynamic'
+            subnet: {
+              id: (((i % 2) == 0) ? subnet1Ref : subnet2Ref)
+            }
+          }
         }
       ]
     }
+    dependsOn: [
+      virtualNetwork
+    ]
   }
-  dependsOn: [
-    resourceId('Microsoft.Network/networkInterfaces', 'nic${i}')
-//@[04:64) [BCP034 (Error)] The enclosing array expected an item of type "module[] | (resource | module) | resource[]", but the provided item was of type "string". (CodeDescription: none) |resourceId('Microsoft.Network/networkInterfaces', 'nic${i}')|
-    availabilitySet
-  ]
-}]
+]
+
+resource myvm 'Microsoft.Compute/virtualMachines@2020-06-01' = [
+  for i in range(0, numberOfInstances): {
+    name: 'myvm${i}'
+    location: location
+    properties: {
+      availabilitySet: {
+        id: resourceId('Microsoft.Compute/availabilitySets', '${availabilitySetName}-${(i%2)}')
+      }
+      hardwareProfile: {
+        vmSize: vmSize
+      }
+      osProfile: {
+        computerName: 'vm${i}'
+        adminUsername: adminUsername
+        adminPassword: adminPasswordOrKey
+        linuxConfiguration: ((authenticationType == 'password') ? json('null') : linuxConfiguration)
+//@[66:78) [simplify-json-null (Warning)] Simplify json('null') to null (bicep core linter https://aka.ms/bicep/linter-diagnostics#simplify-json-null) |json('null')|
+      }
+      storageProfile: {
+        imageReference: imageReference[OS]
+        osDisk: {
+          createOption: 'FromImage'
+        }
+      }
+      networkProfile: {
+        networkInterfaces: [
+          {
+            id: resourceId('Microsoft.Network/networkInterfaces', 'nic${i}')
+          }
+        ]
+      }
+    }
+    dependsOn: [
+      resourceId('Microsoft.Network/networkInterfaces', 'nic${i}')
+//@[06:66) [BCP034 (Error)] The enclosing array expected an item of type "module[] | (resource | module) | resource[]", but the provided item was of type "string". (bicep https://aka.ms/bicep/core-diagnostics#BCP034) |resourceId('Microsoft.Network/networkInterfaces', 'nic${i}')|
+      availabilitySet
+    ]
+  }
+]
+

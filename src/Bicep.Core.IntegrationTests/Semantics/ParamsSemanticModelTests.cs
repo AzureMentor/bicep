@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using Bicep.Core.Configuration;
+
+using System.Diagnostics.CodeAnalysis;
+using Bicep.Core.Extensions;
 using Bicep.Core.FileSystem;
 using Bicep.Core.Samples;
 using Bicep.Core.Semantics;
@@ -8,27 +10,20 @@ using Bicep.Core.Text;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.UnitTests.Utils;
-using Bicep.Core.Workspaces;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
-using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 
 namespace Bicep.Core.IntegrationTests.Semantics
 {
     [TestClass]
     public class ParamsSemanticModelTests
     {
-        private static ServiceBuilder Services => new ServiceBuilder().WithEmptyAzResources();
-
         [NotNull]
         public TestContext? TestContext { get; set; }
 
-        private SemanticModel CreateSemanticModel(ServiceBuilder services, string paramsFilePath)
+        private async Task<SemanticModel> CreateSemanticModel(ServiceBuilder services, string paramsFilePath)
         {
-            var configuration = BicepTestConstants.BuiltInConfiguration;
-            var sourceFileGrouping = services.Build().BuildSourceFileGrouping(PathHelper.FilePathToFileUrl(paramsFilePath));
-            var compilation = services.Build().BuildCompilation(sourceFileGrouping);
+            var compiler = services.Build().GetCompiler();
+            var compilation = await compiler.CreateCompilation(PathHelper.FilePathToFileUrl(paramsFilePath).ToIOUri());
 
             return compilation.GetEntrypointSemanticModel();
         }
@@ -36,11 +31,12 @@ namespace Bicep.Core.IntegrationTests.Semantics
         [DataTestMethod]
         [BaselineData_Bicepparam.TestData()]
         [TestCategory(BaselineHelper.BaselineTestCategory)]
-        public void ProgramsShouldProduceExpectedDiagnostic(BaselineData_Bicepparam baselineData)
+        public async Task ProgramsShouldProduceExpectedDiagnostic(BaselineData_Bicepparam baselineData)
         {
             var data = baselineData.GetData(TestContext);
 
-            var model = CreateSemanticModel(Services.WithFeatureOverrides(new(ParamsFilesEnabled: true)), data.Parameters.OutputFilePath);
+            var services = await CreateServicesAsync();
+            var model = await CreateSemanticModel(services, data.Parameters.OutputFilePath);
 
             // use a deterministic order
             var diagnostics = model.GetAllDiagnostics()
@@ -58,21 +54,22 @@ namespace Bicep.Core.IntegrationTests.Semantics
         [DataTestMethod]
         [BaselineData_Bicepparam.TestData()]
         [TestCategory(BaselineHelper.BaselineTestCategory)]
-        public void ProgramsShouldProduceExpectedUserDeclaredSymbols(BaselineData_Bicepparam baselineData)
+        public async Task ProgramsShouldProduceExpectedUserDeclaredSymbols(BaselineData_Bicepparam baselineData)
         {
             var data = baselineData.GetData(TestContext);
 
-            var model = CreateSemanticModel(Services, data.Parameters.OutputFilePath);
+            var services = await CreateServicesAsync();
+            var model = await CreateSemanticModel(services, data.Parameters.OutputFilePath);
 
             var symbols = SymbolCollector
                 .CollectSymbols(model)
-                .OfType<ParameterAssignmentSymbol>();
+                .OfType<DeclaredSymbol>();
 
-            string getLoggingString(ParameterAssignmentSymbol symbol)
+            string getLoggingString(DeclaredSymbol symbol)
             {
-                (_, var startChar) = TextCoordinateConverter.GetPosition(model.SourceFile.LineStarts, symbol.DeclaringParameterAssignment.Span.Position);
+                (_, var startChar) = TextCoordinateConverter.GetPosition(model.SourceFile.LineStarts, symbol.DeclaringSyntax.Span.Position);
 
-                return $"{symbol.Kind} {symbol.Name}. Type: {symbol.Type}. Declaration start char: {startChar}, length: {symbol.DeclaringParameterAssignment.Span.Length}";
+                return $"{symbol.Kind} {symbol.Name}. Type: {symbol.Type}. Declaration start char: {startChar}, length: {symbol.DeclaringSyntax.Span.Length}";
             }
 
             var sourceTextWithDiags = OutputHelper.AddDiagsToSourceText(data.Parameters.EmbeddedFile.Contents, "\n", symbols, symb => symb.NameSource.Span, getLoggingString);
@@ -80,5 +77,58 @@ namespace Bicep.Core.IntegrationTests.Semantics
             data.Symbols.WriteToOutputFolder(sourceTextWithDiags);
             data.Symbols.ShouldHaveExpectedValue();
         }
+
+        [TestMethod]
+        public async Task Params_file_should_handle_registry_module_resource_derived_types()
+        {
+            const string moduleRef = "br:mockregistry.io/route/table:v1";
+
+            const string moduleContent = """
+                param routes resourceInput<'Microsoft.Network/routeTables@2024-07-01'>.properties.routes?
+            """;
+
+            const string paramsContent = $@"using '{moduleRef}'
+                param routes = [
+                    {{
+                        id: 'myroute'
+                        properties: {{
+                            addressPrefix: '0.0.0.0/0'
+                            nextHopType: 'Internet'
+                        }}
+                    }}
+                ]
+            ";
+
+            var artifactManager = await MockRegistry.CreateDefaultExternalArtifactManager(TestContext);
+            await artifactManager.PublishRegistryModule(moduleRef, moduleContent);
+
+            // Save bicepconfig.json alongside main.bicepparam so the configuration manager trusts mockregistry.io.
+            var outputDir = FileHelper.SaveResultFiles(TestContext, [
+                new("main.bicepparam", paramsContent),
+                new("bicepconfig.json", """{"security": {"trustedRegistries": ["mockregistry.io"]}}"""),
+            ]);
+            var paramsFilePath = Path.Combine(outputDir, "main.bicepparam");
+            var fileUri = PathHelper.FilePathToFileUrl(paramsFilePath);
+
+            var services = await CreateServicesAsync();
+            services = services.WithTestArtifactManager(artifactManager);
+
+            var compiler = services.Build().GetCompiler();
+            var compilation = await compiler.CreateCompilation(fileUri.ToIOUri());
+
+            var diagnostics = compilation.GetEntrypointSemanticModel().GetAllDiagnostics().ExcludingLinterDiagnostics();
+
+            diagnostics.Should().BeEmpty();
+        }
+
+        private async Task<ServiceBuilder> CreateServicesAsync()
+            => new ServiceBuilder()
+                .WithFeatureOverrides(new(TestContext))
+                .WithEnvironmentVariables(
+                    ("stringEnvVariableName", "test"),
+                    ("intEnvVariableName", "100"),
+                    ("boolEnvironmentVariable", "true")
+                )
+                .WithTestArtifactManager(await MockRegistry.CreateDefaultExternalArtifactManager(TestContext));
     }
 }

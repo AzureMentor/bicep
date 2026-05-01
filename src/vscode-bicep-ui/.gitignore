@@ -1,0 +1,15 @@
+.DS_Store
+node_modules
+.turbo
+*.log
+dist
+dist-ssr
+storybook-static
+*.local
+.env
+.cache
+server/dist
+public/dist
+coverage
+
+!packages/*

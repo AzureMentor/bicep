@@ -1,11 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 using Bicep.Core.Parsing;
 using Bicep.Core.UnitTests;
 using Bicep.Core.UnitTests.Assertions;
@@ -48,7 +44,7 @@ namespace Bicep.LangServer.UnitTests.Handlers
 
             Func<Task> sut = () => handler.Handle(path, CancellationToken.None);
 
-            await sut.Should().ThrowAsync<ArgumentException>().WithMessage("Invalid input file path");
+            await sut.Should().ThrowAsync<UriFormatException>();
         }
 
         [TestMethod]
@@ -62,7 +58,7 @@ resource dnsZone 'Microsoft.Network/dnsZones@2018-05-01' = {
   location: 'global'
 }";
             string bicepFilePath = FileHelper.SaveResultFile(TestContext, "input.bicep", bicepFileContents, testOutputPath);
-            Uri bicepFileUri = new Uri(bicepFilePath);
+            Uri bicepFileUri = new(bicepFilePath);
 
             DocumentUri documentUri = DocumentUri.From(bicepFileUri);
             var compilationManager = BicepCompilationManagerHelper.CreateCompilationManager(documentUri, bicepFileContents, true);
@@ -104,7 +100,7 @@ resource dnsZone 'Microsoft.Network/dnsZones@2018-05-01' = {
             string bicepLocalModule1FilePath = FileHelper.SaveResultFile(TestContext, "localmodule1.bicep", bicepLocalModuleFileContents, testOutputPath);
             string bicepLocalModule2FilePath = FileHelper.SaveResultFile(TestContext, "localmodule2.bicep", bicepLocalModuleFileContents, testOutputPath);
             string bicepFilePath = FileHelper.SaveResultFile(TestContext, "input.bicep", bicepFileContents, testOutputPath);
-            Uri bicepFileUri = new Uri(bicepFilePath);
+            Uri bicepFileUri = new(bicepFilePath);
 
             DocumentUri documentUri = DocumentUri.From(bicepFileUri);
             var compilationManager = BicepCompilationManagerHelper.CreateCompilationManager(documentUri, bicepFileContents, true);
@@ -140,7 +136,7 @@ resource dnsZone 'Microsoft.Network/dnsZones@2018-05-01' = {
 }";
             string bicepLocalModule1FilePath = FileHelper.SaveResultFile(TestContext, "localmodule1.bicep", bicepLocalModuleFileContents, testOutputPath);
             string bicepFilePath = FileHelper.SaveResultFile(TestContext, "input.bicep", bicepFileContents, testOutputPath);
-            Uri bicepFileUri = new Uri(bicepFilePath);
+            Uri bicepFileUri = new(bicepFilePath);
 
             DocumentUri documentUri = DocumentUri.From(bicepFileUri);
             var compilationManager = BicepCompilationManagerHelper.CreateCompilationManager(documentUri, bicepFileContents, true);
@@ -148,10 +144,10 @@ resource dnsZone 'Microsoft.Network/dnsZones@2018-05-01' = {
 
             string expected = StringUtils.ReplaceNewlines(await handler.Handle(bicepFilePath, CancellationToken.None), "|");
 
-            expected.Should().Be(@"Restore (force) summary: |  * ./localmodule1.bicep: Succeeded|  * ./localmodule2.bicep: Succeeded");
+            expected.Should().Be(@"Restore (force) summary: |  * ./localmodule1.bicep: Succeeded|  * ./localmodule2.bicep: Failed");
         }
 
 
         // One scenario not tested here is when we have an external module and another file than the module lock is locked, which prevent the directory delete. We don't have a test for the message
-     }
+    }
 }

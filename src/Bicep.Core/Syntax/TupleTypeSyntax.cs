@@ -1,9 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using Bicep.Core.Parsing;
+using Bicep.Core.Text;
 
 namespace Bicep.Core.Syntax;
 
@@ -15,7 +15,7 @@ public class TupleTypeSyntax : TypeSyntax
         AssertTokenType(closeBracket, nameof(closeBracket), TokenType.RightSquare);
 
         this.OpenBracket = openBracket;
-        this.Children = children.ToImmutableArray();
+        this.Children = [.. children];
         this.CloseBracket = closeBracket;
     }
 

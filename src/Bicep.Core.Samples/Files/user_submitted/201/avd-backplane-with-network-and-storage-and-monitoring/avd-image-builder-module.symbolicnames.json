@@ -1,13 +1,12 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "languageVersion": "1.10-experimental",
+  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
     "_generator": {
       "name": "bicep",
       "version": "dev",
-      "templateHash": "18154557577220218550"
+      "templateHash": "2725585745262341266"
     }
   },
   "parameters": {
@@ -137,7 +136,8 @@
         "principalType": "ServicePrincipal"
       },
       "dependsOn": [
-        "aibdef"
+        "aibdef",
+        "managedidentity"
       ]
     },
     "miorole": {
@@ -149,7 +149,10 @@
         "roleDefinitionId": "/providers/Microsoft.Authorization/roleDefinitions/f1a07417-d97a-45cb-824c-7a7467783830",
         "principalId": "[reference('managedidentity').principalId]",
         "principalType": "ServicePrincipal"
-      }
+      },
+      "dependsOn": [
+        "managedidentity"
+      ]
     },
     "scriptName_BuildVMImage": {
       "condition": "[parameters('InvokeRunImageBuildThroughDeploymentScript')]",

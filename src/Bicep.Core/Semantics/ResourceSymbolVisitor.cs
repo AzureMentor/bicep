@@ -1,6 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
 using System.Collections.Immutable;
 
 namespace Bicep.Core.Semantics
@@ -13,7 +12,7 @@ namespace Bicep.Core.Semantics
             var visitor = new ResourceSymbolVisitor(resources);
             visitor.Visit(symbol);
 
-            return resources.ToImmutableArray();
+            return [.. resources];
         }
 
         private readonly List<ResourceSymbol> resources;

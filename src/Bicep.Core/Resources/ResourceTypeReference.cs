@@ -1,40 +1,34 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
 using System.Collections.Immutable;
-using System.Linq;
 using System.Text.RegularExpressions;
-using Bicep.Core.Extensions;
 
 namespace Bicep.Core.Resources
 {
-    public class ResourceTypeReference
+    public partial class ResourceTypeReference
     {
-        private const string TypeSegmentPattern = "[a-z0-9][a-z0-9-.]*";
-        private const string VersionPattern = "[a-z0-9][a-z0-9-]+";
-
-        private const RegexOptions PatternRegexOptions = RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture | RegexOptions.Compiled | RegexOptions.CultureInvariant;
-        private static readonly Regex ResourceTypePattern = new Regex(@$"^(?<type>{TypeSegmentPattern})(/(?<type>{TypeSegmentPattern}))*(@(?<version>{VersionPattern}))?$", PatternRegexOptions);
-        private static readonly Regex ResourceTypePrefixPattern = new Regex(@$"^(?<type>{TypeSegmentPattern})(/(?<type>{TypeSegmentPattern}))*@", PatternRegexOptions);
-
-        public ResourceTypeReference(ImmutableArray<string> typeSegments, string? version)
+        public ResourceTypeReference(string type, string? version)
         {
-            if (typeSegments.Length <= 0)
+            if (type.Length <= 0)
             {
-                throw new ArgumentException("At least one type must be specified.");
+                throw new ArgumentException("Type must be non-empty.");
             }
 
-            TypeSegments = typeSegments;
+            Name = version is null ? type : $"{type}@{version}";
+            Type = type;
+            TypeSegments = [.. type.Split('/')];
             ApiVersion = version;
         }
 
-        public string FormatName()
-            => $"{FormatType()}{(this.ApiVersion == null ? "" : $"@{this.ApiVersion}")}";
+        public string FormatName() => Name;
 
-        public string FormatType()
-            => string.Join('/', this.TypeSegments);
+        public string FormatType() => Type;
 
         public ImmutableArray<string> TypeSegments { get; }
+
+        public string Name { get; }
+
+        public string Type { get; }
 
         public string? ApiVersion { get; }
 
@@ -48,15 +42,13 @@ namespace Bicep.Core.Resources
 
         public static ResourceTypeReference? TryParse(string resourceType)
         {
-            var match = ResourceTypePattern.Match(resourceType);
+            var match = ResourceTypePattern().Match(resourceType);
             if (match.Success == false)
             {
                 return null;
             }
 
-            var types = match.Groups["type"].Captures.Cast<Capture>()
-                .Select(c => c.Value)
-                .ToImmutableArray();
+            var types = match.Groups["types"].Value;
             var version = match.Groups["version"].Value;
 
             if (string.IsNullOrEmpty(version))
@@ -70,7 +62,7 @@ namespace Bicep.Core.Resources
         public static ResourceTypeReference Combine(ResourceTypeReference baseType, ResourceTypeReference nestedType)
         {
             return new ResourceTypeReference(
-                baseType.TypeSegments.AddRange(nestedType.TypeSegments),
+                $"{baseType.Type}/{nestedType.Type}",
                 nestedType.ApiVersion ?? baseType.ApiVersion);
         }
 
@@ -78,7 +70,7 @@ namespace Bicep.Core.Resources
             => TryParse(resourceType) ?? throw new ArgumentException($"Unable to parse '{resourceType}'", nameof(resourceType));
 
         public static bool HasResourceTypePrefix(string segment)
-            => ResourceTypePrefixPattern.Match(segment).Success;
+            => ResourceTypePrefixPattern().IsMatch(segment);
 
         public override string ToString()
             => this.FormatName();
@@ -98,5 +90,11 @@ namespace Bicep.Core.Resources
             => HashCode.Combine(
                 Enumerable.Select(this.TypeSegments, x => LanguageConstants.ResourceTypeComparer.GetHashCode(x)).Aggregate((a, b) => a ^ b),
                 (this.ApiVersion is null ? 0 : LanguageConstants.ResourceTypeComparer.GetHashCode(this.ApiVersion)));
+
+        [GeneratedRegex("^(?<types>[a-z0-9][a-z0-9-.]*(/[a-z0-9][a-z0-9-.]*)*)@", RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture | RegexOptions.CultureInvariant)]
+        private static partial Regex ResourceTypePrefixPattern();
+
+        [GeneratedRegex(@"^(?<types>[a-z0-9][a-z0-9-.]*(/[a-z0-9][a-z0-9-.]*)*)(@(?<version>[a-z0-9][a-z0-9-\.]+))?$", RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture | RegexOptions.CultureInvariant)]
+        private static partial Regex ResourceTypePattern();
     }
 }

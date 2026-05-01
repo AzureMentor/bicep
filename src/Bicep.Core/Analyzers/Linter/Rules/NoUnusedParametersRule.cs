@@ -2,12 +2,8 @@
 // Licensed under the MIT License.
 
 using Bicep.Core.Diagnostics;
-using Bicep.Core.Extensions;
 using Bicep.Core.Semantics;
 using Bicep.Core.Syntax;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Bicep.Core.Analyzers.Linter.Rules
 {
@@ -18,7 +14,6 @@ namespace Bicep.Core.Analyzers.Linter.Rules
         public NoUnusedParametersRule() : base(
             code: Code,
             description: CoreResources.ParameterMustBeUsedRuleDescription,
-            docUri: new Uri($"https://aka.ms/bicep/linter/{Code}"),
             diagnosticStyling: DiagnosticStyling.ShowCodeAsUnused)
         { }
 

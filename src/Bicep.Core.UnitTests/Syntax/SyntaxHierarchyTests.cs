@@ -1,8 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Bicep.Core.Parsing;
 using Bicep.Core.Syntax;
 using Bicep.Core.Syntax.Visitors;
@@ -55,7 +52,7 @@ namespace Bicep.Core.UnitTests.Syntax
             var varIdSyntax = nodes.OfType<IdentifierSyntax>().Single(id => string.Equals(id.IdentifierName, "bar"));
             hierarchy.GetParent(varIdSyntax).Should().BeSameAs(varDecl);
 
-            var paramTypeSyntax = nodes.OfType<VariableAccessSyntax>().Single();
+            var paramTypeSyntax = nodes.OfType<TypeVariableAccessSyntax>().Single();
             hierarchy.GetParent(paramTypeSyntax).Should().BeSameAs(paramDecl);
 
             var paramTypeIdSyntax = nodes.OfType<IdentifierSyntax>().Single(id => string.Equals(id.IdentifierName, "string"));

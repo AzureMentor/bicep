@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-using System.IO;
-using System.Linq;
+
 using System.Text;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Semantics;
@@ -10,6 +8,7 @@ using Newtonsoft.Json;
 
 namespace Bicep.Core.Emit;
 
+// Emits bicepparams files
 public class ParametersEmitter
 {
     private readonly SemanticModel model;
@@ -30,10 +29,9 @@ public class ParametersEmitter
 
         return Emit(sw);
     }
-
     public EmitResult Emit(TextWriter textWriter) => this.EmitOrFail(() =>
     {
-        using var writer = new JsonTextWriter(textWriter)
+        using var writer = new SourceAwareJsonTextWriter(textWriter)
         {
             // don't close the textWriter when writer is disposed
             CloseOutput = false,
@@ -50,13 +48,13 @@ public class ParametersEmitter
         // collect all the diagnostics
         var diagnostics = model.GetAllDiagnostics();
 
-        if (diagnostics.Any(d => d.Level == DiagnosticLevel.Error))
+        if (diagnostics.Any(d => d.IsError()))
         {
-            return new EmitResult(EmitStatus.Failed, diagnostics);
+            return new EmitResult(EmitStatus.Failed, diagnostics, model.Features);
         }
 
         write();
 
-        return new EmitResult(EmitStatus.Succeeded, diagnostics);
+        return new EmitResult(EmitStatus.Succeeded, diagnostics, model.Features);
     }
 }

@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 using Bicep.Core.Syntax;
 
 namespace Bicep.Core.Semantics
@@ -12,13 +10,14 @@ namespace Bicep.Core.Semantics
     /// </summary>
     public class LocalScope : Symbol, ILanguageScope
     {
-        public LocalScope(string name, SyntaxBase declaringSyntax, SyntaxBase bindingSyntax, IEnumerable<DeclaredSymbol> locals, IEnumerable<LocalScope> childScopes)
+        public LocalScope(string name, SyntaxBase declaringSyntax, SyntaxBase bindingSyntax, IEnumerable<DeclaredSymbol> locals, IEnumerable<LocalScope> childScopes, ScopeResolution scopeResolution)
             : base(name)
         {
             this.DeclaringSyntax = declaringSyntax;
             this.BindingSyntax = bindingSyntax;
-            this.Locals = locals.ToImmutableArray();
-            this.ChildScopes = childScopes.ToImmutableArray();
+            this.ScopeResolution = scopeResolution;
+            this.Locals = [.. locals];
+            this.ChildScopes = [.. childScopes];
         }
 
         /// <summary>
@@ -42,12 +41,14 @@ namespace Bicep.Core.Semantics
 
         public override IEnumerable<Symbol> Descendants => this.ChildScopes.Concat<Symbol>(this.Locals);
 
-        public LocalScope ReplaceLocals(IEnumerable<DeclaredSymbol> newLocals) => new(this.Name, this.DeclaringSyntax, this.BindingSyntax, newLocals, this.ChildScopes);
+        public LocalScope ReplaceLocals(IEnumerable<DeclaredSymbol> newLocals) => new(this.Name, this.DeclaringSyntax, this.BindingSyntax, newLocals, this.ChildScopes, this.ScopeResolution);
 
-        public LocalScope ReplaceChildren(IEnumerable<LocalScope> newChildren) => new(this.Name, this.DeclaringSyntax, this.BindingSyntax, this.Locals, newChildren);
+        public LocalScope ReplaceChildren(IEnumerable<LocalScope> newChildren) => new(this.Name, this.DeclaringSyntax, this.BindingSyntax, this.Locals, newChildren, this.ScopeResolution);
 
         public IEnumerable<DeclaredSymbol> GetDeclarationsByName(string name) => this.Locals.Where(symbol => symbol.NameSource.IsValid && string.Equals(symbol.Name, name, LanguageConstants.IdentifierComparison)).ToList();
 
         public IEnumerable<DeclaredSymbol> Declarations => this.Locals;
+
+        public ScopeResolution ScopeResolution { get; }
     }
 }

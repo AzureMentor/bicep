@@ -1,13 +1,12 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "languageVersion": "1.10-experimental",
+  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
     "_generator": {
       "name": "bicep",
       "version": "dev",
-      "templateHash": "14232420119402199964"
+      "templateHash": "18177712368314985712"
     }
   },
   "parameters": {
@@ -110,7 +109,7 @@
     },
     "avdmonitor": {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2022-09-01",
+      "apiVersion": "2025-04-01",
       "name": "LAWorkspace",
       "resourceGroup": "[parameters('logAnalyticsResourceGroup')]",
       "properties": {
@@ -140,14 +139,13 @@
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "languageVersion": "1.10-experimental",
+          "languageVersion": "2.0",
           "contentVersion": "1.0.0.0",
           "metadata": {
-            "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
             "_generator": {
               "name": "bicep",
               "version": "dev",
-              "templateHash": "17360174109371358486"
+              "templateHash": "3538928845112752341"
             }
           },
           "parameters": {
@@ -186,7 +184,7 @@
             },
             "avdmonitor": {
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2022-09-01",
+              "apiVersion": "2025-04-01",
               "name": "myBicepLADiag",
               "resourceGroup": "[parameters('avdBackplaneResourceGroup')]",
               "properties": {
@@ -207,14 +205,13 @@
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                  "languageVersion": "1.10-experimental",
+                  "languageVersion": "2.0",
                   "contentVersion": "1.0.0.0",
                   "metadata": {
-                    "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
                     "_generator": {
                       "name": "bicep",
                       "version": "dev",
-                      "templateHash": "13594450377905290817"
+                      "templateHash": "4097443846793063282"
                     }
                   },
                   "parameters": {
@@ -242,9 +239,9 @@
                       "name": "[parameters('workspaceName')]"
                     },
                     "avdhpds": {
-                      "type": "Microsoft.Insights/diagnosticSettings",
+                      "type": "microsoft.insights/diagnosticSettings",
                       "apiVersion": "2017-05-01-preview",
-                      "scope": "[format('Microsoft.DesktopVirtualization/hostPools/{0}', parameters('hostpoolName'))]",
+                      "scope": "[resourceId('Microsoft.DesktopVirtualization/hostPools', parameters('hostpoolName'))]",
                       "name": "hostpool-diag",
                       "properties": {
                         "workspaceId": "[parameters('logAnalyticsWorkspaceID')]",
@@ -273,9 +270,9 @@
                       }
                     },
                     "avdwsds": {
-                      "type": "Microsoft.Insights/diagnosticSettings",
+                      "type": "microsoft.insights/diagnosticSettings",
                       "apiVersion": "2017-05-01-preview",
-                      "scope": "[format('Microsoft.DesktopVirtualization/workspaces/{0}', parameters('workspaceName'))]",
+                      "scope": "[resourceId('Microsoft.DesktopVirtualization/workspaces', parameters('workspaceName'))]",
                       "name": "workspacepool-diag",
                       "properties": {
                         "workspaceId": "[parameters('logAnalyticsWorkspaceID')]",

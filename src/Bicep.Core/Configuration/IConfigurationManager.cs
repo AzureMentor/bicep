@@ -1,10 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Reflection;
 using System.Text.Json;
 using Bicep.Core.Json;
+using Bicep.IO.Abstraction;
 
 namespace Bicep.Core.Configuration
 {
@@ -18,7 +18,7 @@ namespace Bicep.Core.Configuration
         /// </summary>
         /// <param name="sourceFileUri">The URI of the source file to get configuration for.</param>
         /// <returns>The configuration for the source file.</returns>
-        RootConfiguration GetConfiguration(Uri sourceFileUri);
+        RootConfiguration GetConfiguration(IOUri sourceFileUri);
 
         /// <summary>
         /// Gets the built-in configuration.
@@ -29,7 +29,7 @@ namespace Bicep.Core.Configuration
         public static IConfigurationManager WithStaticConfiguration(RootConfiguration configuration)
             => new ConstantConfigurationManager(configuration);
 
-        protected static readonly JsonElement BuiltInConfigurationElement = GetBuiltInConfigurationElement();
+        static readonly JsonElement BuiltInConfigurationElement = GetBuiltInConfigurationElement();
 
         private static readonly Lazy<RootConfiguration> BuiltInConfigurationLazy =
             new(() => RootConfiguration.Bind(BuiltInConfigurationElement));
@@ -55,7 +55,7 @@ namespace Bicep.Core.Configuration
                 this.configuration = configuration;
             }
 
-            public RootConfiguration GetConfiguration(Uri sourceFileUri) => configuration;
+            public RootConfiguration GetConfiguration(IOUri sourceFileUri) => configuration;
         }
     }
 }

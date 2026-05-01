@@ -1,21 +1,20 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "languageVersion": "1.10-experimental",
+  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
     "_generator": {
       "name": "bicep",
       "version": "dev",
-      "templateHash": "4339804801596155684"
+      "templateHash": "6762298828630915836"
     }
   },
   "parameters": {
     "projectName": {
       "type": "string",
       "defaultValue": "contoso",
-      "maxLength": 11,
-      "minLength": 1
+      "minLength": 1,
+      "maxLength": 11
     },
     "location": {
       "type": "string",
@@ -83,7 +82,7 @@
           "endpoints": {
             "storageContainers": [
               {
-                "connectionString": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-06-01').keys[0].value)]",
+                "connectionString": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageAccountName'), environment().suffixes.storage, listKeys('stg', '2019-06-01').keys[0].value)]",
                 "containerName": "[variables('storageContainerName')]",
                 "fileNameFormat": "{iothub}/{partition}/{YYYY}/{MM}/{DD}/{HH}/{mm}",
                 "batchFrequencyInSeconds": 100,

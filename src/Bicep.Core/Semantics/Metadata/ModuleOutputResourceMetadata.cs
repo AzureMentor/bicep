@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 using Bicep.Core.Syntax;
-using Bicep.Core.TypeSystem;
+using Bicep.Core.TypeSystem.Types;
 
 namespace Bicep.Core.Semantics.Metadata
 {
@@ -9,7 +9,6 @@ namespace Bicep.Core.Semantics.Metadata
     public record ModuleOutputResourceMetadata(
         ResourceType Type,
         ModuleSymbol Module,
-        SyntaxBase NameSyntax,
         string OutputName)
         : ResourceMetadata(Type, IsExistingResource: true)
     {

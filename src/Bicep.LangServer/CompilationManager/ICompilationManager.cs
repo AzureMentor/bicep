@@ -1,18 +1,20 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 
 namespace Bicep.LanguageServer.CompilationManager
 {
-    // TODO: Get rid of the generic interface
-    public interface ICompilationManager<T>
+    public interface ICompilationManager
     {
+        void RefreshChangedFiles(IEnumerable<Uri> files);
+
         void HandleFileChanges(IEnumerable<FileEvent> fileEvents);
 
-        void RefreshCompilation(DocumentUri uri);
+        void RefreshCompilation(DocumentUri uri, bool forceReloadAuxiliaryFiles = false);
+
+        void RefreshAllActiveCompilations(bool forceReloadAuxiliaryFiles = false);
 
         void OpenCompilation(DocumentUri uri, int? version, string text, string languageId);
 
@@ -20,11 +22,6 @@ namespace Bicep.LanguageServer.CompilationManager
 
         void CloseCompilation(DocumentUri uri);
 
-        T? GetCompilation(DocumentUri uri);
-    }
-
-    public interface ICompilationManager : ICompilationManager<CompilationContext>
-    {
-
+        CompilationContext? GetCompilation(DocumentUri uri);
     }
 }

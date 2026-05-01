@@ -1,11 +1,6 @@
 targetScope = 'subscription'
 
-param listOfAllowedLocations array = [
-  'eastus'
-  'eastus2'
-  'westus'
-  'westus2'
-]
+param listOfAllowedLocations array = ['eastus', 'eastus2', 'westus', 'westus2']
 
 param listOfAllowedSKUs array = [
   'Standard_B1ls'
@@ -26,7 +21,7 @@ resource initiativeDefinition 'Microsoft.Authorization/policySetDefinitions@2019
   properties: {
     policyType: 'Custom'
     displayName: initiativeDefinitionName
-    description: 'Initiative Definition for Resource Locatoin and VM SKUs'
+    description: 'Initiative Definition for Resource Location and VM SKUs'
     metadata: {
       category: 'BICEP Example Initiative'
     }

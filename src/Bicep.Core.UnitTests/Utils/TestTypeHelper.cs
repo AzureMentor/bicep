@@ -1,21 +1,25 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
+using Bicep.Core.Diagnostics;
 using Bicep.Core.Extensions;
-using Bicep.Core.Features;
+using Bicep.Core.Registry;
 using Bicep.Core.Resources;
 using Bicep.Core.Semantics.Namespaces;
 using Bicep.Core.TypeSystem;
-using Bicep.Core.TypeSystem.Az;
+using Bicep.Core.TypeSystem.Providers;
+using Bicep.Core.TypeSystem.Providers.Az;
+using Bicep.Core.TypeSystem.Types;
+using Bicep.Core.UnitTests.Mock;
+using Bicep.IO.Abstraction;
+using Moq;
 
 namespace Bicep.Core.UnitTests.Utils
 {
     public static class TestTypeHelper
     {
-        private class TestResourceTypeLoader : IAzResourceTypeLoader
+        private class TestResourceTypeLoader : IResourceTypeLoader
         {
             private readonly ImmutableDictionary<ResourceTypeReference, ResourceTypeComponents> resourceTypes;
 
@@ -31,16 +35,30 @@ namespace Bicep.Core.UnitTests.Utils
                 => resourceTypes.Keys;
         }
 
-        public static IAzResourceTypeLoader CreateEmptyAzResourceTypeLoader()
-            => new TestResourceTypeLoader(Enumerable.Empty<ResourceTypeComponents>());
+        public static IResourceTypeProvider CreateAzResourceTypeProviderWithTypes(IEnumerable<ResourceTypeComponents> resourceTypes)
+        => new AzResourceTypeProvider(new TestResourceTypeLoader(resourceTypes));
 
-        public static IAzResourceTypeLoader CreateAzResourceTypeLoaderWithTypes(IEnumerable<ResourceTypeComponents> resourceTypes)
+        public static IResourceTypeLoader CreateEmptyResourceTypeLoader()
+            => new TestResourceTypeLoader([]);
+
+        public static IResourceTypeLoader CreateResourceTypeLoaderWithTypes(IEnumerable<ResourceTypeComponents> resourceTypes)
             => new TestResourceTypeLoader(resourceTypes);
 
-        public static INamespaceProvider CreateEmptyProvider()
-            => new DefaultNamespaceProvider(CreateAzResourceTypeLoaderWithTypes(Enumerable.Empty<ResourceTypeComponents>()));
+        public static IResourceTypeProviderFactory CreateResourceTypeLoaderFactory(IResourceTypeProvider provider)
+        {
+            var factory = StrictMock.Of<IResourceTypeProviderFactory>();
+            factory.Setup(m => m.GetResourceTypeProvider(It.IsAny<IFileHandle>())).Returns(new ResultWithDiagnosticBuilder<IResourceTypeProvider>(provider));
+            factory.Setup(m => m.GetBuiltInAzResourceTypesProvider()).Returns(provider);
+            return factory.Object;
+        }
 
-        public static ResourceTypeComponents CreateCustomResourceType(string fullyQualifiedType, string apiVersion, TypeSymbolValidationFlags validationFlags, params TypeProperty[] customProperties)
+        public static INamespaceProvider CreateEmptyNamespaceProvider()
+            => new NamespaceProvider(
+                CreateResourceTypeLoaderFactory(
+                    CreateAzResourceTypeProviderWithTypes(
+                        [])));
+
+        public static ResourceTypeComponents CreateCustomResourceType(string fullyQualifiedType, string apiVersion, TypeSymbolValidationFlags validationFlags, params NamedTypeProperty[] customProperties)
             => CreateCustomResourceTypeWithTopLevelProperties(fullyQualifiedType, apiVersion, validationFlags, null, customProperties);
 
         public static ResourceTypeComponents CreateCustomResourceType(
@@ -50,10 +68,10 @@ namespace Bicep.Core.UnitTests.Utils
             ResourceScope scopes,
             ResourceScope readOnlyScopes,
             ResourceFlags flags,
-            params TypeProperty[] customProperties
+            params NamedTypeProperty[] customProperties
         ) => CreateCustomResourceTypeWithTopLevelProperties(fullyQualifiedType, apiVersion, validationFlags, null, scopes, readOnlyScopes, flags, customProperties);
 
-        public static ResourceTypeComponents CreateCustomResourceTypeWithTopLevelProperties(string fullyQualifiedType, string apiVersion, TypeSymbolValidationFlags validationFlags, IEnumerable<TypeProperty>? additionalTopLevelProperties = null, params TypeProperty[] customProperties)
+        public static ResourceTypeComponents CreateCustomResourceTypeWithTopLevelProperties(string fullyQualifiedType, string apiVersion, TypeSymbolValidationFlags validationFlags, IEnumerable<NamedTypeProperty>? additionalTopLevelProperties = null, params NamedTypeProperty[] customProperties)
             => CreateCustomResourceTypeWithTopLevelProperties(
                 fullyQualifiedType,
                 apiVersion,
@@ -68,18 +86,18 @@ namespace Bicep.Core.UnitTests.Utils
             string fullyQualifiedType,
             string apiVersion,
             TypeSymbolValidationFlags validationFlags,
-            IEnumerable<TypeProperty>? additionalTopLevelProperties,
+            IEnumerable<NamedTypeProperty>? additionalTopLevelProperties,
             ResourceScope scopes,
             ResourceScope readOnlyScopes,
             ResourceFlags flags,
-            params TypeProperty[] customProperties
+            params NamedTypeProperty[] customProperties
         )
         {
             var reference = ResourceTypeReference.Parse($"{fullyQualifiedType}@{apiVersion}");
 
             var resourceProperties = AzResourceTypeProvider.GetCommonResourceProperties(reference)
-                .Concat(additionalTopLevelProperties ?? Enumerable.Empty<TypeProperty>())
-                .Concat(new TypeProperty("properties", new ObjectType("properties", validationFlags, customProperties, null), TypePropertyFlags.None));
+                .Concat(additionalTopLevelProperties ?? [])
+                .Concat(new NamedTypeProperty("properties", new ObjectType("properties", validationFlags, customProperties, null), TypePropertyFlags.None));
 
             var bodyType = new ObjectType(reference.FormatName(), validationFlags, resourceProperties, null);
             return new ResourceTypeComponents(reference, scopes, readOnlyScopes, flags, bodyType);
@@ -89,16 +107,14 @@ namespace Bicep.Core.UnitTests.Utils
             => new(
                 name,
                 TypeSymbolValidationFlags.Default,
-                properties.Select(val => new TypeProperty(val.name, val.type)),
-                null,
-                TypePropertyFlags.None);
+                properties.Select(val => new NamedTypeProperty(val.name, val.type)),
+                null);
         public static ObjectType CreateObjectType(string name, params (string name, ITypeReference type, TypePropertyFlags flags)[] properties)
             => new(
                 name,
                 TypeSymbolValidationFlags.Default,
-                properties.Select(val => new TypeProperty(val.name, val.type, val.flags)),
-                null,
-                TypePropertyFlags.None);
+                properties.Select(val => new NamedTypeProperty(val.name, val.type, val.flags)),
+                null);
 
         public static DiscriminatedObjectType CreateDiscriminatedObjectType(string name, string key, params ITypeReference[] members)
             => new(
@@ -106,5 +122,8 @@ namespace Bicep.Core.UnitTests.Utils
                 TypeSymbolValidationFlags.Default,
                 key,
                 members);
+
+        public static NamespaceType GetBuiltInNamespaceType(string name) =>
+            BicepTestConstants.DefaultNamespaceResolver.TryGetNamespace(name) ?? throw new InvalidOperationException();
     }
 }

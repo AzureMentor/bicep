@@ -1,7 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System;
-
 namespace Bicep.Core.TypeSystem
 {
     /// <summary>
@@ -41,13 +39,28 @@ namespace Bicep.Core.TypeSystem
         IsStringFilePath = 1 << 4,
 
         /// <summary>
-        /// Indicates that this type will be a String file path to a JSON file and we should offer completions for it where files wih .json extension are prioritised
+        /// Indicates that this type will be a String file path to a JSON file and we should offer completions for it where files with .json extension are prioritised
         /// </summary>
         IsStringJsonFilePath = 1 << 5,
 
         /// <summary>
-        /// Indicates that this type will be a String file path to a YAML file and we should offer completions for it where files wih .yaml and .yml extension are prioritised
+        /// Indicates that this type will be a String file path to a YAML file and we should offer completions for it where files with .yaml and .yml extension are prioritised
         /// </summary>
         IsStringYamlFilePath = 1 << 6,
+
+        /// <summary>
+        /// Indicates that this type will be a string that contains a fully qualified resource type (e.g., 'Microsoft.Resource/deployments@2022-09-01').
+        /// </summary>
+        IsResourceTypeIdentifier = 1 << 7,
+
+        /// <summary>
+        /// Display warning diagnostics instead of errors if an unknown property is accessed or supplied, a required property is not provided, a read-only property is supplied, or a write-only property is accessed.
+        /// </summary>
+        WarnOnPropertyTypeMismatch = 1 << 8,
+
+        /// <summary>
+        /// Indicates that the string represents a folder path and we should offer completions for it.
+        /// </summary>
+        IsStringDirectoryPath = 1 << 9,
     }
 }

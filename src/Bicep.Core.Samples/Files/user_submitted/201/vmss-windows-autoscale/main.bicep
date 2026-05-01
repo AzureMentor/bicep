@@ -1,11 +1,6 @@
 param vmSku string = 'Standard_A1_v2'
 
-@allowed([
-  '2019-Datacenter'
-  '2016-Datacenter'
-  '2012-R2-Datacenter'
-  '2012-Datacenter'
-])
+@allowed(['2019-Datacenter', '2016-Datacenter', '2012-R2-Datacenter', '2012-Datacenter'])
 param windowsOSVersion string = '2019-Datacenter'
 
 @maxLength(61)
@@ -50,9 +45,7 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2021-05-01' = {
   location: location
   properties: {
     addressSpace: {
-      addressPrefixes: [
-        addressPrefix
-      ]
+      addressPrefixes: [addressPrefix]
     }
     subnets: [
       {
@@ -120,7 +113,11 @@ resource loadBalancer 'Microsoft.Network/loadBalancers@2020-06-01' = {
         name: natPoolName
         properties: {
           frontendIPConfiguration: {
-            id: resourceId('Microsoft.Network/loadBalancers/frontendIPConfigurations', loadBalancerName, 'loadBalancerFrontEnd')
+            id: resourceId(
+              'Microsoft.Network/loadBalancers/frontendIPConfigurations',
+              loadBalancerName,
+              'loadBalancerFrontEnd'
+            )
           }
           protocol: 'Tcp'
           frontendPortRangeStart: natStartPort

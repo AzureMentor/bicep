@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Linq;
 using Bicep.Core.Analyzers.Interfaces;
 using Bicep.Core.Analyzers.Linter.Rules;
 using Bicep.Core.CodeAction;
@@ -15,6 +14,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
     [TestClass]
     public class SecretsInParamsMustBeSecureTests : LinterRuleTestsBase
     {
+        private void AssertCodeFix(string inputFile, string resultFile)
+            => AssertCodeFix(SecretsInParamsMustBeSecureRule.Code, "Mark parameter as secure", inputFile, resultFile);
+
         [TestMethod]
         public void ParameterNameInFormattedMessage()
         {
@@ -33,9 +35,8 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             var diag = diagnostics.First();
             diag.Message.Should().Be("Parameter 'password' may represent a secret (according to its name) and must be declared with the '@secure()' attribute.");
             diag.Code.Should().Be(SecretsInParamsMustBeSecureRule.Code);
-            var fixable = diag.Should().BeAssignableTo<IBicepAnalyerFixableDiagnostic>().Which;
-            fixable.Fixes.Should().HaveCount(1);
-            var fix = fixable.Fixes.First();
+            diag.Fixes.Should().HaveCount(1);
+            var fix = diag.Fixes.First();
             fix.Title.Should().Be("Mark parameter as secure");
             fix.Kind.Should().Be(CodeFixKind.QuickFix);
             fix.Replacements.Should().HaveCount(1);
@@ -158,5 +159,21 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             ";
             CompileAndTest(bicep, 0);
         }
+
+        [TestMethod]
+        // https://github.com/Azure/bicep/issues/15835
+        public void Default_value_reference_to_insecure_param_is_flagged()
+            => AssertCodeFix("""
+@secure()
+param secureParam string
+
+param insecurePa|ram string = secureParam
+""", """
+@secure()
+param secureParam string
+
+@secure()
+param insecureParam string = secureParam
+""");
     }
 }

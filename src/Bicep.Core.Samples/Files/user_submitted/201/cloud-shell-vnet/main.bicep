@@ -32,9 +32,17 @@ param privateEndpointName string = 'cloudshellRelayEndpoint'
 param location string = resourceGroup().location
 
 var networkProfileName = 'aci-networkProfile-${location}'
-var contributorRoleDefinitionId = resourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
-var networkRoleDefinitionId = resourceId('Microsoft.Authorization/roleDefinitions', '4d97b98b-1d4f-4787-a291-c67834d212e7')
-var privateDnsZoneName = ((toLower(environment().name) == 'azureusgovernment') ? 'privatelink.servicebus.usgovcloudapi.net' : 'privatelink.servicebus.windows.net')
+var contributorRoleDefinitionId = resourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  'b24988ac-6180-42a0-ab88-20f7382dd24c'
+)
+var networkRoleDefinitionId = resourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  '4d97b98b-1d4f-4787-a291-c67834d212e7'
+)
+var privateDnsZoneName = ((toLower(environment().name) == 'azureusgovernment')
+  ? 'privatelink.servicebus.usgovcloudapi.net'
+  : 'privatelink.servicebus.windows.net')
 var vnetResourceId = resourceId('Microsoft.Network/virtualNetworks', existingVNETName)
 
 resource existingVNET 'Microsoft.Network/virtualNetworks@2020-04-01' existing = {
@@ -69,9 +77,7 @@ resource containerSubnet 'Microsoft.Network/virtualNetworks/subnets@2020-04-01' 
     serviceEndpoints: [
       {
         service: 'Microsoft.Storage'
-        locations: [
-          location
-        ]
+        locations: [location]
       }
     ]
     delegations: [
@@ -164,9 +170,7 @@ resource relaySubnet 'Microsoft.Network/virtualNetworks/subnets@2020-04-01' = {
       }
     }
   }
-  dependsOn: [
-    containerSubnet
-  ]
+  dependsOn: [containerSubnet]
 }
 
 resource privateEndpoint 'Microsoft.Network/privateEndpoints@2020-04-01' = {
@@ -178,9 +182,7 @@ resource privateEndpoint 'Microsoft.Network/privateEndpoints@2020-04-01' = {
         name: privateEndpointName
         properties: {
           privateLinkServiceId: relayNamespace.id
-          groupIds: [
-            'namespace'
-          ]
+          groupIds: ['namespace']
         }
       }
     ]
@@ -198,9 +200,7 @@ resource storageSubnet 'Microsoft.Network/virtualNetworks/subnets@2020-04-01' = 
     serviceEndpoints: [
       {
         service: 'Microsoft.Storage'
-        locations: [
-          location
-        ]
+        locations: [location]
       }
     ]
     networkSecurityGroup: {
@@ -224,9 +224,7 @@ resource storageSubnet 'Microsoft.Network/virtualNetworks/subnets@2020-04-01' = 
       }
     }
   }
-  dependsOn: [
-    relaySubnet
-  ]
+  dependsOn: [relaySubnet]
 }
 
 resource privateDnsZone 'Microsoft.Network/privateDnsZones@2020-01-01' = {

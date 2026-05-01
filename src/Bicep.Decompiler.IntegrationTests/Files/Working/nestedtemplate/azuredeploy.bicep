@@ -55,3 +55,4 @@ module deployFlowLogs './nested_deployFlowLogs.bicep' = {
     storageAccountResourceId: storageAccount.id
   }
 }
+

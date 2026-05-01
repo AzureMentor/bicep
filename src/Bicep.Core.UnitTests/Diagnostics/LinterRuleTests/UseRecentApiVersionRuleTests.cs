@@ -1,21 +1,20 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using Bicep.Core.Analyzers.Linter.Rules;
+using System.Text.RegularExpressions;
 using Bicep.Core.Analyzers.Linter.ApiVersions;
+using Bicep.Core.Analyzers.Linter.Rules;
+using Bicep.Core.CodeAction;
 using Bicep.Core.Configuration;
 using Bicep.Core.Json;
 using Bicep.Core.Parsing;
+using Bicep.Core.Resources;
+using Bicep.Core.Text;
 using Bicep.Core.TypeSystem;
+using Bicep.Core.UnitTests.Mock;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Bicep.Core.CodeAction;
-
-#pragma warning disable CA1825 // Avoid zero-length array allocations
 
 namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
 {
@@ -29,12 +28,19 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             string ExpectedSubstringInReplacedBicep
         );
 
-        private static void CompileAndTestWithFakeDateAndTypes(string bicep, ResourceScope scope, string[] resourceTypes, string fakeToday, string[] expectedMessagesForCode, OnCompileErrors onCompileErrors = OnCompileErrors.IncludeErrors, int? maxAgeInDays = null)
+        public static void VerifyAllTypesAndDatesAreFake(params string[] bicepStrings)
         {
-            // Test with the linter thinking today's date is fakeToday and also fake resource types from FakeResourceTypes
-            // Note: The compiler does not know about these fake types, only the linter.
-            var apiProvider = new ApiVersionProvider(BicepTestConstants.Features, BicepTestConstants.AzResourceTypeLoader);
-            apiProvider.InjectTypeReferences(scope, FakeResourceTypes.GetFakeResourceTypeReferences(resourceTypes));
+            foreach (var bicep in bicepStrings)
+            {
+                var bicep2 = new Regex("https://schema.management.azure.com/schemas/[-0-9]{10}/deploymentTemplate.json").Replace(bicep, " ");
+                bicep2.Should().NotMatchRegex("\\b20[0-9][0-9]\\b", "all dates and types in these tests should be fake");
+                bicep2.Should().NotMatchRegex("[Mm]icrosoft.[-a-zA-Z]+/[a-zA-z]+", "all dates and types in these tests should be fake");
+            }
+        }
+
+        private static void CompileAndTestWithFakeDateAndTypes(string bicep, ResourceScope scope, string[] resourceTypes, string fakeToday, string[] expectedMessagesForCode, OnCompileErrors onCompileErrors = OnCompileErrors.IncludeErrors, int? maxAgeInDays = null, int? gracePeriodInDays = null)
+        {
+            VerifyAllTypesAndDatesAreFake(bicep, string.Join(", ", resourceTypes), fakeToday, string.Join(", ", expectedMessagesForCode));
 
             AssertLinterRuleDiagnostics(UseRecentApiVersionRule.Code,
                 bicep,
@@ -42,16 +48,17 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 new Options(
                     OnCompileErrors: onCompileErrors,
                     IncludePosition.LineNumber,
-                    ConfigurationPatch: c => CreateConfigurationWithFakeToday(c, fakeToday, maxAgeInDays),
-                    ApiVersionProvider: apiProvider));
+                    ConfigurationPatch: c => CreateConfigurationWithFakeToday(c, fakeToday, maxAgeInDays, gracePeriodInDays),
+                    // Test with the linter thinking today's date is fakeToday and also fake resource types from FakeResourceTypes
+                    // Note: The compiler does not know about these fake types, only the linter.
+                    AzResourceTypeLoader: resourceTypes.Any() ? FakeResourceTypes.GetAzResourceTypeLoaderWithInjectedTypes(resourceTypes).Object : null));
         }
 
-        private static void CompileAndTestFixWithFakeDateAndTypes(string bicep, ResourceScope scope, string[] resourceTypes, string fakeToday, DiagnosticAndFixes[] expectedDiagnostics, int? maxAgeInDays = null)
+        private static void CompileAndTestFixWithFakeDateAndTypes(string bicep, ResourceScope scope, string[] resourceTypes, string fakeToday, DiagnosticAndFixes[] expectedDiagnostics, int? maxAgeInDays = null, int? gracePeriodInDays = null)
         {
-            // Test with the linter thinking today's date is fakeToday and also fake resource types from FakeResourceTypes
-            // Note: The compiler does not know about these fake types, only the linter.
-            var apiProvider = new ApiVersionProvider(BicepTestConstants.Features, BicepTestConstants.AzResourceTypeLoader);
-            apiProvider.InjectTypeReferences(scope, FakeResourceTypes.GetFakeResourceTypeReferences(resourceTypes));
+            VerifyAllTypesAndDatesAreFake(bicep);
+            VerifyAllTypesAndDatesAreFake(resourceTypes);
+            VerifyAllTypesAndDatesAreFake(fakeToday);
 
             AssertLinterRuleDiagnostics(
                 UseRecentApiVersionRule.Code,
@@ -85,33 +92,48 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 new Options(
                     OnCompileErrors.IncludeErrors,
                     IncludePosition.LineNumber,
-                    ConfigurationPatch: c => CreateConfigurationWithFakeToday(c, fakeToday, maxAgeInDays),
-                    ApiVersionProvider: apiProvider));
+                    ConfigurationPatch: c => CreateConfigurationWithFakeToday(c, fakeToday, maxAgeInDays, gracePeriodInDays),
+                    // Test with the linter thinking today's date is fakeToday and also fake resource types from FakeResourceTypes
+                    // Note: The compiler does not know about these fake types, only the linter.
+                    AzResourceTypeLoader: FakeResourceTypes.GetAzResourceTypeLoaderWithInjectedTypes(resourceTypes).Object));
         }
 
-        private static RootConfiguration CreateConfigurationWithFakeToday(RootConfiguration original, string today, int? maxAgeInDays = null)
+        private static RootConfiguration CreateConfigurationWithFakeToday(RootConfiguration original, string today, int? maxAgeInDays = null, int? gracePeriodInDays = null)
         {
+            VerifyAllTypesAndDatesAreFake(today);
+
             return new RootConfiguration(
                 original.Cloud,
                 original.ModuleAliases,
+                original.Extensions,
+                original.ImplicitExtensions,
                 new AnalyzersConfiguration(
-                    JsonElementFactory.CreateElement(@"
-                    {
-                        ""core"": {
-                            ""enabled"": true,
-                            ""rules"": {
-                                ""use-recent-api-versions"": {
-                                    ""level"": ""warning"",
-                                    ""test-today"": ""<TESTING_TODAY_DATE>"",
-                                    ""test-warn-not-found"": true
-                                    <MAX_AGE_PROP>
+                    JsonElementFactory.CreateElement("""
+                        {
+                            "core": {
+                                "enabled": true,
+                                "rules": {
+                                    "use-recent-api-versions": {
+                                        "level": "warning",
+                                        "test-today": "<TESTING_TODAY_DATE>",
+                                        "test-warn-not-found": true
+                                        <MAX_AGE_PROP>
+                                        <GRACE_PERIOD_PROP>
+                                    }
                                 }
                             }
                         }
-                    }".Replace("<TESTING_TODAY_DATE>", today)
-                    .Replace("<MAX_AGE_PROP>", maxAgeInDays.HasValue ? $", \"maxAgeInDays\": {maxAgeInDays}" : ""))),
+                        """
+                            .Replace("<TESTING_TODAY_DATE>", today)
+                            .Replace("<MAX_AGE_PROP>", maxAgeInDays.HasValue ? $", \"maxAgeInDays\": {maxAgeInDays}" : "")
+                            .Replace("<GRACE_PERIOD_PROP>", gracePeriodInDays.HasValue ? $", \"gracePeriodInDays\": {gracePeriodInDays}" : ""))),
                 original.CacheRootDirectory,
-                original.ExperimentalFeaturesEnabled,
+                original.ExperimentalFeaturesWarning,
+                original.ExperimentalFeaturesEnabled with
+                {
+                    SymbolicNameCodegen = true,
+                },
+                original.Formatting,
                 null,
                 null);
         }
@@ -119,12 +141,16 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
         [TestClass]
         public class GetAcceptableApiVersionsTests
         {
-            private static void TestGetAcceptableApiVersions(string fullyQualifiedResourceType, ResourceScope scope, string resourceTypes, string today, string[] expectedApiVersions, int maxAgeInDays = UseRecentApiVersionRule.DefaultMaxAgeInDays)
+            private static void TestGetAcceptableApiVersions(string fullyQualifiedResourceType, ResourceScope scope, string resourceTypes, string today, string[] expectedApiVersions, int maxAgeInDays = UseRecentApiVersionRule.DefaultMaxAgeInDays, int gracePeriodInDays = 0)
             {
-                var apiVersionProvider = new ApiVersionProvider(BicepTestConstants.Features, BicepTestConstants.AzResourceTypeLoader);
+                VerifyAllTypesAndDatesAreFake(fullyQualifiedResourceType, today);
+                VerifyAllTypesAndDatesAreFake(resourceTypes);
+                VerifyAllTypesAndDatesAreFake(expectedApiVersions);
+
+                var apiVersionProvider = new ApiVersionProvider(BicepTestConstants.Features, []);
                 apiVersionProvider.InjectTypeReferences(scope, FakeResourceTypes.GetFakeResourceTypeReferences(resourceTypes));
-                var (_, allowedVersions) = UseRecentApiVersionRule.GetAcceptableApiVersions(apiVersionProvider, ApiVersionHelper.ParseDateFromApiVersion(today), maxAgeInDays, scope, fullyQualifiedResourceType);
-                var allowedVersionsStrings = allowedVersions.Select(v => v.Formatted).ToArray();
+                var (_, allowedVersions) = UseRecentApiVersionRule.GetAcceptableApiVersions(apiVersionProvider, AzureResourceApiVersion.Parse(today).Date, maxAgeInDays, gracePeriodInDays, scope, fullyQualifiedResourceType);
+                var allowedVersionsStrings = allowedVersions.Select(v => v.ToString()).ToArray();
                 allowedVersionsStrings.Should().BeEquivalentTo(expectedApiVersions, options => options.WithStrictOrdering());
             }
 
@@ -138,10 +164,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2418-09-07-preview
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2418-09-07-preview",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -154,10 +179,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2418-09-07-PREVIEW
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2418-09-07-preview",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -170,9 +194,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2421-01-01
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
-                    });
+                    []);
             }
 
             [TestMethod]
@@ -187,10 +209,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2413-09-07-alpha
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2413-09-07-alpha",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -206,11 +227,10 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2413-09-07-beta
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2413-09-07-alpha",
                         "2413-09-07-beta",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -225,12 +245,11 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2419-09-07-alpha
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2419-09-07-alpha",
                         "2419-08-15-beta",
                         "2419-07-21-preview",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -249,8 +268,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2419-09-07-privatepreview
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2419-09-07-alpha",
                         "2419-09-07-beta",
                         "2419-09-07-privatepreview",
@@ -258,7 +276,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         "2419-08-15-privatepreview",
                         "2419-07-21-beta",
                         "2419-07-21-preview",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -276,12 +294,11 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2419-09-07-beta
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2419-09-07-beta",
                         "2419-08-21-beta",
                         "2419-07-15-privatepreview",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -300,10 +317,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2420-09-18
                     ",
                     "2500-07-07",
-                    new string[]
-                    {
+                    [
                         "2420-09-18",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -319,10 +335,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2413-09-07
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2413-09-07",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -339,10 +354,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2413-06-15-beta
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2413-06-15",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -361,10 +375,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2413-09-08-beta
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2413-06-15",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -382,13 +395,12 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2419-09-08-beta
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2419-09-08-beta",
                         "2419-09-07-beta",
                         "2419-09-07-preview",
                         "2413-06-15",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -405,12 +417,11 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2419-09-07-beta
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2419-09-07-beta",
                         "2419-09-07-preview",
                         "2413-05-15",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -425,12 +436,11 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2420-09-18
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2420-09-18",
                         "2419-08-15",
                         "2419-07-21",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -447,11 +457,10 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2420-09-18
                     ",
                    "2421-07-07",
-                   new string[]
-                   {
+                   [
                         "2420-09-18",
-                        "2419-07-21",
-                   });
+                       "2419-07-21",
+                   ]);
             }
 
             [TestMethod]
@@ -467,12 +476,11 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2421-07-16-beta
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2421-07-16-beta",
                         "2420-09-18",
                         "2419-07-21",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -490,13 +498,12 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2421-07-17-preview
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2421-07-17-preview",
                         "2421-07-16-beta",
                         "2420-09-18",
                         "2419-07-21",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -513,10 +520,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2417-07-17-preview
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2416-09-18",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -533,12 +539,11 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2421-07-17-preview
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2421-07-17-preview",
                         "2421-07-16-beta",
                         "2416-09-18",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -555,11 +560,10 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2420-09-18
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2420-09-18",
                         "2419-07-11",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -576,12 +580,11 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2425-01-01
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2425-01-01",
                         "2421-01-01",
                         "2419-09-07",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -602,11 +605,10 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2420-09-18
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2420-09-18",
                         "2420-06-14",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -627,11 +629,10 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2420-09-18
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2420-09-18",
                         "2420-06-14",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -654,12 +655,11 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2420-09-18
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2421-09-07-privatepreview",
                         "2420-09-18",
                         "2420-06-14",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -679,15 +679,14 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2421-04-02-preview
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2421-04-02-preview",
                         "2421-04-01-preview",
                         "2421-03-01-preview",
                         "2421-01-03-preview",
                         "2421-01-02-preview",
                         "2421-01-01-preview",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -708,47 +707,215 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         Fake.Kusto/clusters@2421-04-02-preview
                     ",
                     "2421-07-07",
-                    new string[]
-                    {
+                    [
                         "2421-04-02-preview",
                         "2421-04-01-beta",
                         "2421-03-01-preview",
                         "2421-02-01", // No previews older than this allowed, even if < 2 years old
-                    });
+                    ]);
+            }
+
+            [TestMethod]
+            public void GracePeriod_FiltersOutVersionsWithinGracePeriod()
+            {
+                // Today is 2421-07-07, grace period is 90 days
+                // Versions from 2421-04-09 onwards (within 90 days) should be filtered out
+                TestGetAcceptableApiVersions(
+                    "Fake.Kusto/clusters",
+                    ResourceScope.ResourceGroup,
+                    @"
+                        Fake.Kusto/clusters@2421-03-01
+                        Fake.Kusto/clusters@2421-04-01
+                        Fake.Kusto/clusters@2421-04-08
+                        Fake.Kusto/clusters@2421-04-09
+                        Fake.Kusto/clusters@2421-05-01
+                        Fake.Kusto/clusters@2421-06-01
+                    ",
+                    "2421-07-07",
+                    [
+                        "2421-04-08", // Most recent outside grace period
+                        "2421-04-01",
+                        "2421-03-01",
+                    ],
+                    gracePeriodInDays: 90);
+            }
+
+            [TestMethod]
+            public void GracePeriod_Zero_RecommendsAllVersions()
+            {
+                // With grace period of 0, all versions should be considered
+                TestGetAcceptableApiVersions(
+                    "Fake.Kusto/clusters",
+                    ResourceScope.ResourceGroup,
+                    @"
+                        Fake.Kusto/clusters@2421-03-01
+                        Fake.Kusto/clusters@2421-04-01
+                        Fake.Kusto/clusters@2421-05-01
+                        Fake.Kusto/clusters@2421-06-01
+                    ",
+                    "2421-07-07",
+                    [
+                        "2421-06-01", // Most recent (no grace period filtering)
+                        "2421-05-01",
+                        "2421-04-01",
+                        "2421-03-01",
+                    ],
+                    gracePeriodInDays: 0);
+            }
+
+            [TestMethod]
+            public void GracePeriod_FiltersPreviewVersionsWithinGracePeriod()
+            {
+                // Grace period should apply to preview versions too
+                TestGetAcceptableApiVersions(
+                    "Fake.Kusto/clusters",
+                    ResourceScope.ResourceGroup,
+                    @"
+                        Fake.Kusto/clusters@2421-01-01
+                        Fake.Kusto/clusters@2421-02-01-preview
+                        Fake.Kusto/clusters@2421-03-01-preview
+                        Fake.Kusto/clusters@2421-05-01-preview
+                        Fake.Kusto/clusters@2421-06-01-preview
+                    ",
+                    "2421-07-07",
+                    [
+                        "2421-03-01-preview", // Most recent preview outside grace period (90 days)
+                        "2421-02-01-preview",
+                        "2421-01-01", // Stable version
+                    ],
+                    gracePeriodInDays: 90);
+            }
+
+            [TestMethod]
+            public void GracePeriod_MostRecentVersionWithinGracePeriod_ReturnsNextMostRecent()
+            {
+                // If the most recent version is within grace period, should return the most recent version outside grace period
+                TestGetAcceptableApiVersions(
+                    "Fake.Kusto/clusters",
+                    ResourceScope.ResourceGroup,
+                    @"
+                        Fake.Kusto/clusters@2421-01-01
+                        Fake.Kusto/clusters@2421-04-01
+                        Fake.Kusto/clusters@2421-06-01
+                        Fake.Kusto/clusters@2421-06-15
+                        Fake.Kusto/clusters@2421-07-01
+                    ",
+                    "2421-07-07",
+                    [
+                        "2421-04-01", // Most recent stable outside grace period (90 days from 2421-07-07 = before 2421-04-09)
+                        "2421-01-01",
+                    ],
+                    gracePeriodInDays: 90);
+            }
+
+            [TestMethod]
+            public void GracePeriod_WithMixedStableAndPreview()
+            {
+                // Verify grace period works correctly with mixed stable and preview versions
+                // Today is 2421-07-07, grace period is 90 days
+                // Grace period threshold: 2421-07-07 - 90 days = 2421-04-08
+                // Versions from 2421-04-09 onwards are filtered out
+                TestGetAcceptableApiVersions(
+                    "Fake.Kusto/clusters",
+                    ResourceScope.ResourceGroup,
+                    @"
+                        Fake.Kusto/clusters@2421-01-01
+                        Fake.Kusto/clusters@2421-02-01-preview
+                        Fake.Kusto/clusters@2421-03-01
+                        Fake.Kusto/clusters@2421-04-01-preview
+                        Fake.Kusto/clusters@2421-05-01
+                        Fake.Kusto/clusters@2421-06-01-preview
+                    ",
+                    "2421-07-07",
+                    [
+                        "2421-04-01-preview", // Preview after most recent stable outside grace period (2421-03-01)
+                        "2421-03-01", // Most recent stable outside grace period
+                        "2421-01-01", // Older stable
+                    ],
+                    gracePeriodInDays: 90);
+            }
+
+            [TestMethod]
+            public void GracePeriod_AllVersionsWithinGracePeriod_FallsBackToMostRecent()
+            {
+                // Edge case: All API versions are very new (within 90 days)
+                // Should fall back to recommending the most recent versions despite being in grace period
+                // Today is 2421-07-07, grace period is 90 days
+                // All versions are from 2421-06-01 onwards (within last ~36 days)
+                TestGetAcceptableApiVersions(
+                    "Fake.Kusto/clusters",
+                    ResourceScope.ResourceGroup,
+                    @"
+                        Fake.Kusto/clusters@2421-06-01
+                        Fake.Kusto/clusters@2421-06-15
+                        Fake.Kusto/clusters@2421-07-01
+                    ",
+                    "2421-07-07",
+                    [
+                        "2421-07-01", // Should still recommend most recent as fallback
+                        "2421-06-15",
+                        "2421-06-01",
+                    ],
+                    gracePeriodInDays: 90);
+            }
+
+            [TestMethod]
+            public void GracePeriod_AllVersionsWithinGracePeriod_MixedStableAndPreview_FallsBackCorrectly()
+            {
+                // Edge case with mixed stable and preview versions, all within grace period
+                // Today is 2421-07-07, grace period is 90 days (so versions after 2421-04-08 are filtered)
+                // Fallback logic applies: use all unfiltered versions
+                TestGetAcceptableApiVersions(
+                    "Fake.Kusto/clusters",
+                    ResourceScope.ResourceGroup,
+                    @"
+                        Fake.Kusto/clusters@2421-05-01
+                        Fake.Kusto/clusters@2421-06-01-preview
+                        Fake.Kusto/clusters@2421-06-15
+                        Fake.Kusto/clusters@2421-07-01-preview
+                    ",
+                    "2421-07-07",
+                    [
+                        "2421-07-01-preview", // Most recent preview (after most recent stable)
+                        "2421-06-15", // Most recent stable
+                        "2421-05-01", // Older stable
+                        // Note: 2421-06-01-preview is not included because it's not newer than the most recent stable (2421-06-15)
+                    ],
+                    gracePeriodInDays: 90);
             }
         }
 
         [TestClass]
         public class GetAcceptableApiVersionsInvariantsTests
         {
-            private static readonly ApiVersionProvider RealApiVersionProvider = new(BicepTestConstants.Features, BicepTestConstants.AzResourceTypeLoader);
+            private static readonly ApiVersionProvider RealApiVersionProvider = new(BicepTestConstants.Features, FakeResourceTypes.GetFakeResourceTypeReferences(FakeResourceTypes.ResourceScopeTypes));
             private static readonly bool Exhaustive = false;
 
             public class TestData
             {
-                public TestData(ResourceScope resourceScope, string fullyQualifiedResourceType, DateTime today, int maxAllowedDaysAge)
+                public TestData(ResourceScope resourceScope, string fullyQualifiedResourceType, DateOnly today, int maxAgeInDays)
                 {
                     ResourceScope = resourceScope;
                     FullyQualifiedResourceType = fullyQualifiedResourceType;
-                    MaxAllowedAgeDays = maxAllowedDaysAge;
+                    MaxAgeInDays = maxAgeInDays;
                     Today = today;
                 }
 
                 public string FullyQualifiedResourceType { get; }
                 public ResourceScope ResourceScope { get; }
-                public int MaxAllowedAgeDays { get; }
-                public DateTime Today { get; }
+                public int MaxAgeInDays { get; }
+                public DateOnly Today { get; }
 
                 public static string GetDisplayName(MethodInfo _, object[] data)
                 {
                     var me = ((TestData)data[0]);
-                    return $"{me.ResourceScope}:{me.FullyQualifiedResourceType} (max={me.MaxAllowedAgeDays} days)";
+                    return $"{me.ResourceScope}:{me.FullyQualifiedResourceType} (max={me.MaxAgeInDays} days)";
                 }
             }
 
             private static IEnumerable<object[]> GetTestData()
             {
-                const int maxAllowedAgeDays = 2 * 365;
+                const int maxAgeInDays = 2 * 365;
                 const int maxResourcesToTest = 500; // test is slow
 
                 foreach (ResourceScope scope in new ResourceScope[]
@@ -761,13 +928,12 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 {
                     foreach (string typeName in RealApiVersionProvider.GetResourceTypeNames(scope).Take(maxResourcesToTest))
                     {
-                        var apiVersionDates = RealApiVersionProvider.GetApiVersions(scope, typeName).Select(v => v.Date);
+                        var apiVersionDates = RealApiVersionProvider.GetApiVersions(scope, typeName).Select(v => v.Date).ToArray();
 
-                        var datesToTest = new List<DateTime>();
+                        var datesToTest = new List<DateOnly>();
                         if (Exhaustive)
-
                         {
-                            foreach (DateTime dt in apiVersionDates)
+                            foreach (var dt in apiVersionDates)
                             {
                                 datesToTest.Add(dt.AddDays(-1));
                                 datesToTest.Add(dt);
@@ -775,64 +941,58 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                             }
                         }
 
-                        datesToTest.Add(apiVersionDates.Min().AddDays(-(maxAllowedAgeDays - 1)));
+                        var minApiVersionDate = apiVersionDates.Min();
+                        datesToTest.Add(minApiVersionDate.AddDays(-(maxAgeInDays - 1)));
+
                         if (Exhaustive)
                         {
-                            datesToTest.Add(apiVersionDates.Min().AddDays(-maxAllowedAgeDays));
-                            datesToTest.Add(apiVersionDates.Min().AddDays(-(maxAllowedAgeDays + 1)));
+                            datesToTest.Add(apiVersionDates.Min().AddDays(-maxAgeInDays));
+                            datesToTest.Add(apiVersionDates.Min().AddDays(-(maxAgeInDays + 1)));
                         }
 
-                        datesToTest.Add(apiVersionDates.Max().AddDays(maxAllowedAgeDays - 1));
+                        var maxApiVersionDate = apiVersionDates.Max();
+                        datesToTest.Add(maxApiVersionDate.AddDays(maxAgeInDays - 1));
+
                         if (Exhaustive)
                         {
-                            datesToTest.Add(apiVersionDates.Max().AddDays(maxAllowedAgeDays));
-                            datesToTest.Add(apiVersionDates.Max().AddDays(maxAllowedAgeDays + 1));
+                            datesToTest.Add(maxApiVersionDate.AddDays(maxAgeInDays));
+                            datesToTest.Add(maxApiVersionDate.AddDays(maxAgeInDays + 1));
                         }
 
                         datesToTest = datesToTest.Distinct().ToList();
                         foreach (var today in datesToTest)
                         {
-                            yield return new object[] { new TestData(scope, typeName, today, maxAllowedAgeDays) };
+                            yield return new object[] { new TestData(scope, typeName, today, maxAgeInDays) };
                         }
                     }
                 }
             }
 
-            private static bool DateIsRecent(DateTime dt, DateTime today, int maxAllowedAgeDays)
+            private static bool DateIsRecent(DateOnly dt, DateOnly today, int maxAllowedAgeDays)
             {
                 return DateIsEqualOrMoreRecentThan(dt.AddDays(maxAllowedAgeDays), today);
             }
 
-            private static bool DateIsOld(DateTime dt, DateTime today, int maxAllowedAgeDays)
+            private static bool DateIsOld(DateOnly dt, DateOnly today, int maxAllowedAgeDays)
             {
                 return !DateIsRecent(dt, today, maxAllowedAgeDays);
             }
 
-            private static bool DateIsMoreRecentThan(DateTime dt, DateTime other)
+            private static bool DateIsMoreRecentThan(DateOnly dt, DateOnly other)
             {
-                return DateTime.Compare(dt, other) > 0;
+                return dt.CompareTo(other) > 0;
             }
 
-            private static bool DateIsEqualOrMoreRecentThan(DateTime dt, DateTime other)
+            private static bool DateIsEqualOrMoreRecentThan(DateOnly dt, DateOnly other)
             {
-                return DateTime.Compare(dt, other) >= 0;
-            }
-
-            private static bool DateIsOlderThan(DateTime dt, DateTime other)
-            {
-                return DateTime.Compare(dt, other) < 0;
-            }
-
-            private static bool DateIsEqualOrOlderThan(DateTime dt, DateTime other)
-            {
-                return DateTime.Compare(dt, other) < 0;
+                return dt.CompareTo(other) >= 0;
             }
 
             [DataTestMethod]
             [DynamicData(nameof(GetTestData), DynamicDataSourceType.Method, DynamicDataDisplayNameDeclaringType = typeof(TestData), DynamicDataDisplayName = nameof(TestData.GetDisplayName))]
-            public void Invariants(TestData data)
+            public void InvariantsTest(TestData data)
             {
-                var (allVersions, allowedVersions) = UseRecentApiVersionRule.GetAcceptableApiVersions(RealApiVersionProvider, data.Today, data.MaxAllowedAgeDays, data.ResourceScope, data.FullyQualifiedResourceType);
+                var (allVersions, allowedVersions) = UseRecentApiVersionRule.GetAcceptableApiVersions(RealApiVersionProvider, data.Today, data.MaxAgeInDays, UseRecentApiVersionRule.DefaultGracePeriodInDays, data.ResourceScope, data.FullyQualifiedResourceType);
 
                 allVersions.Should().NotBeNull();
                 allowedVersions.Should().NotBeNull();
@@ -841,10 +1001,10 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 allowedVersions.Should().NotBeEmpty();
 
                 var stableVersions = allVersions.Where(v => v.IsStable).ToArray();
-                var recentStableVersions = stableVersions.Where(v => DateIsRecent(v.Date, data.Today, data.MaxAllowedAgeDays)).ToArray();
+                var recentStableVersions = stableVersions.Where(v => DateIsRecent(v.Date, data.Today, data.MaxAgeInDays)).ToArray();
 
                 var previewVersions = allVersions.Where(v => v.IsPreview).ToArray();
-                var recentPreviewVersions = previewVersions.Where(v => DateIsRecent(v.Date, data.Today, data.MaxAllowedAgeDays)).ToArray();
+                var recentPreviewVersions = previewVersions.Where(v => DateIsRecent(v.Date, data.Today, data.MaxAgeInDays)).ToArray();
 
                 // if there are any stable versions available...
                 if (stableVersions.Any())
@@ -865,7 +1025,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         var previewDate = preview.Date;
 
                         // Any preview version more recent than the most recent stable version and < 2 years old is allowed
-                        if (DateIsRecent(preview.Date, data.Today, data.MaxAllowedAgeDays))
+                        if (DateIsRecent(preview.Date, data.Today, data.MaxAgeInDays))
                         {
                             if (DateIsMoreRecentThan(previewDate, mostRecentStable.Date))
                             {
@@ -893,15 +1053,15 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
 
                 // If the most recent version is a preview version that’s > 2 years old, only that one preview version is allowed
                 var mostRecent = allVersions.OrderBy(v => v.Date).Last();
-                if (mostRecent.IsPreview && DateIsOld(mostRecent.Date, data.Today, data.MaxAllowedAgeDays))
+                if (mostRecent.IsPreview && DateIsOld(mostRecent.Date, data.Today, data.MaxAgeInDays))
                 {
-                    allowedVersions.Where(v => v.IsPreview).Select(v => v.Formatted).Should().BeEquivalentTo(new string[] { mostRecent.Formatted }, "if the most recent version is a preview version that’s > 2 years old, that one preview version is allowed");
+                    allowedVersions.Where(v => v.IsPreview).Select(v => v.ToString()).Should().BeEquivalentTo(new string[] { mostRecent.ToString() }, "if the most recent version is a preview version that’s > 2 years old, that one preview version is allowed");
                 }
 
                 // If there are no stable versions, all recent preview versions are allowed
                 if (!stableVersions.Any())
                 {
-                    allowedVersions.Should().BeEquivalentTo(previewVersions.Where(v => DateIsRecent(v.Date, data.Today, data.MaxAllowedAgeDays)));
+                    allowedVersions.Should().BeEquivalentTo(previewVersions.Where(v => DateIsRecent(v.Date, data.Today, data.MaxAgeInDays)));
                 }
             }
         }
@@ -909,28 +1069,38 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
         [TestClass]
         public class AnalyzeApiVersionTests
         {
+            private static DateOnly GetToday() => DateOnly.FromDateTime(DateTime.Today);
+
+            private static AzureResourceApiVersion CreateApiVersion(DateOnly date, string suffix = "")
+            {
+                var dateString = date.ToString(AzureResourceApiVersion.DateFormat);
+
+                return AzureResourceApiVersion.Parse($"{dateString}{suffix}");
+            }
+
             private static void Test(
-                DateTime currentVersionDate,
+                DateOnly currentVersionDate,
                 string currentVersionSuffix,
-                DateTime[] gaVersionDates,
-                DateTime[] previewVersionDates,
+                DateOnly[] gaVersionDates,
+                DateOnly[] previewVersionDates,
                 (string message, string acceptableVersions, string replacement)? expectedFix,
                 int maxAllowedAgeInDays = 730)
             {
-                string currentVersion = ApiVersionHelper.Format(currentVersionDate) + currentVersionSuffix;
-                string[] gaVersions = gaVersionDates.Select(d => "Whoever.whatever/whichever@" + ApiVersionHelper.Format(d)).ToArray();
-                string[] previewVersions = previewVersionDates.Select(d => "Whoever.whatever/whichever@" + ApiVersionHelper.Format(d) + "-preview").ToArray();
-                var apiVersionProvider = new ApiVersionProvider(BicepTestConstants.Features, BicepTestConstants.AzResourceTypeLoader);
+                string[] gaVersions = gaVersionDates.Select(d => "Whoever.whatever/whichever@" + CreateApiVersion(d)).ToArray();
+                string[] previewVersions = previewVersionDates.Select(d => "Whoever.whatever/whichever@" + CreateApiVersion(d) + "-preview").ToArray();
+                var apiVersionProvider = new ApiVersionProvider(BicepTestConstants.Features, []);
                 apiVersionProvider.InjectTypeReferences(ResourceScope.ResourceGroup, FakeResourceTypes.GetFakeResourceTypeReferences(gaVersions.Concat(previewVersions)));
+
                 var result = UseRecentApiVersionRule.AnalyzeApiVersion(
                     apiVersionProvider,
-                    DateTime.Today,
+                    GetToday(),
                     maxAllowedAgeInDays,
+                    UseRecentApiVersionRule.DefaultGracePeriodInDays,
                     new TextSpan(17, 47),
                     new TextSpan(17, 47),
                     ResourceScope.ResourceGroup,
                     "Whoever.whatever/whichever",
-                    new ApiVersion(currentVersion),
+                    CreateApiVersion(currentVersionDate, currentVersionSuffix),
                     returnNotFoundDiagnostics: true);
 
                 if (expectedFix == null)
@@ -942,32 +1112,30 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     result.Should().NotBeNull();
                     result!.Span.Should().Be(new TextSpan(17, 47));
                     result.Message.Should().Be(expectedFix.Value.message);
-                    (string.Join(", ", result.AcceptableVersions.Select(v => v.Formatted))).Should().Be(expectedFix.Value.acceptableVersions);
+                    (string.Join(", ", result.AcceptableVersions.Select(v => v.ToString()))).Should().Be(expectedFix.Value.acceptableVersions);
                     result.Fixes.Should().HaveCount(1); // Right now we only create one fix
                     result.Fixes[0].Replacements.Should().SatisfyRespectively(r => r.Span.Should().Be(new TextSpan(17, 47)));
-                    result.Fixes[0].Replacements.Select(r => r.Text).Should().BeEquivalentTo(new string[] { expectedFix.Value.replacement });
+                    result.Fixes[0].Replacements.Select(r => r.Text).Should().BeEquivalentTo([expectedFix.Value.replacement]);
                 }
             }
 
             [TestMethod]
             public void WithCurrentVersionLessThanTwoYearsOld_ShouldNotAddDiagnostics()
             {
-                DateTime currentVersionDate = DateTime.Today.AddDays(-1 * 365);
-                DateTime recentGAVersionDate = DateTime.Today.AddDays(-5 * 31);
-
-                Test(currentVersionDate, "", new DateTime[] { currentVersionDate, recentGAVersionDate }, new DateTime[] { },
-                    null);
+                DateOnly currentVersionDate = GetToday().AddDays(-1 * 365);
+                DateOnly recentGAVersionDate = GetToday().AddDays(-5 * 31);
+                Test(currentVersionDate, "", [currentVersionDate, recentGAVersionDate], [], null);
             }
 
             [TestMethod]
             public void WithCurrentVersionMoreThanTwoYearsOldAndRecentApiVersionIsAvailable_ShouldAddDiagnostics()
             {
-                DateTime currentVersionDate = DateTime.Today.AddDays(-3 * 365);
-                string currentVersion = ApiVersionHelper.Format(currentVersionDate);
-                DateTime recentGAVersionDate = DateTime.Today.AddDays(-5 * 30);
-                string recentGAVersion = ApiVersionHelper.Format(recentGAVersionDate);
+                DateOnly currentVersionDate = GetToday().AddDays(-3 * 365);
+                string currentVersion = CreateApiVersion(currentVersionDate);
+                DateOnly recentGAVersionDate = GetToday().AddDays(-5 * 30);
+                string recentGAVersion = CreateApiVersion(recentGAVersionDate);
 
-                Test(currentVersionDate, "", new DateTime[] { currentVersionDate, recentGAVersionDate }, new DateTime[] { },
+                Test(currentVersionDate, "", [currentVersionDate, recentGAVersionDate], [],
                     (
                         $"Use more recent API version for 'Whoever.whatever/whichever'. '{currentVersion}' is {3 * 365} days old, should be no more than 730 days old, or the most recent.",
                         acceptableVersions: recentGAVersion,
@@ -978,13 +1146,13 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             [TestMethod]
             public void WithCurrentAndRecentApiVersionsMoreThanTwoYearsOld_ShouldAddDiagnosticsToUseRecentApiVersion()
             {
-                DateTime currentVersionDate = DateTime.Today.AddDays(-4 * 365);
-                string currentVersion = ApiVersionHelper.Format(currentVersionDate);
+                DateOnly currentVersionDate = GetToday().AddDays(-4 * 365);
+                string currentVersion = CreateApiVersion(currentVersionDate);
 
-                DateTime recentGAVersionDate = DateTime.Today.AddDays(-3 * 365);
-                string recentGAVersion = ApiVersionHelper.Format(recentGAVersionDate);
+                DateOnly recentGAVersionDate = GetToday().AddDays(-3 * 365);
+                string recentGAVersion = CreateApiVersion(recentGAVersionDate);
 
-                Test(currentVersionDate, "", new DateTime[] { currentVersionDate, recentGAVersionDate }, new DateTime[] { },
+                Test(currentVersionDate, "", [currentVersionDate, recentGAVersionDate], [],
                      (
                         $"Use more recent API version for 'Whoever.whatever/whichever'. '{currentVersion}' is {4 * 365} days old, should be no more than 730 days old, or the most recent.",
                         acceptableVersions: recentGAVersion,
@@ -995,13 +1163,13 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             [TestMethod]
             public void WithCurrentAndRecentApiVersionsTooOld_CustomMaxAge_ShouldAddDiagnosticsToUseRecentApiVersion()
             {
-                DateTime currentVersionDate = DateTime.Today.AddDays(-4 * 365);
-                string currentVersion = ApiVersionHelper.Format(currentVersionDate);
+                DateOnly currentVersionDate = GetToday().AddDays(-4 * 365);
+                string currentVersion = CreateApiVersion(currentVersionDate);
 
-                DateTime recentGAVersionDate = DateTime.Today.AddDays(-3 * 365);
-                string recentGAVersion = ApiVersionHelper.Format(recentGAVersionDate);
+                DateOnly recentGAVersionDate = GetToday().AddDays(-3 * 365);
+                string recentGAVersion = CreateApiVersion(recentGAVersionDate);
 
-                Test(currentVersionDate, "", new DateTime[] { currentVersionDate, recentGAVersionDate }, new DateTime[] { },
+                Test(currentVersionDate, "", [currentVersionDate, recentGAVersionDate], [],
                      (
                         $"Use more recent API version for 'Whoever.whatever/whichever'. '{currentVersion}' is {4 * 365} days old, should be no more than 20 days old, or the most recent.",
                         acceptableVersions: recentGAVersion,
@@ -1013,13 +1181,13 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             [TestMethod]
             public void CustomMaxAge_Zero()
             {
-                DateTime currentVersionDate = DateTime.Today.AddDays(-4 * 365);
-                string currentVersion = ApiVersionHelper.Format(currentVersionDate);
+                DateOnly currentVersionDate = GetToday().AddDays(-4 * 365);
+                string currentVersion = CreateApiVersion(currentVersionDate);
 
-                DateTime recentGAVersionDate = DateTime.Today.AddDays(-3 * 365);
-                string recentGAVersion = ApiVersionHelper.Format(recentGAVersionDate);
+                DateOnly recentGAVersionDate = GetToday().AddDays(-3 * 365);
+                string recentGAVersion = CreateApiVersion(recentGAVersionDate);
 
-                Test(currentVersionDate, "", new DateTime[] { currentVersionDate, recentGAVersionDate }, new DateTime[] { },
+                Test(currentVersionDate, "", [currentVersionDate, recentGAVersionDate], [],
                      (
                         $"Use more recent API version for 'Whoever.whatever/whichever'. '{currentVersion}' is {4 * 365} days old, should be no more than 0 days old, or the most recent.",
                         acceptableVersions: recentGAVersion,
@@ -1031,38 +1199,38 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             [TestMethod]
             public void WhenCurrentAndRecentApiVersionsAreSameAndMoreThanTwoYearsOld_ShouldNotAddDiagnostics()
             {
-                DateTime currentVersionDate = DateTime.Today.AddDays(-3 * 365);
+                DateOnly currentVersionDate = GetToday().AddDays(-3 * 365);
 
-                Test(currentVersionDate, "", new DateTime[] { currentVersionDate }, new DateTime[] { },
+                Test(currentVersionDate, "", [currentVersionDate], [],
                     null);
             }
 
             [TestMethod]
             public void WithPreviewVersion_WhenCurrentPreviewVersionIsLatest_ShouldNotAddDiagnostics()
             {
-                DateTime currentVersionDate = DateTime.Today.AddDays(-365);
+                DateOnly currentVersionDate = GetToday().AddDays(-365);
 
-                DateTime recentGAVersionDate = DateTime.Today.AddDays(-3 * 365);
+                DateOnly recentGAVersionDate = GetToday().AddDays(-3 * 365);
 
-                DateTime recentPreviewVersionDate = currentVersionDate;
+                DateOnly recentPreviewVersionDate = currentVersionDate;
 
 
-                Test(currentVersionDate, "", new DateTime[] { currentVersionDate, recentGAVersionDate }, new DateTime[] { recentPreviewVersionDate },
+                Test(currentVersionDate, "", [currentVersionDate, recentGAVersionDate], [recentPreviewVersionDate],
                      null);
             }
 
             [TestMethod]
             public void WithOldPreviewVersion_WhenRecentPreviewVersionIsAvailable_ButIsOlderThanGAVersion_ShouldAddDiagnosticsAboutBeingOld()
             {
-                DateTime currentVersionDate = DateTime.Today.AddDays(-5 * 365);
-                string currentVersion = ApiVersionHelper.Format(currentVersionDate, "-preview");
+                DateOnly currentVersionDate = GetToday().AddDays(-5 * 365);
+                string currentVersion = CreateApiVersion(currentVersionDate, "-preview");
 
-                DateTime recentGAVersionDate = DateTime.Today.AddDays(-1 * 365);
-                string recentGAVersion = ApiVersionHelper.Format(recentGAVersionDate);
+                DateOnly recentGAVersionDate = GetToday().AddDays(-1 * 365);
+                string recentGAVersion = CreateApiVersion(recentGAVersionDate);
 
-                DateTime recentPreviewVersionDate = DateTime.Today.AddDays(-2 * 365);
+                DateOnly recentPreviewVersionDate = GetToday().AddDays(-2 * 365);
 
-                Test(currentVersionDate, "-preview", new DateTime[] { recentGAVersionDate }, new DateTime[] { currentVersionDate, recentPreviewVersionDate },
+                Test(currentVersionDate, "-preview", [recentGAVersionDate], [currentVersionDate, recentPreviewVersionDate],
                     (
                        $"Use more recent API version for 'Whoever.whatever/whichever'. '{currentVersion}' is {5 * 365} days old, should be no more than 730 days old, or the most recent.",
                        acceptableVersions: recentGAVersion,
@@ -1073,16 +1241,16 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             [TestMethod]
             public void WithPreviewVersion_WhenRecentPreviewVersionIsAvailable_AndIfNewerGAVersion_ShouldAddDiagnosticsToUseGA()
             {
-                DateTime currentVersionDate = DateTime.Today.AddDays(-5 * 365);
-                string currentVersion = ApiVersionHelper.Format(currentVersionDate, "-preview");
+                DateOnly currentVersionDate = GetToday().AddDays(-5 * 365);
+                string currentVersion = CreateApiVersion(currentVersionDate, "-preview");
 
-                DateTime recentGAVersionDate = DateTime.Today.AddDays(-3 * 365);
-                string recentGAVersion = ApiVersionHelper.Format(recentGAVersionDate);
+                DateOnly recentGAVersionDate = GetToday().AddDays(-3 * 365);
+                string recentGAVersion = CreateApiVersion(recentGAVersionDate);
 
-                DateTime recentPreviewVersionDate = DateTime.Today.AddDays(-2 * 365);
-                string recentPreviewVersion = ApiVersionHelper.Format(recentPreviewVersionDate, "-preview");
+                DateOnly recentPreviewVersionDate = GetToday().AddDays(-2 * 365);
+                string recentPreviewVersion = CreateApiVersion(recentPreviewVersionDate, "-preview");
 
-                Test(currentVersionDate, "-preview", new DateTime[] { recentGAVersionDate }, new DateTime[] { currentVersionDate, recentPreviewVersionDate },
+                Test(currentVersionDate, "-preview", [recentGAVersionDate], [currentVersionDate, recentPreviewVersionDate],
                     (
 
                        $"Use more recent API version for 'Whoever.whatever/whichever'. '{currentVersion}' is {5 * 365} days old, should be no more than 730 days old, or the most recent.",
@@ -1094,15 +1262,15 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             [TestMethod]
             public void WithOldPreviewVersion_WhenRecentGAVersionIsAvailable_ShouldAddDiagnostics()
             {
-                DateTime currentVersionDate = DateTime.Today.AddDays(-5 * 365);
-                string currentVersion = ApiVersionHelper.Format(currentVersionDate);
+                DateOnly currentVersionDate = GetToday().AddDays(-5 * 365);
+                string currentVersion = CreateApiVersion(currentVersionDate);
 
-                DateTime recentGAVersionDate = DateTime.Today.AddDays(-2 * 365);
-                string recentGAVersion = ApiVersionHelper.Format(recentGAVersionDate);
+                DateOnly recentGAVersionDate = GetToday().AddDays(-2 * 365);
+                string recentGAVersion = CreateApiVersion(recentGAVersionDate);
 
-                DateTime recentPreviewVersionDate = DateTime.Today.AddDays(-3 * 365);
+                DateOnly recentPreviewVersionDate = GetToday().AddDays(-3 * 365);
 
-                Test(currentVersionDate, "-preview", new DateTime[] { recentGAVersionDate }, new DateTime[] { currentVersionDate, recentPreviewVersionDate },
+                Test(currentVersionDate, "-preview", [recentGAVersionDate], [currentVersionDate, recentPreviewVersionDate],
                   (
                      $"Use more recent API version for 'Whoever.whatever/whichever'. '{currentVersion}-preview' is {5 * 365} days old, should be no more than 730 days old, or the most recent.",
                      acceptableVersions: recentGAVersion,
@@ -1113,13 +1281,13 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             [TestMethod]
             public void WithRecentPreviewVersion_WhenRecentGAVersionIsAvailable_ShouldAddDiagnostics()
             {
-                DateTime currentVersionDate = DateTime.Today.AddDays(-2 * 365);
-                string currentVersion = ApiVersionHelper.Format(currentVersionDate);
+                DateOnly currentVersionDate = GetToday().AddDays(-2 * 365);
+                string currentVersion = CreateApiVersion(currentVersionDate);
 
-                DateTime recentGAVersionDate = DateTime.Today.AddDays(-1 * 365);
-                string recentGAVersion = ApiVersionHelper.Format(recentGAVersionDate);
+                DateOnly recentGAVersionDate = GetToday().AddDays(-1 * 365);
+                string recentGAVersion = CreateApiVersion(recentGAVersionDate);
 
-                Test(currentVersionDate, "-preview", new DateTime[] { recentGAVersionDate }, new DateTime[] { currentVersionDate },
+                Test(currentVersionDate, "-preview", [recentGAVersionDate], [currentVersionDate],
                   (
                      $"Use more recent API version for 'Whoever.whatever/whichever'. '{currentVersion}-preview' is a preview version and there is a more recent non-preview version available.",
                      acceptableVersions: recentGAVersion,
@@ -1130,13 +1298,13 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             [TestMethod]
             public void WithRecentPreviewVersion_WhenRecentGAVersionIsSameAsPreviewVersion_ShouldAddDiagnosticsUsingGAVersion()
             {
-                DateTime currentVersionDate = DateTime.Today.AddDays(-2 * 365);
-                string currentVersion = ApiVersionHelper.Format(currentVersionDate, "-preview");
+                DateOnly currentVersionDate = GetToday().AddDays(-2 * 365);
+                string currentVersion = CreateApiVersion(currentVersionDate, "-preview");
 
-                DateTime recentGAVersionDate = currentVersionDate;
-                string recentGAVersion = ApiVersionHelper.Format(recentGAVersionDate);
+                DateOnly recentGAVersionDate = currentVersionDate;
+                string recentGAVersion = CreateApiVersion(recentGAVersionDate);
 
-                Test(currentVersionDate, "-preview", new DateTime[] { recentGAVersionDate }, new DateTime[] { currentVersionDate },
+                Test(currentVersionDate, "-preview", [recentGAVersionDate], [currentVersionDate],
                  (
                     $"Use more recent API version for 'Whoever.whatever/whichever'. '{currentVersion}' is a preview version and there is a non-preview version available with the same date.",
                     acceptableVersions: recentGAVersion,
@@ -1147,13 +1315,13 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             [TestMethod]
             public void WithPreviewVersion_WhenGAVersionisNull_AndCurrentVersionIsNotRecent_ShouldAddDiagnosticsUsingRecentPreviewVersion()
             {
-                DateTime currentVersionDate = DateTime.Today.AddDays(-3 * 365);
-                string currentVersion = ApiVersionHelper.Format(currentVersionDate, "-preview");
+                DateOnly currentVersionDate = GetToday().AddDays(-3 * 365);
+                string currentVersion = CreateApiVersion(currentVersionDate, "-preview");
 
-                DateTime recentPreviewVersionDate = DateTime.Today.AddDays(-2 * 365);
-                string recentPreviewVersion = ApiVersionHelper.Format(recentPreviewVersionDate, "-preview");
+                DateOnly recentPreviewVersionDate = GetToday().AddDays(-2 * 365);
+                string recentPreviewVersion = CreateApiVersion(recentPreviewVersionDate, "-preview");
 
-                Test(currentVersionDate, "-preview", new DateTime[] { }, new DateTime[] { recentPreviewVersionDate, currentVersionDate },
+                Test(currentVersionDate, "-preview", [], [recentPreviewVersionDate, currentVersionDate],
                     (
                        $"Use more recent API version for 'Whoever.whatever/whichever'. '{currentVersion}' is {3 * 365} days old, should be no more than 730 days old, or the most recent.",
                        acceptableVersions: recentPreviewVersion,
@@ -1164,11 +1332,11 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             [TestMethod]
             public void WithPreviewVersion_WhenGAVersionisNull_AndCurrentVersionIsRecent_ShouldNotAddDiagnostics()
             {
-                DateTime currentVersionDate = DateTime.Today.AddDays(-2 * 365);
+                DateOnly currentVersionDate = GetToday().AddDays(-2 * 365);
 
-                DateTime recentPreviewVersionDate = currentVersionDate;
+                DateOnly recentPreviewVersionDate = currentVersionDate;
 
-                Test(currentVersionDate, "-preview", new DateTime[] { }, new DateTime[] { recentPreviewVersionDate, currentVersionDate },
+                Test(currentVersionDate, "-preview", [], [recentPreviewVersionDate, currentVersionDate],
                     null);
             }
         }
@@ -1180,7 +1348,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             public void ArmTtk_ApiVersionIsNotAnExpression_Error()
             {
                 string bicep = @"
-                    resource publicIPAddress1 'fake.Network/publicIPAddresses@[concat(\'2020\', \'01-01\')]' = {
+                    resource publicIPAddress1 'fake.Network/publicIPAddresses@[concat(\'2420\', \'01-01\')]' = {
                       name: 'publicIPAddress1'
                       #disable-next-line no-loc-expr-outside-params
                       location: resourceGroup().location
@@ -1195,7 +1363,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] { "[2] The resource type is not valid. Specify a valid resource type of format \"<types>@<apiVersion>\"." });
+                    ["[2] The resource type is not valid. Specify a valid resource type of format \"<type-name>@<apiVersion>\"."]);
             }
 
             [TestMethod]
@@ -1244,12 +1412,12 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
+                    [
                         "[4] Use more recent API version for 'fake.ServiceBus/namespaces'. '2418-01-01-preview' is 1645 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2421-06-01-preview, 2421-01-01-preview, 2417-04-01",
                         "[18] Use more recent API version for 'fake.ServiceBus/namespaces/queues/authorizationRules'. '2415-08-01' is 2529 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2421-06-01-preview, 2421-01-01-preview, 2417-04-01",
                         "[29] Use more recent API version for 'fake.ServiceBus/namespaces/queues/authorizationRules'. '2418-01-01-preview' is 1645 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2421-06-01-preview, 2421-01-01-preview, 2417-04-01",
                         "[35] Could not find apiVersion 4017-04-01 for fake.ServiceBus/namespaces/queues/authorizationRules. Acceptable versions: 2421-06-01-preview, 2421-01-01-preview, 2417-04-01",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -1289,13 +1457,13 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new[] {
+                    [
                         "[5] Use more recent API version for 'fake.ServiceBus/namespaces'. '2418-01-01-preview' is 1645 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2421-06-01-preview, 2421-01-01-preview, 2417-04-01",
                         "[9] Use more recent API version for 'fake.ServiceBus/namespaces/queues'. '2415-08-01' is 2529 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2421-06-01-preview, 2421-01-01-preview, 2417-04-01",
                         "[13] Use more recent API version for 'fake.ServiceBus/namespaces/queues/authorizationRules'. '2418-01-01-preview' is 1645 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2421-06-01-preview, 2421-01-01-preview, 2417-04-01",
                         "[20] Use more recent API version for 'fake.ServiceBus/namespaces/queues/authorizationRules'. '2415-08-01' is 2529 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2421-06-01-preview, 2421-01-01-preview, 2417-04-01",
                         "[25] Use more recent API version for 'fake.ServiceBus/namespaces/queues/authorizationRules'. '2415-08-01' is 2529 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2421-06-01-preview, 2421-01-01-preview, 2417-04-01",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -1320,9 +1488,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
-                      "[2] The resource type is not valid. Specify a valid resource type of format \"<types>@<apiVersion>\"."
-                    });
+                    [
+                      "[2] The resource type is not valid. Specify a valid resource type of format \"<type-name>@<apiVersion>\"."
+                    ]);
             }
 
             [TestMethod]
@@ -1345,15 +1513,14 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 CompileAndTestWithFakeDateAndTypes(
                     bicep,
                     ResourceScope.ResourceGroup,
-                    new string[]
-                    {
+                    [
                            "Fake.DBforMySQL/servers@2417-12-01",
-                           "Fake.DBforMySQL/servers@2417-12-01-preview",
-                    },
+                        "Fake.DBforMySQL/servers@2417-12-01-preview",
+                    ],
                     fakeToday: "2422-07-04",
-                    new[] {
+                    [
                         "[2] Use more recent API version for 'fake.DBforMySQL/servers'. '2417-12-01-preview' is 1676 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2417-12-01",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -1376,15 +1543,14 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 CompileAndTestWithFakeDateAndTypes(
                     bicep,
                     ResourceScope.ResourceGroup,
-                    new string[]
-                    {
+                    [
                            "Fake.DBforMySQL/servers@2417-12-02",
-                           "Fake.DBforMySQL/servers@2417-12-01-preview",
-                    },
+                        "Fake.DBforMySQL/servers@2417-12-01-preview",
+                    ],
                     fakeToday: "2422-07-04",
-                    new[] {
+                    [
                         "[2] Use more recent API version for 'fake.DBforMySQL/servers'. '2417-12-01-preview' is 1676 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2417-12-02",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -1407,15 +1573,14 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 CompileAndTestWithFakeDateAndTypes(
                     bicep,
                     ResourceScope.ResourceGroup,
-                    new string[]
-                    {
+                    [
                         "Fake.DBforMySQL/servers@2417-11-30",
                         "Fake.DBforMySQL/servers@2417-12-01-preview",
-                    },
+                    ],
                     fakeToday: "2422-07-04",
-                    new[] {
+                    [
                         "[2] Use more recent API version for 'fake.DBforMySQL/servers'. '2417-12-01-preview' is 1676 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2417-11-30",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -1432,13 +1597,12 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 CompileAndTestWithFakeDateAndTypes(
                     bicep,
                     ResourceScope.ResourceGroup,
-                    new string[]
-                    {
+                    [
                            "Fake.DevTestLab/schedules@2417-06-01-preview",
-                           "Fake.DevTestLab/schedules@2417-08-01-preview",
-                    },
+                        "Fake.DevTestLab/schedules@2417-08-01-preview",
+                    ],
                     fakeToday: "2422-07-04",
-                    new string[] { });
+                    []);
             }
 
             [TestMethod]
@@ -1453,15 +1617,14 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                 CompileAndTestWithFakeDateAndTypes(
                     bicep,
                     ResourceScope.ResourceGroup,
-                    new string[]
-                    {
+                    [
                            "Fake.MachineLearningCompute/operationalizationClusters@2417-06-01-preview",
-                           "Fake.MachineLearningCompute/operationalizationClusters@2417-08-01-preview",
-                    },
+                        "Fake.MachineLearningCompute/operationalizationClusters@2417-08-01-preview",
+                    ],
                     fakeToday: "2422-07-04",
-                    new[] {
+                    [
                         "[2] Use more recent API version for 'Fake.MachineLearningCompute/operationalizationClusters'. '2417-06-01-preview' is 1859 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2417-08-01-preview",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -1469,6 +1632,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             {
                 // https://docs.microsoft.com/en-us/azure/azure-resource-manager/bicep/scope-extension-resources#apply-to-resource
                 /*
+                    ARM-TTK output:
                     [-] apiVersions Should Be Recent (15 ms)
                     Api versions must be the latest or under 2 years old (730 days) - API version 2020-04-01-preview of Microsoft.Authorization/roleAssignments is 830 days old Line: 40, Column: 8
                     Valid Api Versions:
@@ -1493,9 +1657,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         param builtInRoleType string
 
                         var role = {
-                          Owner: '/subscriptions/${subscription().subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635'
-                          Contributor: '/subscriptions/${subscription().subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c'
-                          Reader: '/subscriptions/${subscription().subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7'
+                          Owner: '/subscriptions/${subscription().subscriptionId}/providers/Fake.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635'
+                          Contributor: '/subscriptions/${subscription().subscriptionId}/providers/Fake.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c'
+                          Reader: '/subscriptions/${subscription().subscriptionId}/providers/Fake.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7'
                         }
 
                         resource roleAssignSub 'fake.Authorization/roleAssignments@2420-04-01-preview' = {
@@ -1508,9 +1672,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         ResourceScope.Subscription,
                         FakeResourceTypes.SubscriptionScopeTypes,
                        fakeToday: "2422-07-04",
-                       new String[] {
+                       [
                            "[21] Use more recent API version for 'fake.Authorization/roleAssignments'. '2420-04-01-preview' is 824 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2420-10-01-preview, 2420-08-01-preview, 2417-09-01"
-                       });
+                       ]);
             }
 
             [TestMethod]
@@ -1528,7 +1692,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] { });
+                    []);
             }
 
             [TestMethod]
@@ -1550,9 +1714,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         param builtInRoleType string
 
                         var role = {
-                          Owner: '/subscriptions/${subscription().subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635'
-                          Contributor: '/subscriptions/${subscription().subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c'
-                          Reader: '/subscriptions/${subscription().subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7'
+                          Owner: '/subscriptions/${subscription().subscriptionId}/providers/Fake.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635'
+                          Contributor: '/subscriptions/${subscription().subscriptionId}/providers/Fake.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c'
+                          Reader: '/subscriptions/${subscription().subscriptionId}/providers/Fake.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7'
                         }
 
                         resource roleAssignSub 'fake.Authorization/roleAssignments@2420-08-01-preview' = {
@@ -1565,7 +1729,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         ResourceScope.Subscription,
                         FakeResourceTypes.SubscriptionScopeTypes,
                         "2422-07-04",
-                        new string[] { }
+                        []
                     );
             }
 
@@ -1588,9 +1752,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         param builtInRoleType string
 
                         var role = {
-                          Owner: '/subscriptions/${subscription().subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635'
-                          Contributor: '/subscriptions/${subscription().subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c'
-                          Reader: '/subscriptions/${subscription().subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7'
+                          Owner: '/subscriptions/${subscription().subscriptionId}/providers/Fake.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635'
+                          Contributor: '/subscriptions/${subscription().subscriptionId}/providers/Fake.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c'
+                          Reader: '/subscriptions/${subscription().subscriptionId}/providers/Fake.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7'
                         }
 
                         resource roleAssignSub 'fake.Authorization/roleAssignments@2417-10-01-preview' = {
@@ -1603,9 +1767,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         ResourceScope.Subscription,
                         FakeResourceTypes.SubscriptionScopeTypes,
                         "2422-07-04",
-                        new[] {
+                        [
                             "[21] Use more recent API version for 'fake.Authorization/roleAssignments'. '2417-10-01-preview' is 1737 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2420-10-01-preview, 2420-08-01-preview, 2417-09-01",
-                        }
+                        ]
                     );
             }
 
@@ -1628,9 +1792,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                         param location string = resourceGroup().location
 
                         var role = {
-                          Owner: '/subscriptions/${subscription().subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635'
-                          Contributor: '/subscriptions/${subscription().subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c'
-                          Reader: '/subscriptions/${subscription().subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7'
+                          Owner: '/subscriptions/${subscription().subscriptionId}/providers/Fake.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635'
+                          Contributor: '/subscriptions/${subscription().subscriptionId}/providers/Fake.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c'
+                          Reader: '/subscriptions/${subscription().subscriptionId}/providers/Fake.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7'
                         }
                         #disable-next-line no-loc-expr-outside-params
                         var uniqueStorageName = 'storage${uniqueString(resourceGroup().id)}'
@@ -1658,10 +1822,10 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new[] {
+                    [
                         "[24] Use more recent API version for 'fake.Storage/storageAccounts'. '2420-08-01-preview' is a preview version and there is a more recent non-preview version available. Acceptable versions: 2421-06-01, 2421-04-01, 2421-02-01, 2421-01-01",
                         "[35] Use more recent API version for 'fake.Authorization/roleAssignments'. '2420-04-01-preview' is 824 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2420-10-01-preview, 2420-08-01-preview, 2415-07-01",
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -1684,9 +1848,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                      ResourceScope.ResourceGroup,
                      FakeResourceTypes.ResourceScopeTypes,
                      "2422-07-04",
-                     new[] {
+                     [
                         "[6] Use more recent API version for 'fake.Authorization/locks'. '2416-09-01' is 2132 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2420-05-01",
-                     });
+                     ]);
             }
 
             [TestMethod]
@@ -1705,9 +1869,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.Subscription,
                     FakeResourceTypes.SubscriptionScopeTypes,
                     "2422-07-04",
-                    new[] {
+                    [
                         "[7] Use more recent API version for 'fake.Resources/resourceGroups'. '2419-05-10' is 1151 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2421-05-01, 2421-04-01, 2421-01-01, 2420-10-01, 2420-08-01"
-                    });
+                                      ]);
             }
 
             [TestMethod]
@@ -1726,7 +1890,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.Subscription,
                     FakeResourceTypes.SubscriptionScopeTypes,
                     "2422-07-04",
-                    new string[] { });
+                    []);
             }
 
             [TestMethod]
@@ -1743,9 +1907,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                new string[] {
+                [
                     "[2] Could not find resource type \"DontKnowWho.MachineLearningCompute/operationalizationClusters\".",
-                });
+                ]);
             }
 
             [TestMethod]
@@ -1762,9 +1926,9 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
+                    [
                         "[2] Could not find apiVersion 2417-06-01-beta for Fake.MachineLearningCompute/operationalizationClusters. Acceptable versions: 2417-08-01-preview"
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -1783,13 +1947,13 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.Subscription,
                     FakeResourceTypes.SubscriptionScopeTypes,
                     "2422-07-04",
-                    new[] {
+                    [
                         new DiagnosticAndFixes(
                             "Use more recent API version for 'fake.Resources/resourceGroups'. '2419-05-10' is 1151 days old, should be no more than 730 days old, or the most recent. Acceptable versions: 2421-05-01, 2421-04-01, 2421-01-01, 2420-10-01, 2420-08-01",
                             "Replace with 2421-05-01",
                             "resource newRG 'fake.Resources/resourceGroups@2421-05-01'"
                             )
-                    });
+                    ]);
             }
 
             [TestMethod]
@@ -1809,13 +1973,13 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.Subscription,
                     FakeResourceTypes.SubscriptionScopeTypes,
                     "2422-07-04",
-                    new[] {
+                    [
                         new DiagnosticAndFixes(
                             "Use more recent API version for 'fake.Resources/resourceGroups'. '2419-05-10' is 1151 days old, should be no more than 459 days old, or the most recent. Acceptable versions: 2421-05-01, 2421-04-01",
                             "Replace with 2421-05-01",
                             "resource newRG 'fake.Resources/resourceGroups@2421-05-01'"
                             )
-                    },
+                    ],
                     maxAgeInDays: 459
                 );
 
@@ -1834,13 +1998,13 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.Subscription,
                     FakeResourceTypes.SubscriptionScopeTypes,
                     "2422-07-04",
-                    new[] {
+                    [
                         new DiagnosticAndFixes(
                             "Use more recent API version for 'fake.Resources/resourceGroups'. '2419-05-10' is 1151 days old, should be no more than 458 days old, or the most recent. Acceptable versions: 2421-05-01",
                             "Replace with 2421-05-01",
                             "resource newRG 'fake.Resources/resourceGroups@2421-05-01'"
                             )
-                    },
+                    ],
                     maxAgeInDays: 458
                 );
             }
@@ -1862,8 +2026,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.Subscription,
                     FakeResourceTypes.SubscriptionScopeTypes,
                     "2422-07-04",
-                    new string[] {
-                    },
+                    [],
                     maxAgeInDays: 459
                 );
             }
@@ -1884,13 +2047,13 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.Subscription,
                     FakeResourceTypes.SubscriptionScopeTypes,
                     "2422-07-04",
-                    new[] {
+                    [
                         new DiagnosticAndFixes(
                             "Use more recent API version for 'fake.Resources/resourceGroups'. '2419-05-10' is 1151 days old, should be no more than 0 days old, or the most recent. Acceptable versions: 2421-05-01",
                             "Replace with 2421-05-01",
                             "resource newRG 'fake.Resources/resourceGroups@2421-05-01'"
                             )
-                    },
+                    ],
                     maxAgeInDays: 0);
             }
 
@@ -1898,7 +2061,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
             public void LinterIgnoresNotAzureResources()
             {
                 CompileAndTestWithFakeDateAndTypes(@"
-                        import 'kubernetes@1.0.0' {
+                        extension kubernetes with {
                           namespace: 'default'
                           kubeConfig: ''
                         }
@@ -1918,10 +2081,7 @@ namespace Bicep.Core.UnitTests.Diagnostics.LinterRuleTests
                     ResourceScope.ResourceGroup,
                     FakeResourceTypes.ResourceScopeTypes,
                     "2422-07-04",
-                    new string[] {
-                       // pass
-                    },
-                    OnCompileErrors.Ignore);
+                    []);
             }
         }
     }

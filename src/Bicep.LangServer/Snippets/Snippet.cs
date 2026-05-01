@@ -1,12 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
 using System.Collections.Immutable;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using Bicep.Core.Parsing;
+using Bicep.Core.Text;
 using Bicep.LanguageServer.Completions;
 
 namespace Bicep.LanguageServer.Snippets
@@ -18,7 +17,7 @@ namespace Bicep.LanguageServer.Snippets
         // $(?<index>\d+) detects tab stops e.g. $1
         // $(?<index>\d+)\|((?<name>[^,]+)(.*))\|} detects placeholders with choices e.g. ${1|one,two,three|}
         // See https://microsoft.github.io/language-server-protocol/specifications/specification-current/#snippet_syntax for more information
-        private static readonly Regex PlaceholderPattern = new Regex(@"\$({(?<index>\d+):(?<name>[^}]+)}|(?<index>\d+)|{(?<index>\d+)\|((?<name>[^,]+)(.*))\|})", RegexOptions.Compiled | RegexOptions.ExplicitCapture);
+        private static readonly Regex PlaceholderPattern = new(@"\$({(?<index>\d+):(?<name>[^}]+)}|(?<index>\d+)|{(?<index>\d+)\|((?<name>[^,]+)(.*))\|})", RegexOptions.Compiled | RegexOptions.ExplicitCapture);
 
         public Snippet(string text, CompletionPriority completionPriority = CompletionPriority.Medium, string prefix = "", string detail = "")
         {
@@ -28,10 +27,13 @@ namespace Bicep.LanguageServer.Snippets
             this.Prefix = prefix;
             this.Detail = detail;
             this.CompletionPriority = completionPriority;
-            this.Placeholders = matches
-                .Select(CreatePlaceholder)
-                .OrderBy(p => p.Index)
-                .ToImmutableArray();
+            this.Placeholders =
+            [
+                .. matches
+                                .Select(CreatePlaceholder)
+                                .OrderBy(p => p.Index)
+,
+            ];
         }
 
         public string Prefix { get; }

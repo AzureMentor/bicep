@@ -5,10 +5,7 @@ param frontDoorWafDeployed bool = false // Used for conditions once available in
 param frontDoorWafNamePrefix string = 'AzFdWafTestingBicep'
 param frontDoorWafEnabledState bool = true
 
-@allowed([
-  'Prevention'
-  'Detection'
-])
+@allowed(['Prevention', 'Detection'])
 param frontDoorWafMode string = 'Prevention'
 
 var frontDoorNameLower = toLower(frontDoorName)
@@ -101,15 +98,15 @@ resource resAzFd 'Microsoft.Network/frontdoors@2020-01-01' = {
         properties: {
           frontendEndpoints: [
             {
-              id: resourceId('Microsoft.Network/frontDoors/FrontendEndpoints', frontDoorNameLower, frontendEndpoint1Name)
+              id: resourceId(
+                'Microsoft.Network/frontDoors/FrontendEndpoints',
+                frontDoorNameLower,
+                frontendEndpoint1Name
+              )
             }
           ]
-          acceptedProtocols: [
-            'Https'
-          ]
-          patternsToMatch: [
-            '/*'
-          ]
+          acceptedProtocols: ['Https']
+          patternsToMatch: ['/*']
           enabledState: 'Enabled'
           routeConfiguration: {
             '@odata.type': '#Microsoft.Azure.FrontDoor.Models.FrontdoorForwardingConfiguration'
@@ -125,16 +122,15 @@ resource resAzFd 'Microsoft.Network/frontdoors@2020-01-01' = {
         properties: {
           frontendEndpoints: [
             {
-              id: resourceId('Microsoft.Network/frontDoors/FrontendEndpoints', frontDoorNameLower, frontendEndpoint1Name)
+              id: resourceId(
+                'Microsoft.Network/frontDoors/FrontendEndpoints',
+                frontDoorNameLower,
+                frontendEndpoint1Name
+              )
             }
           ]
-          acceptedProtocols: [
-            'Https'
-          ]
-          patternsToMatch: [
-            '/redirect/*'
-            '/redirect'
-          ]
+          acceptedProtocols: ['Https']
+          patternsToMatch: ['/redirect/*', '/redirect']
           enabledState: 'Enabled'
           routeConfiguration: {
             '@odata.type': '#Microsoft.Azure.FrontDoor.Models.FrontdoorRedirectConfiguration'

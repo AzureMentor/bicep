@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using Bicep.Core.Exceptions;
-using System;
 
 namespace Bicep.Cli
 {

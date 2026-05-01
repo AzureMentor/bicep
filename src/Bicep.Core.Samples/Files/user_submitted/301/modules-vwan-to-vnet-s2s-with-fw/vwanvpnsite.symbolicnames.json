@@ -1,13 +1,12 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "languageVersion": "1.10-experimental",
+  "languageVersion": "2.0",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "_EXPERIMENTAL_WARNING": "Symbolic name support in ARM is experimental, and should be enabled for testing purposes only. Do not enable this setting for any production usage, or you may be unexpectedly broken at any time!",
     "_generator": {
       "name": "bicep",
       "version": "dev",
-      "templateHash": "6223556652513066188"
+      "templateHash": "7540302005305677536"
     }
   },
   "parameters": {
@@ -21,25 +20,25 @@
     "addressprefix": {
       "type": "string",
       "metadata": {
-        "description": "Specifices the VPN Sites local IP Addresses"
+        "description": "Specifies the VPN Sites local IP Addresses"
       }
     },
     "bgppeeringpddress": {
       "type": "string",
       "metadata": {
-        "description": "Specifices the VPN Sites BGP Peering IP Addresses"
+        "description": "Specifies the VPN Sites BGP Peering IP Addresses"
       }
     },
     "ipaddress": {
       "type": "string",
       "metadata": {
-        "description": "Specifices the VPN Sites VPN Device IP Address"
+        "description": "Specifies the VPN Sites VPN Device IP Address"
       }
     },
     "wanid": {
       "type": "string",
       "metadata": {
-        "description": "Specifices the resource ID of the Virtual WAN where the VPN Site should be created"
+        "description": "Specifies the resource ID of the Virtual WAN where the VPN Site should be created"
       }
     },
     "remotesiteasn": {

@@ -8,8 +8,10 @@ namespace Bicep.LanguageServer
         public const string BuildCommand = "build";
         public const string DecompileForPasteCommand = "decompileForPaste";
         public const string DecompileCommand = "decompile";
+        public const string DecompileParamsCommand = "decompileParams";
         public const string DecompileSaveCommand = "decompileSave";
         public const string GenerateParamsCommand = "generateParams";
+        public const string BuildParamsCommand = "buildParams";
         public const string DeployCompleteMethod = "deploymentComplete";
         public const string DeployStartCommand = "deploy/start";
         public const string DeployWaitForCompletionCommand = "deploy/waitForCompletion";
@@ -23,5 +25,7 @@ namespace Bicep.LanguageServer
 
         // This is under "bicep.completions" in configuration
         public const string GetAllAzureContainerRegistriesForCompletionsSetting = "getAllAccessibleAzureContainerRegistries";
+
+        public const string ExternalSourceFileScheme = "bicep-extsrc";
     }
 }

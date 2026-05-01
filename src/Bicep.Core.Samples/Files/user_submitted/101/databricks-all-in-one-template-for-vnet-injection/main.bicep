@@ -8,11 +8,7 @@ param location string = resourceGroup().location
 param nsgName string = 'databricks-nsg'
 
 @description('The pricing tier of workspace.')
-@allowed([
-  'trial'
-  'standard'
-  'premium'
-])
+@allowed(['trial', 'standard', 'premium'])
 param pricingTier string = 'premium'
 
 @description('CIDR range for the private subnet.')
@@ -141,9 +137,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2020-05-01' = {
   name: vnetName
   properties: {
     addressSpace: {
-      addressPrefixes: [
-        vnetCidr
-      ]
+      addressPrefixes: [vnetCidr]
     }
     subnets: [
       {

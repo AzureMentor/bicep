@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Linq;
+
 using Bicep.Core.Parsing;
 
 namespace Bicep.Core.Syntax
@@ -66,6 +66,7 @@ namespace Bicep.Core.Syntax
             this.VisitNodes(syntax.LeadingNodes);
             this.Visit(syntax.Keyword);
             this.Visit(syntax.Name);
+            this.Visit(syntax.Type);
             this.Visit(syntax.Assignment);
             this.Visit(syntax.Value);
         }
@@ -91,6 +92,7 @@ namespace Bicep.Core.Syntax
             this.Visit(syntax.Type);
             this.Visit(syntax.ExistingKeyword);
             this.Visit(syntax.Assignment);
+            this.VisitNodes(syntax.Newlines);
             this.Visit(syntax.Value);
         }
 
@@ -101,15 +103,33 @@ namespace Bicep.Core.Syntax
             this.Visit(syntax.Name);
             this.Visit(syntax.Path);
             this.Visit(syntax.Assignment);
+            this.VisitNodes(syntax.Newlines);
             this.Visit(syntax.Value);
         }
-
+        public override void VisitTestDeclarationSyntax(TestDeclarationSyntax syntax)
+        {
+            this.VisitNodes(syntax.LeadingNodes);
+            this.Visit(syntax.Keyword);
+            this.Visit(syntax.Name);
+            this.Visit(syntax.Path);
+            this.Visit(syntax.Assignment);
+            this.Visit(syntax.Value);
+        }
         public override void VisitOutputDeclarationSyntax(OutputDeclarationSyntax syntax)
         {
             this.VisitNodes(syntax.LeadingNodes);
             this.Visit(syntax.Keyword);
             this.Visit(syntax.Name);
             this.Visit(syntax.Type);
+            this.Visit(syntax.Assignment);
+            this.Visit(syntax.Value);
+        }
+
+        public override void VisitAssertDeclarationSyntax(AssertDeclarationSyntax syntax)
+        {
+            this.VisitNodes(syntax.LeadingNodes);
+            this.Visit(syntax.Keyword);
+            this.Visit(syntax.Name);
             this.Visit(syntax.Assignment);
             this.Visit(syntax.Value);
         }
@@ -229,6 +249,11 @@ namespace Bicep.Core.Syntax
             this.Visit(syntax.NullKeyword);
         }
 
+        public override void VisitNoneLiteralSyntax(NoneLiteralSyntax syntax)
+        {
+            this.Visit(syntax.NoneKeyword);
+        }
+
         public override void VisitSkippedTriviaSyntax(SkippedTriviaSyntax syntax)
         {
             foreach (var element in syntax.Elements)
@@ -273,12 +298,14 @@ namespace Bicep.Core.Syntax
         public override void VisitForSyntax(ForSyntax syntax)
         {
             this.Visit(syntax.OpenSquare);
+            this.VisitNodes(syntax.OpenNewlines);
             this.Visit(syntax.ForKeyword);
             this.Visit(syntax.VariableSection);
             this.Visit(syntax.InKeyword);
             this.Visit(syntax.Expression);
             this.Visit(syntax.Colon);
             this.Visit(syntax.Body);
+            this.VisitNodes(syntax.CloseNewlines);
             this.Visit(syntax.CloseSquare);
         }
 
@@ -292,8 +319,10 @@ namespace Bicep.Core.Syntax
         public override void VisitTernaryOperationSyntax(TernaryOperationSyntax syntax)
         {
             this.Visit(syntax.ConditionExpression);
+            this.VisitNodes(syntax.NewlinesBeforeQuestion);
             this.Visit(syntax.Question);
             this.Visit(syntax.TrueExpression);
+            this.VisitNodes(syntax.NewlinesBeforeColon);
             this.Visit(syntax.Colon);
             this.Visit(syntax.FalseExpression);
         }
@@ -316,6 +345,7 @@ namespace Bicep.Core.Syntax
             this.Visit(syntax.BaseExpression);
             this.Visit(syntax.OpenSquare);
             this.Visit(syntax.SafeAccessMarker);
+            this.Visit(syntax.FromEndMarker);
             this.Visit(syntax.IndexExpression);
             this.Visit(syntax.CloseSquare);
         }
@@ -381,7 +411,7 @@ namespace Bicep.Core.Syntax
             this.VisitNodes(syntax.LeadingNodes);
         }
 
-        public override void VisitImportDeclarationSyntax(ImportDeclarationSyntax syntax)
+        public override void VisitExtensionDeclarationSyntax(ExtensionDeclarationSyntax syntax)
         {
             this.VisitNodes(syntax.LeadingNodes);
             this.Visit(syntax.Keyword);
@@ -390,13 +420,21 @@ namespace Bicep.Core.Syntax
             this.Visit(syntax.AsClause);
         }
 
-        public override void VisitImportWithClauseSyntax(ImportWithClauseSyntax syntax)
+        public override void VisitExtensionConfigAssignmentSyntax(ExtensionConfigAssignmentSyntax syntax)
+        {
+            this.VisitNodes(syntax.LeadingNodes);
+            this.Visit(syntax.Keyword);
+            this.Visit(syntax.Alias);
+            this.Visit(syntax.WithClause);
+        }
+
+        public override void VisitExtensionWithClauseSyntax(ExtensionWithClauseSyntax syntax)
         {
             this.Visit(syntax.Keyword);
             this.Visit(syntax.Config);
         }
 
-        public override void VisitImportAsClauseSyntax(ImportAsClauseSyntax syntax)
+        public override void VisitAliasAsClauseSyntax(AliasAsClauseSyntax syntax)
         {
             this.Visit(syntax.Keyword);
             this.Visit(syntax.Alias);
@@ -416,12 +454,27 @@ namespace Bicep.Core.Syntax
             this.VisitNodes(syntax.LeadingNodes);
             this.Visit(syntax.Keyword);
             this.Visit(syntax.Path);
+            this.Visit(syntax.WithClause);
+        }
+
+        public override void VisitUsingWithClauseSyntax(UsingWithClauseSyntax syntax)
+        {
+            this.Visit(syntax.Keyword);
+            this.Visit(syntax.Config);
+        }
+
+        public override void VisitExtendsDeclarationSyntax(ExtendsDeclarationSyntax syntax)
+        {
+            this.VisitNodes(syntax.LeadingNodes);
+            this.Visit(syntax.Keyword);
+            this.Visit(syntax.Path);
         }
 
         public override void VisitLambdaSyntax(LambdaSyntax syntax)
         {
             this.Visit(syntax.VariableSection);
             this.Visit(syntax.Arrow);
+            this.VisitNodes(syntax.NewlinesBeforeBody);
             this.Visit(syntax.Body);
         }
 
@@ -429,6 +482,175 @@ namespace Bicep.Core.Syntax
         {
             this.Visit(syntax.BaseExpression);
             this.Visit(syntax.AssertionOperator);
+        }
+
+        public override void VisitTypedVariableBlockSyntax(TypedVariableBlockSyntax syntax)
+        {
+            this.Visit(syntax.OpenParen);
+            this.VisitNodes(syntax.Children);
+            this.Visit(syntax.CloseParen);
+        }
+
+        public override void VisitTypedLocalVariableSyntax(TypedLocalVariableSyntax syntax)
+        {
+            this.Visit(syntax.Name);
+            this.Visit(syntax.Type);
+        }
+
+        public override void VisitTypedLambdaSyntax(TypedLambdaSyntax syntax)
+        {
+            this.Visit(syntax.VariableSection);
+            this.Visit(syntax.ReturnType);
+            this.Visit(syntax.Arrow);
+            this.VisitNodes(syntax.NewlinesBeforeBody);
+            this.Visit(syntax.Body);
+        }
+
+        public override void VisitFunctionDeclarationSyntax(FunctionDeclarationSyntax syntax)
+        {
+            this.VisitNodes(syntax.LeadingNodes);
+            this.Visit(syntax.Keyword);
+            this.Visit(syntax.Name);
+            this.Visit(syntax.Lambda);
+        }
+
+        public override void VisitCompileTimeImportDeclarationSyntax(CompileTimeImportDeclarationSyntax syntax)
+        {
+            this.VisitNodes(syntax.LeadingNodes);
+            this.Visit(syntax.Keyword);
+            this.Visit(syntax.ImportExpression);
+            this.Visit(syntax.FromClause);
+        }
+
+        public override void VisitImportedSymbolsListSyntax(ImportedSymbolsListSyntax syntax)
+        {
+            this.Visit(syntax.OpenBrace);
+            this.VisitNodes(syntax.Children);
+            this.Visit(syntax.CloseBrace);
+        }
+
+        public override void VisitImportedSymbolsListItemSyntax(ImportedSymbolsListItemSyntax syntax)
+        {
+            this.Visit(syntax.OriginalSymbolName);
+            this.Visit(syntax.AsClause);
+        }
+
+        public override void VisitWildcardImportSyntax(WildcardImportSyntax syntax)
+        {
+            this.Visit(syntax.Wildcard);
+            this.Visit(syntax.AliasAsClause);
+        }
+
+        public override void VisitCompileTimeImportFromClauseSyntax(CompileTimeImportFromClauseSyntax syntax)
+        {
+            this.Visit(syntax.Keyword);
+            this.Visit(syntax.Path);
+        }
+
+        public override void VisitParameterizedTypeInstantiationSyntax(ParameterizedTypeInstantiationSyntax syntax)
+        {
+            this.Visit(syntax.Name);
+            this.Visit(syntax.OpenChevron);
+            this.VisitNodes(syntax.Children);
+            this.Visit(syntax.CloseChevron);
+        }
+
+        public override void VisitInstanceParameterizedTypeInstantiationSyntax(InstanceParameterizedTypeInstantiationSyntax syntax)
+        {
+            this.Visit(syntax.BaseExpression);
+            this.Visit(syntax.Dot);
+            this.Visit(syntax.PropertyName);
+            this.Visit(syntax.OpenChevron);
+            this.VisitNodes(syntax.Children);
+            this.Visit(syntax.CloseChevron);
+        }
+
+        public override void VisitParameterizedTypeArgumentSyntax(ParameterizedTypeArgumentSyntax syntax)
+        {
+            this.Visit(syntax.Expression);
+        }
+
+        public override void VisitTypePropertyAccessSyntax(TypePropertyAccessSyntax syntax)
+        {
+            this.Visit(syntax.BaseExpression);
+            this.Visit(syntax.Dot);
+            this.Visit(syntax.PropertyName);
+        }
+
+        public override void VisitTypeAdditionalPropertiesAccessSyntax(TypeAdditionalPropertiesAccessSyntax syntax)
+        {
+            this.Visit(syntax.BaseExpression);
+            this.Visit(syntax.Dot);
+            this.Visit(syntax.Asterisk);
+        }
+
+        public override void VisitTypeArrayAccessSyntax(TypeArrayAccessSyntax syntax)
+        {
+            this.Visit(syntax.BaseExpression);
+            this.Visit(syntax.OpenSquare);
+            this.Visit(syntax.IndexExpression);
+            this.Visit(syntax.CloseSquare);
+        }
+
+        public override void VisitTypeItemsAccessSyntax(TypeItemsAccessSyntax syntax)
+        {
+            this.Visit(syntax.BaseExpression);
+            this.Visit(syntax.OpenSquare);
+            this.Visit(syntax.Asterisk);
+            this.Visit(syntax.CloseSquare);
+        }
+
+        public override void VisitTypeVariableAccessSyntax(TypeVariableAccessSyntax syntax)
+        {
+            this.Visit(syntax.Name);
+        }
+
+        public override void VisitStringTypeLiteralSyntax(StringTypeLiteralSyntax syntax)
+        {
+            for (int i = 0; i < syntax.StringTokens.Length + syntax.Expressions.Length; i++)
+            {
+                this.Visit(i % 2 == 0 ? syntax.StringTokens[i / 2] : syntax.Expressions[i / 2]);
+            }
+        }
+
+        public override void VisitIntegerTypeLiteralSyntax(IntegerTypeLiteralSyntax syntax)
+        {
+            this.Visit(syntax.Literal);
+        }
+
+        public override void VisitBooleanTypeLiteralSyntax(BooleanTypeLiteralSyntax syntax)
+        {
+            this.Visit(syntax.Literal);
+        }
+
+        public override void VisitNullTypeLiteralSyntax(NullTypeLiteralSyntax syntax)
+        {
+            this.Visit(syntax.NullKeyword);
+        }
+
+        public override void VisitUnaryTypeOperationSyntax(UnaryTypeOperationSyntax syntax)
+        {
+            this.Visit(syntax.OperatorToken);
+            this.Visit(syntax.Expression);
+        }
+
+        public override void VisitNonNullableTypeSyntax(NonNullableTypeSyntax syntax)
+        {
+            this.Visit(syntax.Base);
+            this.Visit(syntax.NonNullabilityMarker);
+        }
+
+        public override void VisitParenthesizedTypeSyntax(ParenthesizedTypeSyntax syntax)
+        {
+            this.Visit(syntax.OpenParen);
+            this.Visit(syntax.Expression);
+            this.Visit(syntax.CloseParen);
+        }
+
+        public override void VisitSpreadExpressionSyntax(SpreadExpressionSyntax syntax)
+        {
+            this.Visit(syntax.Ellipsis);
+            this.Visit(syntax.Expression);
         }
     }
 }

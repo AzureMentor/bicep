@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft Corporation.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
 namespace Bicep.Core.Configuration
@@ -10,7 +10,7 @@ namespace Bicep.Core.Configuration
         {
             return @"{
   // See https://aka.ms/bicep/config for more information on Bicep configuration options
-  // Press CTRL+SPACE/CMD+SPACE at any location to see Intellisense suggestions
+  // Press CTRL+SPACE at any location to see Intellisense suggestions
   ""analyzers"": {
     ""core"": {
       ""rules"": {

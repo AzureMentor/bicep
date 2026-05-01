@@ -1,0 +1,66 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "languageVersion": "2.0",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "dev",
+      "templateHash": "11859104226844029873"
+    }
+  },
+  "parameters": {
+    "storageAccount1": {
+      "type": "string",
+      "defaultValue": "testStorageAccount"
+    },
+    "storageAccount2": {
+      "type": "string",
+      "defaultValue": "testStorageAccount"
+    },
+    "storageAccount3": {
+      "type": "string",
+      "defaultValue": "testStorageAccount"
+    },
+    "storageAccount5": {
+      "type": "string",
+      "defaultValue": "testStorageAccount"
+    },
+    "storageAccount4": {
+      "type": "string",
+      "defaultValue": "testStorageAccount"
+    },
+    "storageAccount6": {
+      "type": "string",
+      "defaultValue": "testStorageAccount"
+    },
+    "storageAccount7": {
+      "type": "string",
+      "defaultValue": "testStorageAccount"
+    }
+  },
+  "variables": {
+    "vmProperties": {
+      "diagnosticsProfile": {
+        "bootDiagnostics": {
+          "enabled": 123,
+          "storageUri": true,
+          "unknownProp": "asdf"
+        }
+      },
+      "evictionPolicy": "Deallocate"
+    },
+    "unusedVar1": "This is an unused variable",
+    "unusedVar2": "This is another unused variable",
+    "unusedVar3": "This is yet another unused variable"
+  },
+  "resources": {
+    "vm": {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2020-12-01",
+      "name": "vm",
+      "location": "West US",
+      "properties": "[variables('vmProperties')]"
+    }
+  }
+}

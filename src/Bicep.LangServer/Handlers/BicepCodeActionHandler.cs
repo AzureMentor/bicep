@@ -1,26 +1,24 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Bicep.Core;
 using Bicep.Core.Analyzers;
 using Bicep.Core.CodeAction;
 using Bicep.Core.CodeAction.Fixes;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Extensions;
-using Bicep.Core.Parsing;
 using Bicep.Core.Semantics;
+using Bicep.Core.SourceGraph;
+using Bicep.Core.Syntax;
 using Bicep.Core.Text;
-using Bicep.Core.Workspaces;
+using Bicep.IO.Abstraction;
 using Bicep.LanguageServer.CompilationManager;
 using Bicep.LanguageServer.Completions;
 using Bicep.LanguageServer.Extensions;
+using Bicep.LanguageServer.Model;
 using Bicep.LanguageServer.Providers;
+using Bicep.LanguageServer.Refactor;
 using Bicep.LanguageServer.Telemetry;
 using Bicep.LanguageServer.Utils;
 using Newtonsoft.Json.Linq;
@@ -37,20 +35,18 @@ namespace Bicep.LanguageServer.Handlers
     {
         private readonly IClientCapabilitiesProvider clientCapabilitiesProvider;
         private readonly ICompilationManager compilationManager;
+        private readonly DocumentSelectorFactory documentSelectorFactory;
 
-        private static readonly ImmutableArray<ICodeFixProvider> codeFixProviders = new ICodeFixProvider[]
-        {
-            new MultilineObjectsAndArraysCodeFixProvider(),
-        }.ToImmutableArray<ICodeFixProvider>();
-
-        public BicepCodeActionHandler(ICompilationManager compilationManager, IClientCapabilitiesProvider clientCapabilitiesProvider)
+        public BicepCodeActionHandler(ICompilationManager compilationManager, IClientCapabilitiesProvider clientCapabilitiesProvider, DocumentSelectorFactory documentSelectorFactory)
         {
             this.clientCapabilitiesProvider = clientCapabilitiesProvider;
             this.compilationManager = compilationManager;
+            this.documentSelectorFactory = documentSelectorFactory;
         }
 
-        public override Task<CommandOrCodeActionContainer> Handle(CodeActionParams request, CancellationToken cancellationToken)
+        public override async Task<CommandOrCodeActionContainer?> Handle(CodeActionParams request, CancellationToken cancellationToken)
         {
+            await Task.CompletedTask;
             cancellationToken.ThrowIfCancellationRequested();
 
             var documentUri = request.TextDocument.Uri;
@@ -58,7 +54,7 @@ namespace Bicep.LanguageServer.Handlers
 
             if (compilationContext == null)
             {
-                return Task.FromResult(new CommandOrCodeActionContainer());
+                return null;
             }
 
             var requestStartOffset = PositionHelper.GetOffset(compilationContext.LineStarts, request.Range.Start);
@@ -76,7 +72,7 @@ namespace Bicep.LanguageServer.Handlers
                     fixable.Span.ContainsInclusive(requestEndOffset) ||
                     (requestStartOffset <= fixable.Span.Position && fixable.GetEndPosition() <= requestEndOffset))
                 .OfType<IFixable>()
-                .SelectMany(fixable => fixable.Fixes.Select(fix => CreateCodeFix(request.TextDocument.Uri, compilationContext, fix)));
+                .SelectMany(fixable => fixable.Fixes.Select(fix => CreateCodeActionFromFix(request.TextDocument.Uri, compilationContext, fix)));
 
             List<CommandOrCodeAction> commandOrCodeActions = new();
 
@@ -86,9 +82,9 @@ namespace Bicep.LanguageServer.Handlers
                 .Where(diagnostic => !diagnostic.CanBeSuppressed());
             var diagnosticsThatCanBeSuppressed = diagnostics
                 .Where(diagnostic =>
-                      (diagnostic.Span.ContainsInclusive(requestStartOffset) ||
+                      diagnostic.Span.ContainsInclusive(requestStartOffset) ||
                       diagnostic.Span.ContainsInclusive(requestEndOffset) ||
-                      (requestStartOffset <= diagnostic.Span.Position && diagnostic.GetEndPosition() <= requestEndOffset)))
+                      (requestStartOffset <= diagnostic.Span.Position && diagnostic.GetEndPosition() <= requestEndOffset))
                 .Except(coreCompilerErrors);
 
             HashSet<string> diagnosticCodesToSuppressInline = new();
@@ -114,22 +110,31 @@ namespace Bicep.LanguageServer.Handlers
                         analyzerDiagnostic.Span.ContainsInclusive(requestStartOffset) ||
                         analyzerDiagnostic.Span.ContainsInclusive(requestEndOffset) ||
                         (requestStartOffset <= analyzerDiagnostic.Span.Position && analyzerDiagnostic.GetEndPosition() <= requestEndOffset))
-                    .OfType<AnalyzerDiagnostic>()
-                    .Select(analyzerDiagnostic => CreateEditLinterRuleAction(documentUri, analyzerDiagnostic.Code, semanticModel.Configuration.ConfigurationPath));
+                    .Where(x => x.Source == DiagnosticSource.CoreLinter)
+                    .Select(analyzerDiagnostic => CreateEditLinterRuleAction(documentUri, analyzerDiagnostic.Code, semanticModel.Configuration.ConfigFileUri));
                 commandOrCodeActions.AddRange(editLinterRuleActions);
             }
 
-            var matchingNodes = SyntaxMatcher.FindNodesInRange(compilationContext.ProgramSyntax, requestStartOffset, requestEndOffset);
-            var codeFixes = codeFixProviders
-                .Concat(GetDecoratorCodeFixProviders(semanticModel))
-                .SelectMany(provider => provider.GetFixes(semanticModel, matchingNodes))
-                .Select(fix => CreateCodeFix(request.TextDocument.Uri, compilationContext, fix));
-            commandOrCodeActions.AddRange(codeFixes);
+            var nodesInRange = SyntaxMatcher.FindNodesSpanningRange(compilationContext.ProgramSyntax, requestStartOffset, requestEndOffset);
+            var codeFixes = GetCodeFixes(semanticModel, nodesInRange);
+            commandOrCodeActions.AddRange(codeFixes.Select(fix => CreateCodeActionFromFix(documentUri, compilationContext, fix)));
 
-            return Task.FromResult(new CommandOrCodeActionContainer(commandOrCodeActions));
+            return new(commandOrCodeActions);
         }
 
-        private IEnumerable<DecoratorCodeFixProvider> GetDecoratorCodeFixProviders(SemanticModel semanticModel)
+        private static IEnumerable<CodeFix> GetCodeFixes(SemanticModel model, IReadOnlyList<SyntaxBase> matchingNodes)
+        {
+            ICodeFixProvider[] providers = [
+                .. GetDecoratorCodeFixProviders(model),
+                new ExpressionAndTypeExtractor(model),
+                new MultilineStringCodeFixProvider(),
+            ];
+
+            return providers
+                .SelectMany(provider => provider.GetFixes(model, matchingNodes));
+        }
+
+        private static IEnumerable<DecoratorCodeFixProvider> GetDecoratorCodeFixProviders(SemanticModel semanticModel)
         {
             var nsResolver = semanticModel.Binder.NamespaceResolver;
             return nsResolver.GetNamespaceNames().Select(nsResolver.TryGetNamespace).WhereNotNull()
@@ -196,7 +201,7 @@ namespace Bicep.LanguageServer.Handlers
             };
         }
 
-        private static CommandOrCodeAction CreateEditLinterRuleAction(DocumentUri documentUri, string ruleName, string? bicepConfigFilePath)
+        private static CommandOrCodeAction CreateEditLinterRuleAction(DocumentUri documentUri, string ruleName, IOUri? configFileIdentifier)
         {
             return new CodeAction
             {
@@ -205,7 +210,7 @@ namespace Bicep.LanguageServer.Handlers
                 (
                     title: "edit linter rule code action",
                     name: LangServerConstants.EditLinterRuleCommandName,
-                    args: JArray.FromObject(new List<object> { documentUri, ruleName, bicepConfigFilePath ?? string.Empty /* (passing null not allowed) */ })
+                    args: JArray.FromObject(new List<object> { documentUri, ruleName, configFileIdentifier?.ToString() ?? string.Empty /* (passing null not allowed) */ })
                 )
             };
         }
@@ -217,12 +222,13 @@ namespace Bicep.LanguageServer.Handlers
             return Task.FromResult(request);
         }
 
-        private static CommandOrCodeAction CreateCodeFix(DocumentUri uri, CompilationContext context, CodeFix fix)
+        private static CommandOrCodeAction CreateCodeActionFromFix(DocumentUri uri, CompilationContext context, CodeFix fix)
         {
             var codeActionKind = fix.Kind switch
             {
                 CodeFixKind.QuickFix => CodeActionKind.QuickFix,
                 CodeFixKind.Refactor => CodeActionKind.Refactor,
+                CodeFixKind.RefactorExtract => CodeActionKind.RefactorExtract,
                 _ => CodeActionKind.Empty,
             };
 
@@ -241,13 +247,14 @@ namespace Bicep.LanguageServer.Handlers
                             NewText = replacement.Text
                         })
                     }
-                }
+                },
+                Command = fix is CodeFixWithCommand withCommand ? withCommand.Command : null,
             };
         }
 
         protected override CodeActionRegistrationOptions CreateRegistrationOptions(CodeActionCapability capability, ClientCapabilities clientCapabilities) => new()
         {
-            DocumentSelector = DocumentSelectorFactory.CreateForBicepAndParams(),
+            DocumentSelector = documentSelectorFactory.CreateForBicepAndParams(),
             CodeActionKinds = new Container<CodeActionKind>(CodeActionKind.QuickFix),
             ResolveProvider = false
         };

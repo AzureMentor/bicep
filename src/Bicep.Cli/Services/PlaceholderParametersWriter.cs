@@ -2,11 +2,10 @@
 // Licensed under the MIT License.
 
 using Bicep.Core.Emit;
+using Bicep.Core.Emit.Options;
 using Bicep.Core.Exceptions;
 using Bicep.Core.Semantics;
-using Newtonsoft.Json;
-using System;
-using System.IO;
+using Bicep.IO.Abstraction;
 
 namespace Bicep.Cli.Services
 {
@@ -22,34 +21,22 @@ namespace Bicep.Cli.Services
             this.io = io;
         }
 
-        public EmitResult ToFile(Compilation compilation, string outputPath)
+        public EmitResult ToFile(Compilation compilation, IFileHandle outputFile, OutputFormatOption outputFormat, IncludeParamsOption includeParams)
         {
             var existingContent = string.Empty;
-            if (File.Exists(outputPath))
+            if (outputFile.Exists())
             {
-                existingContent = File.ReadAllText(outputPath);
+                existingContent = outputFile.ReadAllText();
             }
-            using var fileStream = CreateFileStream(outputPath);
+            using var fileStream = outputFile.OpenWrite();
             var semanticModel = compilation.GetEntrypointSemanticModel();
-            return new TemplateEmitter(semanticModel).EmitEmptyParametersFile(fileStream, existingContent);
+            return new TemplateEmitter(semanticModel).EmitTemplateGeneratedParameterFile(fileStream, existingContent, outputFormat, includeParams);
         }
 
-        public EmitResult ToStdout(Compilation compilation)
+        public EmitResult ToStdout(Compilation compilation, OutputFormatOption outputFormat, IncludeParamsOption includeParams)
         {
             var semanticModel = compilation.GetEntrypointSemanticModel();
-            return new TemplateEmitter(semanticModel).EmitEmptyParametersFile(io.Output, string.Empty);
-        }
-
-        private static FileStream CreateFileStream(string path)
-        {
-            try
-            {
-                return new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
-            }
-            catch (Exception exception)
-            {
-                throw new BicepException(exception.Message, exception);
-            }
+            return new TemplateEmitter(semanticModel).EmitTemplateGeneratedParameterFile(io.Output.Writer, string.Empty, outputFormat, includeParams);
         }
     }
 }

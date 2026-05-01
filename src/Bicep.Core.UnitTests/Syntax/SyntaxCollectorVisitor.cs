@@ -1,6 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using Bicep.Core.Syntax;
 
@@ -13,7 +12,7 @@ namespace Bicep.Core.UnitTests.Syntax
             public IEnumerable<SyntaxCollectorVisitor.SyntaxItem> GetAncestors()
             {
                 var data = this;
-                while (data.Parent is {} parent)
+                while (data.Parent is { } parent)
                 {
                     yield return parent;
                     data = parent;
@@ -34,7 +33,7 @@ namespace Bicep.Core.UnitTests.Syntax
             var visitor = new SyntaxCollectorVisitor();
             visitor.Visit(syntax);
 
-            return visitor.syntaxList.ToImmutableArray();
+            return [.. visitor.syntaxList];
         }
 
         protected override void VisitInternal(SyntaxBase syntax)

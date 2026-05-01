@@ -2,8 +2,6 @@
 // Licensed under the MIT License.
 
 using Bicep.Core.TypeSystem;
-using System;
-using System.Collections.Generic;
 
 namespace Bicep.Core.Semantics
 {
@@ -13,7 +11,7 @@ namespace Bicep.Core.Semantics
     /// </summary>
     public class SymbolHierarchy
     {
-        private readonly Dictionary<Symbol, Symbol?> parentMap = new Dictionary<Symbol, Symbol?>();
+        private readonly Dictionary<Symbol, Symbol?> parentMap = new();
 
         /// <summary>
         /// Adds a root node and indexes the parents for all child nodes recursively.

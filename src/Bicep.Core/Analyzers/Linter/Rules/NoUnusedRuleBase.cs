@@ -1,30 +1,41 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Linq;
 using Bicep.Core.CodeAction;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Navigation;
 using Bicep.Core.Parsing;
+using Bicep.Core.Semantics;
+using Bicep.Core.Semantics.Namespaces;
 using Bicep.Core.Syntax;
+using Bicep.Core.Text;
 
 namespace Bicep.Core.Analyzers.Linter.Rules;
 
 public abstract class NoUnusedRuleBase : LinterRuleBase
 {
-    protected NoUnusedRuleBase(string code, string description, DiagnosticStyling diagnosticStyling, Uri? docUri = null, DiagnosticLevel diagnosticLevel = DiagnosticLevel.Warning) :
-        base(code, description, docUri, diagnosticLevel, diagnosticStyling)
+    protected NoUnusedRuleBase(string code, string description, DiagnosticStyling diagnosticStyling) :
+        base(code, description, LinterRuleCategory.BestPractice, diagnosticStyling)
     {
     }
 
-    protected AnalyzerFixableDiagnostic CreateRemoveUnusedDiagnosticForSpan(DiagnosticLevel diagnosticLevel, string name, TextSpan nameSpan, SyntaxBase declaringSyntax, ProgramSyntax programSyntax)
+    protected Diagnostic CreateRemoveUnusedDiagnosticForSpan(DiagnosticLevel diagnosticLevel, string name, TextSpan nameSpan, SyntaxBase declaringSyntax, ProgramSyntax programSyntax)
     {
         var span = GetSpanForRow(programSyntax, declaringSyntax);
         var codeFix = new CodeFix(GetCodeFixDescription(name), true, CodeFixKind.QuickFix, new CodeReplacement(span, String.Empty));
-        var fixableDiagnosticForSpan = CreateFixableDiagnosticForSpan(diagnosticLevel, nameSpan, codeFix, name);
-        return fixableDiagnosticForSpan;
+
+        return CreateFixableDiagnosticForSpan(diagnosticLevel, nameSpan, codeFix, name);
     }
+
+    protected Diagnostic CreateRemoveUnusedDiagnosticForSpan(DiagnosticLevel diagnosticLevel, string name, TextSpan nameSpan, TextSpan codeFixSpan)
+    {
+        var codeFix = new CodeFix(GetCodeFixDescription(name), true, CodeFixKind.QuickFix, new CodeReplacement(codeFixSpan, String.Empty));
+
+        return CreateFixableDiagnosticForSpan(diagnosticLevel, nameSpan, codeFix, name);
+    }
+
+    protected static bool IsExported(SemanticModel model, StatementSyntax declaringSyntax)
+        => SemanticModelHelper.TryGetDecoratorInNamespace(model, declaringSyntax, SystemNamespaceType.BuiltInName, LanguageConstants.ExportPropertyName) is not null;
 
     private static TextSpan GetSpanForRow(ProgramSyntax programSyntax, SyntaxBase declaringSyntax)
     {

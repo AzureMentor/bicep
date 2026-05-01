@@ -8,7 +8,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Threading;
 using System.Threading.Tasks;
 using Bicep.VSLanguageServerClient.MiddleLayerProviders;
 using Bicep.VSLanguageServerClient.ProcessLauncher;
@@ -21,6 +20,8 @@ using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Telemetry;
 using Microsoft.VisualStudio.Threading;
 using Microsoft.VisualStudio.Utilities;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using StreamJsonRpc;
 
 namespace Bicep.VSLanguageServerClient
@@ -28,11 +29,12 @@ namespace Bicep.VSLanguageServerClient
     [Export(typeof(ILanguageClient))]
     [ContentType(BicepLanguageServerClientConstants.BicepContentType)]
     [ContentType(BicepLanguageServerClientConstants.BicepConfigContentType)]
+    [ContentType(BicepLanguageServerClientConstants.BicepParamContentType)]
     public class BicepLanguageServerClient : ILanguageClient, ILanguageClientCustomMessage2
     {
         private IClientProcess? process;
         private readonly IBicepSettings bicepSettings;
-        private readonly ILanguageClientMiddleLayer middleLayer;
+        private readonly ILanguageClientMiddleLayer2<JToken> middleLayer;
         private readonly IProcessTracker processTracker;
         private readonly TelemetrySession TelemetrySession;
 
@@ -47,17 +49,17 @@ namespace Bicep.VSLanguageServerClient
             bicepSettings = new BicepSettings();
 
             var updateFormatSettingsMiddleLayer = new UpdateFormatSettingsMiddleLayer(bicepSettings);
-            var gotoDefintionMiddleLayer = new HandleGotoDefintionMiddleLayer();
-            middleLayer = new AggregatingMiddleLayer(gotoDefintionMiddleLayer, handleSnippetCompletionsMiddleLayer, updateFormatSettingsMiddleLayer);
+            var gotoDefinitionMiddleLayer = new HandleGotoDefinitionMiddleLayer();
+            middleLayer = new AggregatingMiddleLayer(gotoDefinitionMiddleLayer, handleSnippetCompletionsMiddleLayer, updateFormatSettingsMiddleLayer);
         }
 
         public string Name => BicepLanguageServerClientConstants.BicepLanguageServerName;
 
-        public virtual IEnumerable<string> ConfigurationSections => Enumerable.Empty<string>();
+        public virtual IEnumerable<string> ConfigurationSections => [];
 
-        public virtual object InitializationOptions => new object();
+        public virtual object InitializationOptions => new();
 
-        public IEnumerable<string> FilesToWatch => Enumerable.Empty<string>();
+        public IEnumerable<string> FilesToWatch => [];
 
         public bool ShowNotificationOnInitializeFailed => true;
 
@@ -72,7 +74,7 @@ namespace Bicep.VSLanguageServerClient
             string languageServerExePath = Path.Combine(vsixInstallPath, BicepLanguageServerClientConstants.BicepLanguageServerInstallationSubPath, "Bicep.LangServer.exe");
 
             var launchServerArguments = $" --contentType {BicepLanguageServerClientConstants.BicepContentType}" +
-                $" --lcid {Thread.CurrentThread.CurrentUICulture.LCID}";
+                $" --lcid {Thread.CurrentThread.CurrentUICulture.LCID} --vs-compatibility-mode";
 
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
@@ -108,6 +110,8 @@ namespace Bicep.VSLanguageServerClient
 
         public async Task AttachForCustomMessageAsync(JsonRpc rpc)
         {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
             var didChangeWatchedFilesNotifier = new DidChangeWatchedFilesNotifier(rpc);
             didChangeWatchedFilesNotifier.CreateFileSystemWatchers();
 

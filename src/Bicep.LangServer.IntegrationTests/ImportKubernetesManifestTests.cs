@@ -2,19 +2,17 @@
 // Licensed under the MIT License.
 
 using System.Diagnostics.CodeAnalysis;
-using System.Threading.Tasks;
-using Bicep.Core.UnitTests.Utils;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Bicep.Core.UnitTests.Assertions;
-using Bicep.LanguageServer.Handlers;
-using System.IO;
 using Bicep.Core.UnitTests;
-using FluentAssertions;
+using Bicep.Core.UnitTests.Assertions;
 using Bicep.Core.UnitTests.Baselines;
-using OmniSharp.Extensions.LanguageServer.Protocol.Window;
+using Bicep.Core.UnitTests.Utils;
 using Bicep.LangServer.IntegrationTests.Assertions;
-using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using Bicep.LanguageServer.Handlers;
+using FluentAssertions;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json.Linq;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using OmniSharp.Extensions.LanguageServer.Protocol.Window;
 
 namespace Bicep.LangServer.IntegrationTests
 {
@@ -37,20 +35,20 @@ namespace Bicep.LangServer.IntegrationTests
             using var helper = await LanguageServerHelper.StartServer(
                 this.TestContext,
                 options => options.OnTelemetryEvent(telemetryEventsListener.AddMessage),
-                services => services.WithFeatureOverrides(new(TestContext, ExtensibilityEnabled: true)));
+                services => services.WithFeatureOverrides(new(TestContext)));
             var client = helper.Client;
 
             var response = await client.SendRequest(new ImportKubernetesManifestRequest(yamlFile.OutputFilePath), default);
 
             var telemetry = await telemetryEventsListener.WaitForAll();
             telemetry.Should().ContainEvent("ImportKubernetesManifest/success", new JObject
-                {
-                    ["success"] = "true",
-                });
+            {
+                ["success"] = "true",
+            });
 
             bicepFile.ShouldHaveExpectedValue();
 
-            CompilationHelper.Compile(new ServiceBuilder().WithFeatureOverrides(new(ExtensibilityEnabled: true)), bicepFile.ReadFromOutputFolder()).Should().GenerateATemplate();
+            CompilationHelper.Compile(bicepFile.ReadFromOutputFolder()).Should().GenerateATemplate();
         }
 
         [TestMethod]
@@ -75,9 +73,9 @@ namespace Bicep.LangServer.IntegrationTests
 
             var telemetry = await telemetryEventsListener.WaitForAll();
             telemetry.Should().ContainEvent("ImportKubernetesManifest/failure", new JObject
-                {
-                    ["failureType"] = "DeserializeYamlFailed",
-                });
+            {
+                ["failureType"] = "DeserializeYamlFailed",
+            });
 
             var message = await messageListener.WaitNext();
             message.Should().HaveMessageAndType(

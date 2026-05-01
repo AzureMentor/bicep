@@ -1,17 +1,23 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <RootNamespace>Bicep.Tools.Benchmark</RootNamespace>
+    <IsTestingPlatformApplication>false</IsTestingPlatformApplication>
+    <EnableMSTestRunner>false</EnableMSTestRunner>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BenchmarkDotNet" Version="0.13.5" />
+    <PackageReference Include="BenchmarkDotNet" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../Bicep.Core/Bicep.Core.csproj" />
     <ProjectReference Include="../Bicep.Core.Samples/Bicep.Core.Samples.csproj" />
     <ProjectReference Include="../Bicep.LangServer.IntegrationTests/Bicep.LangServer.IntegrationTests.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Nerdbank.GitVersioning" />
   </ItemGroup>
 </Project>

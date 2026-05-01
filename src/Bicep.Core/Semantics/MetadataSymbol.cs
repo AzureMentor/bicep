@@ -1,6 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-using System.Collections.Generic;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Syntax;
 
@@ -28,11 +27,11 @@ namespace Bicep.Core.Semantics
             }
         }
 
-        public override IEnumerable<ErrorDiagnostic> GetDiagnostics() => ValidateName();
+        public override IEnumerable<Diagnostic> GetDiagnostics() => ValidateName();
 
-        private IEnumerable<ErrorDiagnostic> ValidateName()
+        private IEnumerable<Diagnostic> ValidateName()
         {
-            if (this.Name.StartsWith("_"))
+            if (this.Name.StartsWith('_'))
             {
                 yield return DiagnosticBuilder.ForPosition(this.NameSource).ReservedMetadataIdentifier(this.Name);
             }

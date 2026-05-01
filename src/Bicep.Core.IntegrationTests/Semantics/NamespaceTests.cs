@@ -1,11 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using System.Linq;
 using System.Reflection;
 using Bicep.Core.Extensions;
 using Bicep.Core.Samples;
@@ -48,16 +45,16 @@ namespace Bicep.Core.IntegrationTests.Semantics
             }
 
             var expected = JToken.Parse(expectedStr);
-            var expectedPath = Path.Combine("src", "Bicep.Core.Samples", "Files", DataSet.TestFunctionsDirectory, fileName);
+            var expectedPath = DataSet.GetBaselineUpdatePath(DataSet.TestFunctionsDirectory, fileName);
             actual.Should().EqualWithJsonDiffOutput(TestContext, expected, expectedPath, actualLocation);
         }
 
         private static IEnumerable<object[]> GetNamespaces()
         {
             // local function
-            static object[] CreateRow(INamespaceSymbol @namespace) => new object[] { @namespace };
+            static object[] CreateRow(INamespaceSymbol @namespace) => [@namespace];
 
-            var (_, _, compilation) = CompilationHelper.Compile(TestTypeHelper.CreateEmptyAzResourceTypeLoader(), ("main.bicep", string.Empty));
+            var (_, _, compilation) = CompilationHelper.Compile(TestTypeHelper.CreateEmptyResourceTypeLoader(), ("main.bicep", string.Empty));
 
             return compilation.GetEntrypointSemanticModel().Root.Namespaces.OfType<INamespaceSymbol>().Select(CreateRow);
         }
@@ -72,7 +69,7 @@ namespace Bicep.Core.IntegrationTests.Semantics
         }
 
         private OverloadRecord Convert(FunctionOverload overload) =>
-            new OverloadRecord(
+            new(
                 overload.Name,
                 overload.Description,
                 overload.FixedParameters.Select(fixedParam => new FixedParameterRecord(fixedParam.Name, fixedParam.Description, fixedParam.Type.Name, fixedParam.Required)).ToImmutableArray(),

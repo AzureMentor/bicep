@@ -1,23 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Bicep.Core;
-using Bicep.Core.Analyzers.Interfaces;
-using Bicep.Core.Analyzers.Linter.ApiVersions;
-using Bicep.Core.Configuration;
 using Bicep.Core.Diagnostics;
 using Bicep.Core.Emit;
-using Bicep.Core.Features;
-using Bicep.Core.FileSystem;
-using Bicep.Core.Registry;
-using Bicep.Core.Semantics;
-using Bicep.Core.Semantics.Namespaces;
-using Bicep.Core.Workspaces;
+using Bicep.Core.Emit.Options;
+using Bicep.IO.Abstraction;
 using Bicep.LanguageServer.CompilationManager;
 using Bicep.LanguageServer.Utils;
 using Microsoft.WindowsAzure.ResourceStack.Common.Extensions;
@@ -29,68 +17,81 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
 
 namespace Bicep.LanguageServer.Handlers
 {
+    public record BicepGenerateParamsCommandParams(
+        string BicepFilePath,
+        OutputFormatOption OutputFormat,
+        IncludeParamsOption IncludeParams
+    );
+
     // This handler is used to generate compiled parameters.json file for given a bicep file path.
-    // It returns generate-params succeeded/failed message, which can be displayed approriately in IDE output window
-    public class BicepGenerateParamsCommandHandler : ExecuteTypedResponseCommandHandlerBase<string, string>
+    // It returns generate-params succeeded/failed message, which can be displayed appropriately in IDE output window
+    public class BicepGenerateParamsCommandHandler : ExecuteTypedResponseCommandHandlerBase<BicepGenerateParamsCommandParams, string>
     {
         private readonly ICompilationManager compilationManager;
+        private readonly IFileExplorer fileExplorer;
         private readonly BicepCompiler bicepCompiler;
 
-        public BicepGenerateParamsCommandHandler(ICompilationManager compilationManager, BicepCompiler bicepCompiler, ISerializer serializer)
+        public BicepGenerateParamsCommandHandler(ICompilationManager compilationManager, IFileExplorer fileExplorer, BicepCompiler bicepCompiler, ISerializer serializer)
             : base(LangServerConstants.GenerateParamsCommand, serializer)
         {
             this.compilationManager = compilationManager;
+            this.fileExplorer = fileExplorer;
             this.bicepCompiler = bicepCompiler;
         }
 
-        public override async Task<string> Handle(string bicepFilePath, CancellationToken cancellationToken)
+        public override async Task<string> Handle(BicepGenerateParamsCommandParams parameters, CancellationToken cancellationToken)
         {
-            if (string.IsNullOrWhiteSpace(bicepFilePath))
+            if (string.IsNullOrWhiteSpace(parameters.BicepFilePath))
             {
                 throw new ArgumentException("Invalid input file path");
             }
 
-            DocumentUri documentUri = DocumentUri.FromFileSystemPath(bicepFilePath);
-            string output = await GenerateCompiledParametersFileAndReturnOutputMessage(bicepFilePath, documentUri);
+            DocumentUri documentUri = DocumentUri.FromFileSystemPath(parameters.BicepFilePath);
+            string output = await GenerateCompiledParametersFileAndReturnOutputMessage(parameters.OutputFormat, parameters.IncludeParams, documentUri);
 
             return output;
         }
 
-        private async Task<string> GenerateCompiledParametersFileAndReturnOutputMessage(string bicepFilePath, DocumentUri documentUri)
+        private async Task<string> GenerateCompiledParametersFileAndReturnOutputMessage(OutputFormatOption outputFormat, IncludeParamsOption includeParams, DocumentUri documentUri)
         {
-            string compiledFilePath = PathHelper.ResolveParametersFileOutputPath(bicepFilePath);
-            string compiledFile = Path.GetFileName(compiledFilePath);
+            var bicepFileUri = documentUri.ToIOUri();
+            var extension = outputFormat == OutputFormatOption.BicepParam ? LanguageConstants.ParamsFileExtension : LanguageConstants.JsonFileExtension;
+            var compiledFileUri = bicepFileUri.WithExtension(extension);
+            var compiledFile = this.fileExplorer.GetFile(compiledFileUri);
 
-            // If the template exists and contains bicep generator metadata, we can go ahead and replace the file.
-            // If not, we'll fail the generate params.
-            if (File.Exists(compiledFilePath) && !TemplateIsParametersFile(File.ReadAllText(compiledFilePath)))
+            // If the template exists and has a .json extension and contains the Bicep metadata, fail the generate params.
+            // If not, continue to update the file.
+            if (extension == LanguageConstants.JsonFileExtension && compiledFile.Exists())
             {
-                return "Generating parameters file failed. The file \"" + compiledFile + "\" already exists but does not contain the schema for a parameters file. If overwriting the file is intended, delete it manually and retry the Generate Parameters command.";
+                var template = await compiledFile.ReadAllTextAsync();
+
+                if (!TemplateIsParametersFile(template))
+                {
+                    return "Generating parameters file failed. The file \"" + compiledFile + "\" already exists. If overwriting the file is intended, delete it manually and retry the Generate Parameters command.";
+                }
             }
 
-            var compilation = await new CompilationHelper(bicepCompiler, compilationManager).GetCompilation(documentUri);
-            var fileUri = documentUri.ToUri();
+            var compilation = await new CompilationHelper(bicepCompiler, compilationManager).GetRefreshedCompilation(documentUri);
 
-            var diagnosticsByFile = compilation.GetAllDiagnosticsByBicepFile()
-                .FirstOrDefault(x => x.Key.FileUri == fileUri);
-
-            if (diagnosticsByFile.Value.Any(x => x.Level == DiagnosticLevel.Error))
+            if (compilation.HasErrors())
             {
+                var diagnosticsByFile = compilation.GetAllDiagnosticsByBicepFile();
+
                 return "Generating parameters file failed. Please fix below errors:\n" + DiagnosticsHelper.GetDiagnosticsMessage(diagnosticsByFile);
             }
 
-            var existingContent = File.Exists(compiledFilePath) ? File.ReadAllText(compiledFilePath) : string.Empty;
+            var existingContent = compiledFile.Exists() ? await compiledFile.ReadAllTextAsync() : "";
 
             var model = compilation.GetEntrypointSemanticModel();
             var emitter = new TemplateEmitter(model);
-            using var fileStream = new FileStream(compiledFilePath, FileMode.Create, FileAccess.Write);
-            var result = emitter.EmitEmptyParametersFile(fileStream, existingContent);
+            using var fileStream = new FileStream(compiledFileUri, FileMode.Create, FileAccess.Write);
+            var result = emitter.EmitTemplateGeneratedParameterFile(fileStream, existingContent, outputFormat, includeParams);
 
-            return "Generating parameters file succeeded. Processed file " + compiledFile;
+            return $"Generating parameters file succeeded. Processed file '{compiledFile.Uri}'";
         }
 
         // Returns true if the template contains the parameters file schema, false otherwise
-        public bool TemplateIsParametersFile(string template)
+        public static bool TemplateIsParametersFile(string template)
         {
             try
             {

@@ -1,18 +1,12 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.IO;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using Bicep.Core.FileSystem;
-using Bicep.Core.Parsing;
+using Bicep.Core.SourceGraph;
 using Bicep.Core.Syntax;
 using Bicep.Core.Text;
-using Bicep.Core.Workspaces;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -42,6 +36,7 @@ namespace Bicep.Core.Emit
             public PositionTrackingTextWriter(TextWriter textWriter)
             {
                 this.internalWriter = textWriter;
+                this.NewLine = textWriter.NewLine;
             }
 
             public override Encoding Encoding => this.internalWriter.Encoding;
@@ -63,20 +58,18 @@ namespace Bicep.Core.Emit
 
         private static readonly Regex JsonWhitespaceStrippingRegex = new(@"(""(?:[^""\\]|\\.)*"")|\s+", RegexOptions.Compiled);
 
-        private readonly IFileResolver fileResolver;
         private readonly RawSourceMap rawSourceMap;
         private readonly BicepSourceFile? sourceFile;
         private readonly PositionTrackingTextWriter trackingWriter;
 
-        public PositionTrackingJsonTextWriter(IFileResolver fileResolver, TextWriter textWriter, BicepSourceFile? sourceFile = null, RawSourceMap? rawSourceMap = null)
-            : this(fileResolver, new(textWriter), sourceFile, rawSourceMap)
+        public PositionTrackingJsonTextWriter(TextWriter textWriter, BicepSourceFile? sourceFile = null, RawSourceMap? rawSourceMap = null)
+            : this(new(textWriter), sourceFile, rawSourceMap)
         {
         }
 
-        private PositionTrackingJsonTextWriter(IFileResolver fileResolver, PositionTrackingTextWriter trackingWriter, BicepSourceFile? sourceFile, RawSourceMap? rawSourceMap)
+        private PositionTrackingJsonTextWriter(PositionTrackingTextWriter trackingWriter, BicepSourceFile? sourceFile, RawSourceMap? rawSourceMap)
             : base(trackingWriter)
         {
-            this.fileResolver = fileResolver;
             this.rawSourceMap = rawSourceMap ?? new RawSourceMap(new List<RawSourceMapFileEntry>());
             this.sourceFile = sourceFile;
             this.trackingWriter = trackingWriter;
@@ -219,7 +212,7 @@ namespace Bicep.Core.Emit
                         return lineStarts;
                     });
 
-            // get position and length of template hash (relying on the first occurence)
+            // get position and length of template hash (relying on the first occurrence)
             (var templateHashStartPosition, var templateHashLength) = formattedTemplateLines
                 .Select((value, index) => new { lineNumber = index, lineValue = value })
                 .Where(item => item.lineValue.Contains(TemplateWriter.TemplateHashPropertyName))
@@ -236,13 +229,13 @@ namespace Bicep.Core.Emit
             Array.Fill(weights, int.MaxValue);
 
             var sourceMapFileEntries = new List<SourceMapFileEntry>();
-            var entrypointFileName = System.IO.Path.GetFileName(sourceFile.FileUri.AbsolutePath);
-            var entrypointAbsolutePath = System.IO.Path.GetDirectoryName(sourceFile.FileUri.AbsolutePath)!;
+            var entrypointFileName = sourceFile.GetFileName();
 
             foreach (var bicepFileEntry in this.rawSourceMap.Entries)
             {
-                var bicepAbsolutePath = bicepFileEntry.SourceFile.FileUri.AbsolutePath;
-                var bicepRelativeFilePath = fileResolver.GetRelativePath(entrypointAbsolutePath, bicepAbsolutePath);
+                var bicepRelativeFilePath = bicepFileEntry.SourceFile == sourceFile
+                    ? entrypointFileName
+                    : bicepFileEntry.SourceFile.FileHandle.Uri.GetPathRelativeTo(sourceFile.FileHandle.Uri);
                 var sourceMapEntries = new List<SourceMapEntry>();
 
                 foreach (var sourceMapEntry in bicepFileEntry.SourceMap)
@@ -296,7 +289,7 @@ namespace Bicep.Core.Emit
 
             return new SourceMap(
                entrypointFileName,
-               sourceMapFileEntries.ToImmutableArray());
+               [.. sourceMapFileEntries]);
         }
     }
 }
